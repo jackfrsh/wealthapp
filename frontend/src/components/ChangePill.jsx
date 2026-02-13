@@ -16,16 +16,16 @@ export default function ChangePill({ change, changePct, currency, size = 'md', s
   const colors = isZero
     ? 'bg-black/[.04] dark:bg-white/[.06] text-ink-muted dark:text-white/50'
     : isPos
-      ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-      : 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400'
+      ? 'bg-gain-light dark:bg-gain/10 text-gain dark:text-emerald-400'
+      : 'bg-loss-light dark:bg-loss/10 text-loss dark:text-red-400'
 
   const Icon = isZero ? Minus : isPos ? TrendingUp : TrendingDown
 
   return (
     <span className={`inline-flex items-center font-semibold rounded-full ${sizes[size]} ${colors}`}>
       <Icon size={size === 'sm' ? 11 : size === 'lg' ? 15 : 13} strokeWidth={2.5} />
-      {showAmount && <span>{change >= 0 ? '+' : ''}{fmtCurrency(change, currency)}</span>}
-      <span>{fmtPct(changePct)}</span>
+      {showAmount && <span className="tabular-nums">{change >= 0 ? '+' : ''}{fmtCurrency(change, currency)}</span>}
+      <span className="tabular-nums">{fmtPct(changePct)}</span>
     </span>
   )
 }

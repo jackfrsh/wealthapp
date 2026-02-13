@@ -18,6 +18,17 @@ body.dark {
   @apply bg-surface-dark text-white;
 }
 
+/* Tabular numbers for financial figures */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Safe area for notched phones */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* ─── Custom scrollbar ─────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;

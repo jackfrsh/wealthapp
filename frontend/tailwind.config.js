@@ -6,31 +6,40 @@ export default {
     extend: {
       fontFamily: {
         display: ['"Instrument Serif"', 'Georgia', 'serif'],
-        sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+        sans: ['"Inter"', '"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+        mono: ['"Inter"', 'ui-monospace', 'monospace'],
       },
       colors: {
         surface: {
-          DEFAULT: '#faf9f7',
-          2: '#f3f1ed',
-          3: '#eae7e1',
-          dark: '#0c0c0c',
-          'dark-2': '#161616',
-          'dark-3': '#1e1e1e',
+          DEFAULT: '#f8f9fa',
+          2: '#f1f3f5',
+          3: '#e9ecef',
+          dark: '#0f1117',
+          'dark-2': '#181b22',
+          'dark-3': '#1f222b',
         },
         ink: {
           DEFAULT: '#0f0e0d',
           2: '#2a2826',
           3: '#4a4742',
-          muted: '#9a9590',
+          muted: '#868e96',
         },
         accent: {
-          DEFAULT: '#16a34a',
-          light: '#dcfce7',
-          dark: '#15803d',
+          DEFAULT: '#3b82c4',
+          light: '#e7f1fb',
+          dark: '#2d6aa0',
+        },
+        gain: {
+          DEFAULT: '#22a06b',
+          light: '#e3fcef',
+        },
+        loss: {
+          DEFAULT: '#de350b',
+          light: '#ffebe6',
         },
         danger: {
-          DEFAULT: '#dc2626',
-          light: '#fef2f2',
+          DEFAULT: '#de350b',
+          light: '#ffebe6',
         },
       },
       borderRadius: {
@@ -40,7 +49,7 @@ export default {
       boxShadow: {
         card: '0 1px 3px rgba(0,0,0,.04), 0 1px 2px rgba(0,0,0,.02)',
         'card-hover': '0 8px 25px rgba(0,0,0,.08), 0 2px 6px rgba(0,0,0,.04)',
-        glow: '0 0 40px rgba(22,163,74,.12)',
+        glow: '0 0 40px rgba(59,130,196,.10)',
       },
       animation: {
         'fade-in': 'fadeIn .3s ease-out',
