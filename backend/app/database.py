@@ -8,21 +8,25 @@ from __future__ import annotations
 
 import os
 import logging
+from pathlib import Path
 
 from sqlmodel import SQLModel, Session, create_engine
 
 logger = logging.getLogger("wealth.database")
 
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
 # Railway provides postgres:// but SQLAlchemy requires postgresql://
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-_is_sqlite = False
+ROOT = Path(__file__).resolve().parents[2]  # backend/app/.. -> repo root
+DB_PATH = ROOT / "wealth.db"
 
+_is_sqlite = False
 if not DATABASE_URL:
-    DATABASE_URL = "sqlite:///./wealth.db"
+    DATABASE_URL = f"sqlite:///{DB_PATH}"
     _is_sqlite = True
 
 _connect_args: dict = {}
