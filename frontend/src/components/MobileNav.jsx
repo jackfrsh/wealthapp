@@ -5,7 +5,7 @@ import { LayoutDashboard, Wallet, Camera, TrendingUp, Settings } from 'lucide-re
 const items = [
   { id: 'dashboard', icon: LayoutDashboard, label: 'Home' },
   { id: 'accounts', icon: Wallet, label: 'Accounts' },
-  { id: 'snapshots', icon: Camera, label: 'Snaps' },
+  { id: 'snapshots', icon: Camera, label: 'History' },
   { id: 'projections', icon: TrendingUp, label: 'Project' },
   { id: 'settings', icon: Settings, label: 'Settings' },
 ]

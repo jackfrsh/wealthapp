@@ -5,7 +5,7 @@ import { LayoutDashboard, Wallet, Camera, TrendingUp, Settings, LogOut } from 'l
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'accounts', label: 'Accounts', icon: Wallet },
-  { id: 'snapshots', label: 'Snapshots', icon: Camera },
+  { id: 'snapshots', label: 'History', icon: Camera },
   { id: 'projections', label: 'Projections', icon: TrendingUp },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]

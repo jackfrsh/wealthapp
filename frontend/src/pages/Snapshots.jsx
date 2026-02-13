@@ -19,15 +19,14 @@ export default function Snapshots() {
   useEffect(() => { load() }, [load])
 
   const create = async () => {
-    try { await api('/snapshots',{method:'POST'}); showToast('Snapshot created!'); load() } catch(e) { showToast(e.message,'error') }
+    try { await api('/snapshots',{method:'POST'}); showToast('Net worth recorded!'); load() } catch(e) { showToast(e.message,'error') }
   }
 
   const del = async (id) => {
-    if (!confirm('Delete this snapshot?')) return
+    if (!confirm('Delete this record?')) return
     try { await api(`/snapshots/${id}`,{method:'DELETE'}); showToast('Deleted'); load() } catch(e) { showToast(e.message,'error') }
   }
 
-  // Sort newest first
   const sorted = [...snaps].sort((a,b) => new Date(b.created_at)-new Date(a.created_at))
 
   if (loading) return <div className="space-y-4"><div className="h-10 w-48 rounded-lg skeleton"/>{[1,2,3].map(i=><div key={i} className="h-20 rounded-2xl skeleton"/>)}</div>
@@ -36,16 +35,16 @@ export default function Snapshots() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">Snapshots</h1>
-          <p className="text-sm text-ink-muted dark:text-white/40 mt-1">Point-in-time net worth history.</p>
+          <h1 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">Net Worth History</h1>
+          <p className="text-sm text-ink-muted dark:text-white/40 mt-1">Record your net worth to track it over time.</p>
         </div>
-        <button onClick={create} className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl bg-ink dark:bg-white text-white dark:text-ink hover:opacity-90 transition-all active:scale-[.97]">
-          <Camera size={16}/> New snapshot
+        <button onClick={create} className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl bg-accent text-white hover:bg-accent-dark transition-all active:scale-[.97]">
+          <Camera size={16}/> Record net worth
         </button>
       </div>
 
       {sorted.length===0 ? (
-        <Card><EmptyState icon="📸" title="No snapshots yet" subtitle="Create one to start tracking your net worth over time." action={<button onClick={create} className="text-xs font-semibold px-4 py-2 rounded-xl bg-accent text-white">+ Create snapshot</button>}/></Card>
+        <Card><EmptyState icon="📸" title="No history yet" subtitle="Record your net worth to start tracking it over time." action={<button onClick={create} className="text-xs font-semibold px-4 py-2 rounded-xl bg-accent text-white">Record net worth</button>}/></Card>
       ) : (
         <Card className="divide-y divide-black/[.04] dark:divide-white/[.04]">
           {sorted.map((snap, i) => {
@@ -60,7 +59,7 @@ export default function Snapshots() {
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
                     <div>
-                      <div className="font-display text-xl text-ink dark:text-white tracking-tight">
+                      <div className="font-display text-xl text-ink dark:text-white tracking-tight tabular-nums">
                         {fmtCurrency(snap.total_base, snap.base_currency)}
                       </div>
                       <div className="text-[11px] text-ink-muted dark:text-white/40 mt-0.5">
@@ -80,19 +79,18 @@ export default function Snapshots() {
                         {isExpanded ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
                       </button>
                     )}
-                    <button onClick={()=>del(snap.id)} className="p-1 rounded-lg hover:bg-danger-light dark:hover:bg-danger/10 text-ink-muted/40 hover:text-danger transition-colors">
+                    <button onClick={()=>del(snap.id)} className="p-1 rounded-lg hover:bg-loss-light dark:hover:bg-loss/10 text-ink-muted/40 hover:text-loss transition-colors">
                       <Trash2 size={13}/>
                     </button>
                   </div>
                 </div>
 
-                {/* Breakdown */}
                 {isExpanded && breakdown.length > 0 && (
                   <div className="mt-3 pt-3 border-t border-black/[.03] dark:border-white/[.03] space-y-1.5 animate-fade-in">
                     {breakdown.map(b => (
                       <div key={b.id} className="flex justify-between items-center text-xs">
                         <span className="text-ink-muted dark:text-white/50">{b.name} <span className="text-ink-muted/40 dark:text-white/20">({b.currency})</span></span>
-                        <span className="text-ink dark:text-white font-medium">{fmtCurrency(b.value_base, snap.base_currency)}</span>
+                        <span className="text-ink dark:text-white font-medium tabular-nums">{fmtCurrency(b.value_base, snap.base_currency)}</span>
                       </div>
                     ))}
                   </div>
