@@ -32,34 +32,34 @@ export default function AuthPage({ onLogin }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface dark:bg-surface-dark p-4">
+    <div className="min-h-screen flex items-center justify-center bg-surface dark:bg-surface-dark p-5">
       {/* Subtle gradient background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-accent/5 dark:bg-accent/10 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] bg-amber-500/5 dark:bg-amber-500/5 rounded-full blur-[120px]" />
+        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-accent/[.04] dark:bg-accent/[.06] rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] bg-amber-500/[.04] dark:bg-amber-500/[.04] rounded-full blur-[120px]" />
       </div>
 
-      <div className="relative w-full max-w-[400px]">
+      <div className="relative w-full max-w-[420px]">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <h1 className="font-display text-4xl text-ink dark:text-white tracking-tight">
+        <div className="text-center mb-10">
+          <h1 className="font-display text-5xl text-ink dark:text-white tracking-tight">
             wealth<span className="text-accent">.</span>
           </h1>
-          <p className="text-sm text-ink-muted dark:text-white/40 mt-1">Track your net worth, beautifully.</p>
+          <p className="text-sm text-ink-muted dark:text-white/35 mt-2">Plan your financial future, beautifully.</p>
         </div>
 
         {/* Card */}
-        <div className="bg-white dark:bg-surface-dark-2 rounded-3xl shadow-card border border-black/[.04] dark:border-white/[.06] p-8">
+        <div className="bg-white dark:bg-surface-dark-2 rounded-3xl shadow-card-lg border border-black/[.05] dark:border-white/[.06] p-8 sm:p-10">
           {/* Tabs */}
-          <div className="flex border-b border-black/[.06] dark:border-white/[.06] mb-6">
+          <div className="flex border-b border-black/[.06] dark:border-white/[.06] mb-7">
             {['login', 'register'].map(m => (
               <button
                 key={m}
                 onClick={() => { setMode(m); setError('') }}
-                className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-colors -mb-px ${
+                className={`pb-3.5 px-5 text-sm font-semibold border-b-2 transition-colors -mb-px min-h-[44px] ${
                   mode === m
                     ? 'text-ink dark:text-white border-ink dark:border-white'
-                    : 'text-ink-muted dark:text-white/40 border-transparent hover:text-ink dark:hover:text-white/70'
+                    : 'text-ink-muted dark:text-white/35 border-transparent hover:text-ink dark:hover:text-white/60'
                 }`}
               >
                 {m === 'login' ? 'Sign in' : 'Create account'}
@@ -69,32 +69,32 @@ export default function AuthPage({ onLogin }) {
 
           {/* Error */}
           {error && (
-            <div className="text-sm text-danger bg-danger-light dark:bg-danger/10 px-4 py-2.5 rounded-xl mb-4 animate-fade-in">
+            <div className="text-sm text-danger bg-danger-light dark:bg-danger/10 px-4 py-3 rounded-2xl mb-5 animate-fade-in">
               {error}
             </div>
           )}
 
           {/* Form */}
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div>
-              <label className="block text-xs font-semibold text-ink-3 dark:text-white/60 mb-1.5 tracking-wide">Username</label>
+              <label className="block text-xs font-semibold text-ink-3 dark:text-white/50 mb-2 tracking-wide">Username</label>
               <input
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && submit()}
-                className="w-full px-4 py-2.5 rounded-xl border border-black/[.08] dark:border-white/[.08] bg-surface dark:bg-surface-dark text-ink dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
+                className="w-full px-4 py-3.5 rounded-2xl border border-black/[.08] dark:border-white/[.08] bg-surface dark:bg-surface-dark text-ink dark:text-white text-base focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
                 placeholder="yourname"
                 autoComplete="username"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-ink-3 dark:text-white/60 mb-1.5 tracking-wide">Password</label>
+              <label className="block text-xs font-semibold text-ink-3 dark:text-white/50 mb-2 tracking-wide">Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && submit()}
-                className="w-full px-4 py-2.5 rounded-xl border border-black/[.08] dark:border-white/[.08] bg-surface dark:bg-surface-dark text-ink dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
+                className="w-full px-4 py-3.5 rounded-2xl border border-black/[.08] dark:border-white/[.08] bg-surface dark:bg-surface-dark text-ink dark:text-white text-base focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
                 placeholder="••••••••"
                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               />
@@ -102,7 +102,7 @@ export default function AuthPage({ onLogin }) {
             <button
               onClick={submit}
               disabled={loading}
-              className="w-full py-3 rounded-xl bg-ink dark:bg-white text-white dark:text-ink font-semibold text-sm transition-all hover:opacity-90 active:scale-[.98] disabled:opacity-50"
+              className="w-full py-3.5 rounded-2xl bg-accent text-white font-semibold text-base transition-all hover:bg-accent-dark active:scale-[.98] disabled:opacity-50 min-h-[48px]"
             >
               {loading ? '...' : mode === 'login' ? 'Sign in' : 'Create account'}
             </button>

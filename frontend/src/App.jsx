@@ -126,7 +126,7 @@ export default function App() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface dark:bg-surface-dark">
         <div className="animate-pulse-soft">
-          <span className="font-display text-3xl text-ink dark:text-white">wealth<span className="text-accent">.</span></span>
+          <span className="font-display text-4xl text-ink dark:text-white">wealth<span className="text-accent">.</span></span>
         </div>
       </div>
     )
@@ -154,8 +154,8 @@ export default function App() {
     <AppContext.Provider value={ctx}>
       <div className="flex min-h-screen bg-surface dark:bg-surface-dark transition-colors duration-300">
         <Sidebar onLogout={handleLogout} />
-        <main className="flex-1 min-w-0 pb-24 lg:pb-0">
-          <div className="max-w-[960px] mx-auto px-5 sm:px-8 py-8 sm:py-10 animate-fade-in" key={page}>
+        <main className="flex-1 min-w-0 pb-28 lg:pb-0">
+          <div className="max-w-[960px] mx-auto px-5 sm:px-8 lg:px-10 py-8 sm:py-12 animate-fade-in" key={page}>
             <PageComponent />
           </div>
         </main>

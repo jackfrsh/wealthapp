@@ -17,21 +17,21 @@ export default function Modal({ open, onClose, title, children }) {
 
   return (
     <div
-      className="fixed inset-0 z-[9990] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[9990] flex items-end sm:items-center justify-center p-0 sm:p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/30 dark:bg-black/50 backdrop-blur-sm" />
       <div
         ref={ref}
-        className="relative w-full max-w-md bg-white dark:bg-surface-dark-2 rounded-3xl shadow-xl p-7 animate-slide-up"
+        className="relative w-full sm:max-w-md bg-white dark:bg-surface-dark-2 rounded-t-3xl sm:rounded-3xl shadow-xl p-7 sm:p-8 animate-slide-up max-h-[90vh] overflow-y-auto"
       >
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="font-display text-xl text-ink dark:text-white">{title}</h2>
+        <div className="flex items-center justify-between mb-7">
+          <h2 className="font-display text-2xl text-ink dark:text-white">{title}</h2>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-ink-muted dark:text-white/40 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            className="p-2 -mr-1 rounded-xl text-ink-muted dark:text-white/40 hover:bg-black/5 dark:hover:bg-white/5 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
         {children}

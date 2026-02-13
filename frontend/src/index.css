@@ -2,15 +2,70 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Design Tokens (CSS Variables) ───────────────────── */
+:root {
+  /* Backgrounds */
+  --bg:         #f5f5f0;
+  --bg-card:    #ffffff;
+  --bg-inset:   #eeeee8;
+  --bg-hero:    linear-gradient(135deg, #e8f0fa 0%, #f5f5f0 50%, #eeeee8 100%);
+
+  /* Text */
+  --text:       #1a1a1a;
+  --text-2:     #2e2e2e;
+  --text-3:     #555555;
+  --text-muted: #8c8c8c;
+
+  /* Accent */
+  --accent:     #3b7cc4;
+  --accent-light: #e8f0fa;
+
+  /* Semantic */
+  --positive:   #1a9a5e;
+  --negative:   #d13415;
+
+  /* Border & Shadow */
+  --border:     rgba(0,0,0,.06);
+  --shadow-card: 0 1px 3px rgba(0,0,0,.03), 0 4px 12px rgba(0,0,0,.04);
+  --radius:     18px;
+  --radius-sm:  12px;
+  --radius-full: 9999px;
+
+  /* Spacing scale (supplements Tailwind) */
+  --space-xs:   0.25rem;
+  --space-sm:   0.5rem;
+  --space-md:   1rem;
+  --space-lg:   1.5rem;
+  --space-xl:   2rem;
+  --space-2xl:  3rem;
+}
+
+.dark {
+  --bg:         #161921;
+  --bg-card:    #1c2029;
+  --bg-inset:   #242832;
+  --bg-hero:    linear-gradient(135deg, #1c2029 0%, #242832 60%, #1c2029 100%);
+
+  --text:       #f0f0f0;
+  --text-2:     #c8c8c8;
+  --text-3:     #999999;
+  --text-muted: #6b6b6b;
+
+  --border:     rgba(255,255,255,.06);
+  --shadow-card: 0 1px 3px rgba(0,0,0,.2), 0 4px 12px rgba(0,0,0,.15);
+}
+
 /* ─── Base ─────────────────────────────────────────────── */
 html {
   scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  @apply bg-surface text-ink font-sans;
+  @apply bg-surface text-ink font-sans text-base;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
 }
 
 .dark body,
@@ -29,6 +84,36 @@ body.dark {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* ─── Premium typography helpers ───────────────────────── */
+.hero-number {
+  font-family: "Instrument Serif", Georgia, serif;
+  font-size: clamp(2.25rem, 6vw, 3.5rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 640px) {
+  .hero-number {
+    font-size: clamp(3rem, 5vw, 3.75rem);
+  }
+}
+
+/* ─── Hero gradient panel ──────────────────────────────── */
+.hero-panel {
+  background: var(--bg-hero);
+  position: relative;
+}
+
+.hero-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid var(--border);
+  pointer-events: none;
+}
+
 /* ─── Custom scrollbar ─────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
@@ -45,7 +130,7 @@ body.dark {
 
 /* ─── Skeleton shimmer ─────────────────────────────────── */
 @keyframes shimmer {
-  0% { background-position: 200% 0; }
+  0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
 .skeleton {
@@ -60,6 +145,19 @@ body.dark {
 
 /* ─── Glass effect ─────────────────────────────────────── */
 .glass {
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+}
+
+/* ─── iOS-like touch interaction feedback ──────────────── */
+@media (hover: none) {
+  .touch-press:active {
+    opacity: 0.7;
+    transition: opacity 0.1s ease;
+  }
+}
+
+/* ─── Premium input styling ────────────────────────────── */
+input, select, textarea {
+  font-size: 1rem; /* Prevent iOS zoom on focus */
 }

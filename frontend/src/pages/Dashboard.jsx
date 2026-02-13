@@ -45,12 +45,12 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="space-y-5">
-        <div className="h-[200px] rounded-3xl skeleton" />
+      <div className="space-y-6">
+        <div className="h-[240px] rounded-3xl skeleton" />
         <div className="grid grid-cols-3 gap-4">
-          {[1,2,3].map(i => <div key={i} className="h-[120px] rounded-2xl skeleton" />)}
+          {[1,2,3].map(i => <div key={i} className="h-[130px] rounded-2xl skeleton" />)}
         </div>
-        <div className="h-[280px] rounded-2xl skeleton" />
+        <div className="h-[300px] rounded-2xl skeleton" />
       </div>
     )
   }
@@ -71,70 +71,84 @@ export default function Dashboard() {
   const rangeChangePct = data.range_change_pct || 0
 
   return (
-    <div className="space-y-5">
-      {/* ═══ Hero — dominant net worth ═══ */}
-      <div className="relative overflow-hidden rounded-3xl bg-ink dark:bg-surface-dark-3 p-7 sm:p-9">
-        {/* Accent glow */}
-        <div className="absolute top-[-60px] right-[-60px] w-[300px] h-[300px] bg-accent/10 rounded-full blur-[80px] pointer-events-none" />
+    <div className="space-y-6">
+      {/* ═══ Hero — Premium Wealth Overview ═══ */}
+      <div className="hero-panel rounded-3xl p-7 sm:p-10">
+        {/* Soft accent glow */}
+        <div className="absolute top-[-80px] right-[-40px] w-[350px] h-[350px] bg-accent/[.06] dark:bg-accent/[.08] rounded-full blur-[100px] pointer-events-none" />
 
         <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
-          <div>
-            <div className="text-[11px] font-semibold tracking-[.12em] uppercase text-white/40 mb-2">
-              Net Worth
+          <div className="space-y-4">
+            {/* Section label */}
+            <div className="text-xs font-semibold tracking-[.14em] uppercase text-ink-muted/70 dark:text-white/35">
+              Your Wealth
             </div>
-            <div className="font-display text-[44px] sm:text-[56px] leading-none text-white tracking-tight mb-3 tabular-nums">
+
+            {/* Primary net worth */}
+            <div className="hero-number text-ink dark:text-white">
               {fmtCurrency(total, ccy)}
             </div>
 
+            {/* Delta pill + range */}
             {data.total_snapshots > 0 && (
-              <div className="mb-3">
+              <div className="flex items-center gap-3">
                 <ChangePill
                   change={rangeChange}
                   changePct={rangeChangePct}
                   currency={ccy}
                   size="md"
                 />
-                <span className="text-xs text-white/30 ml-2">past {range}</span>
+                <span className="text-xs text-ink-muted/50 dark:text-white/25">past {range}</span>
               </div>
             )}
 
-            <div className="flex items-center gap-4 text-xs text-white/35">
-              <span>{data.accounts_count || 0} accounts</span>
-              <span>{data.total_snapshots || 0} records</span>
+            {/* Calm subline */}
+            <p className="text-sm text-ink-muted/60 dark:text-white/30 max-w-xs leading-relaxed">
+              Building long-term financial independence.
+            </p>
+
+            {/* Meta counts */}
+            <div className="flex items-center gap-4 text-xs text-ink-muted/50 dark:text-white/25">
+              <span>{data.accounts_count || 0} account{data.accounts_count !== 1 ? 's' : ''}</span>
+              <span className="w-px h-3 bg-current opacity-30" />
+              <span>{data.total_snapshots || 0} record{data.total_snapshots !== 1 ? 's' : ''}</span>
               {data.excluded_accounts > 0 && (
-                <span className="text-amber-400/60">{data.excluded_accounts} excluded (FX)</span>
+                <>
+                  <span className="w-px h-3 bg-current opacity-30" />
+                  <span className="text-amber-600/70 dark:text-amber-400/50">{data.excluded_accounts} excluded</span>
+                </>
               )}
             </div>
           </div>
 
-          {/* Goal */}
+          {/* Goal (if set) */}
           {goal > 0 && (
-            <div className="text-right">
-              <div className="text-[10px] font-semibold tracking-[.1em] uppercase text-white/30 flex items-center gap-1 justify-end">
-                <Target size={11} /> Goal
+            <div className="text-right sm:min-w-[140px]">
+              <div className="text-xs font-semibold tracking-[.1em] uppercase text-ink-muted/50 dark:text-white/25 flex items-center gap-1.5 justify-end">
+                <Target size={12} /> Goal
               </div>
-              <div className="font-display text-xl text-amber-400 mt-1 tabular-nums">
+              <div className="font-display text-2xl text-amber-600 dark:text-amber-400 mt-2 tabular-nums">
                 {fmtCurrency(goal, ccy)}
               </div>
-              <div className="text-xs text-white/30 mt-0.5 tabular-nums">
-                {goalPct >= 100 ? '🎯 Reached!' : `${fmtCurrency(goal - total, ccy)} to go`}
+              <div className="text-xs text-ink-muted/50 dark:text-white/25 mt-1 tabular-nums">
+                {goalPct >= 100 ? 'Reached!' : `${fmtCurrency(goal - total, ccy)} to go`}
               </div>
             </div>
           )}
         </div>
 
-        {/* Goal progress */}
+        {/* Goal progress bar */}
         {goal > 0 && (
-          <div className="relative mt-6 pt-5 border-t border-white/[.06]">
-            <div className="h-1.5 bg-white/[.08] rounded-full overflow-hidden">
+          <div className="relative mt-8 pt-6 border-t border-black/[.05] dark:border-white/[.05]">
+            <div className="h-2 bg-black/[.05] dark:bg-white/[.06] rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-accent to-blue-400 rounded-full transition-all duration-700"
                 style={{ width: `${goalPct.toFixed(1)}%` }}
               />
             </div>
-            <div className="flex justify-between text-[10px] text-white/25 mt-1.5 tabular-nums">
+            <div className="flex justify-between text-xs text-ink-muted/40 dark:text-white/20 mt-2 tabular-nums">
               <span>{fmtCurrency(0, ccy)}</span>
-              <span>{goalPct.toFixed(0)}%</span>
+              <span className="font-semibold text-ink-muted/60 dark:text-white/30">{goalPct.toFixed(0)}%</span>
               <span>{fmtCurrency(goal, ccy)}</span>
             </div>
           </div>
@@ -145,23 +159,23 @@ export default function Dashboard() {
       <div className="flex gap-3">
         <button
           onClick={createSnapshot}
-          className="flex items-center gap-1.5 text-sm font-semibold px-5 py-2.5 rounded-xl bg-accent text-white hover:bg-accent-dark transition-colors active:scale-[.97]"
+          className="flex items-center gap-2 text-sm font-semibold px-6 py-3 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-colors active:scale-[.97] touch-press"
         >
-          <Camera size={16} /> Record net worth
+          <Camera size={17} /> Record net worth
         </button>
         <button
           onClick={() => setPage('accounts')}
-          className="flex items-center gap-1.5 text-sm font-medium px-4 py-2.5 rounded-xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-surface-2 dark:hover:bg-white/5 transition-colors"
+          className="flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-surface-2 dark:hover:bg-white/5 transition-colors touch-press"
         >
           Add account
         </button>
       </div>
 
       {/* ═══ Stats Row ═══ */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-        <Card className="p-5">
-          <div className="text-[10px] font-bold tracking-[.1em] uppercase text-ink-muted dark:text-white/40 mb-2.5 flex items-center gap-1.5">
-            <TrendingUp size={12} /> Change ({range})
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="p-6">
+          <div className="text-xs font-semibold tracking-[.08em] uppercase text-ink-muted dark:text-white/40 mb-3 flex items-center gap-2">
+            <TrendingUp size={14} /> Change ({range})
           </div>
           {data.total_snapshots > 0 ? (
             <>
@@ -170,48 +184,48 @@ export default function Dashboard() {
               }`}>
                 {rangeChange >= 0 ? '+' : ''}{fmtCurrency(rangeChange, ccy)}
               </div>
-              <div className="mt-2">
+              <div className="mt-3">
                 <ChangePill change={rangeChange} changePct={rangeChangePct} currency={ccy} size="sm" showAmount={false} />
               </div>
             </>
           ) : (
-            <div className="text-lg text-ink-muted dark:text-white/30">—</div>
+            <div className="text-xl text-ink-muted dark:text-white/30">—</div>
           )}
         </Card>
 
-        <Card className="p-5">
-          <div className="text-[10px] font-bold tracking-[.1em] uppercase text-ink-muted dark:text-white/40 mb-2.5 flex items-center gap-1.5">
-            <Clock size={12} /> Latest Record
+        <Card className="p-6">
+          <div className="text-xs font-semibold tracking-[.08em] uppercase text-ink-muted dark:text-white/40 mb-3 flex items-center gap-2">
+            <Clock size={14} /> Latest Record
           </div>
           <div className="font-display text-2xl text-ink dark:text-white tracking-tight tabular-nums">
             {data.latest_snapshot_total > 0 ? fmtCurrency(data.latest_snapshot_total, ccy) : '—'}
           </div>
-          <div className="text-[11px] text-ink-muted/60 dark:text-white/25 mt-2">
+          <div className="text-xs text-ink-muted/50 dark:text-white/25 mt-2">
             {series.length > 0 ? fmtDate(series[series.length - 1]?.t) : 'No records yet'}
           </div>
         </Card>
 
-        <Card className="p-5">
-          <div className="text-[10px] font-bold tracking-[.1em] uppercase text-ink-muted dark:text-white/40 mb-2.5 flex items-center gap-1.5">
-            <Camera size={12} /> History
+        <Card className="p-6">
+          <div className="text-xs font-semibold tracking-[.08em] uppercase text-ink-muted dark:text-white/40 mb-3 flex items-center gap-2">
+            <Camera size={14} /> History
           </div>
           <div className="font-display text-2xl text-ink dark:text-white tracking-tight tabular-nums">
             {data.total_snapshots || 0}
           </div>
-          <div className="text-[11px] text-ink-muted/60 dark:text-white/25 mt-1">data points</div>
+          <div className="text-xs text-ink-muted/50 dark:text-white/25 mt-2">data points</div>
         </Card>
       </div>
 
       {/* ═══ Chart ═══ */}
-      <Card className="p-5 sm:p-6">
-        <div className="flex items-center justify-between mb-4">
+      <Card className="p-6 sm:p-8">
+        <div className="flex items-center justify-between mb-5">
           <h3 className="text-sm font-semibold text-ink dark:text-white">Net worth over time</h3>
           <div className="flex bg-surface-2 dark:bg-white/5 rounded-full p-0.5 gap-0.5">
             {RANGES.map(r => (
               <button
                 key={r}
                 onClick={() => setRange(r)}
-                className={`text-[11px] font-semibold px-3 py-1.5 rounded-full transition-all ${
+                className={`text-xs font-semibold px-3.5 py-2 rounded-full transition-all min-w-[44px] ${
                   range === r
                     ? 'bg-white dark:bg-white/10 text-ink dark:text-white shadow-sm'
                     : 'text-ink-muted dark:text-white/40 hover:text-ink dark:hover:text-white/70'
@@ -229,31 +243,31 @@ export default function Dashboard() {
             title="Not enough data yet"
             subtitle="Record your net worth at least twice to see your trend"
             action={
-              <button onClick={createSnapshot} className="text-xs font-semibold px-4 py-2 rounded-xl bg-accent text-white hover:bg-accent-dark transition-colors">
+              <button onClick={createSnapshot} className="text-sm font-semibold px-5 py-2.5 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-colors">
                 Record net worth
               </button>
             }
           />
         ) : (
-          <div className="h-[200px] sm:h-[220px]">
+          <div className="h-[220px] sm:h-[260px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={series} margin={{ top: 5, right: 5, bottom: 0, left: 5 }}>
                 <defs>
                   <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3b82c4" stopOpacity={0.15} />
-                    <stop offset="100%" stopColor="#3b82c4" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#3b7cc4" stopOpacity={0.12} />
+                    <stop offset="100%" stopColor="#3b7cc4" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" strokeOpacity={0.04} />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 10, fill: 'currentColor', fillOpacity: 0.3 }}
+                  tick={{ fontSize: 11, fill: 'currentColor', fillOpacity: 0.3 }}
                   axisLine={false}
                   tickLine={false}
                   interval="preserveStartEnd"
                 />
                 <YAxis
-                  tick={{ fontSize: 10, fill: 'currentColor', fillOpacity: 0.3 }}
+                  tick={{ fontSize: 11, fill: 'currentColor', fillOpacity: 0.3 }}
                   axisLine={false}
                   tickLine={false}
                   width={60}
@@ -267,11 +281,11 @@ export default function Dashboard() {
                 <Area
                   type="monotone"
                   dataKey="value"
-                  stroke="#3b82c4"
+                  stroke="#3b7cc4"
                   strokeWidth={2.5}
                   fill="url(#areaFill)"
                   dot={false}
-                  activeDot={{ r: 5, stroke: '#3b82c4', strokeWidth: 2, fill: 'white' }}
+                  activeDot={{ r: 5, stroke: '#3b7cc4', strokeWidth: 2, fill: 'white' }}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -286,9 +300,9 @@ function ChartTooltip({ active, payload, ccy }) {
   if (!active || !payload?.length) return null
   const d = payload[0].payload
   return (
-    <div className="bg-ink dark:bg-surface-dark-3 text-white px-3.5 py-2.5 rounded-xl shadow-lg text-xs border border-white/5">
-      <div className="font-bold text-sm tabular-nums">{fmtCurrency(d.value, ccy)}</div>
-      <div className="text-white/50 mt-0.5">{fmtDate(d.t)}</div>
+    <div className="bg-ink dark:bg-surface-dark-3 text-white px-4 py-3 rounded-2xl shadow-lg text-sm border border-white/5">
+      <div className="font-bold tabular-nums">{fmtCurrency(d.value, ccy)}</div>
+      <div className="text-white/50 mt-0.5 text-xs">{fmtDate(d.t)}</div>
     </div>
   )
 }

@@ -8,9 +8,9 @@ export default function ChangePill({ change, changePct, currency, size = 'md', s
   const isZero = change === 0
 
   const sizes = {
-    sm: 'text-[11px] px-2 py-0.5 gap-1',
-    md: 'text-xs px-2.5 py-1 gap-1.5',
-    lg: 'text-sm px-3 py-1.5 gap-1.5',
+    sm: 'text-xs px-2.5 py-1 gap-1.5',
+    md: 'text-sm px-3 py-1.5 gap-2',
+    lg: 'text-base px-4 py-2 gap-2',
   }
 
   const colors = isZero
@@ -23,7 +23,7 @@ export default function ChangePill({ change, changePct, currency, size = 'md', s
 
   return (
     <span className={`inline-flex items-center font-semibold rounded-full ${sizes[size]} ${colors}`}>
-      <Icon size={size === 'sm' ? 11 : size === 'lg' ? 15 : 13} strokeWidth={2.5} />
+      <Icon size={size === 'sm' ? 12 : size === 'lg' ? 16 : 14} strokeWidth={2.5} />
       {showAmount && <span className="tabular-nums">{change >= 0 ? '+' : ''}{fmtCurrency(change, currency)}</span>}
       <span className="tabular-nums">{fmtPct(changePct)}</span>
     </span>

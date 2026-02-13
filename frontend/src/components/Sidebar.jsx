@@ -14,19 +14,19 @@ export default function Sidebar({ onLogout }) {
   const { page, setPage, username } = useApp()
 
   return (
-    <nav className="hidden lg:flex flex-col w-[240px] flex-shrink-0 bg-ink dark:bg-surface-dark-2 border-r border-transparent dark:border-white/5 sticky top-0 h-screen">
+    <nav className="hidden lg:flex flex-col w-[260px] flex-shrink-0 bg-surface-dark dark:bg-surface-dark-2 border-r border-transparent dark:border-white/5 sticky top-0 h-screen">
       {/* Logo */}
-      <div className="px-6 pt-8 pb-6 border-b border-white/5">
-        <div className="font-display text-[22px] text-white tracking-tight">
+      <div className="px-7 pt-9 pb-7 border-b border-white/[.06]">
+        <div className="font-display text-2xl text-white tracking-tight">
           wealth<span className="text-accent">.</span>
         </div>
-        <div className="text-[11px] text-white/30 tracking-widest uppercase mt-0.5">
-          Net Worth Tracker
+        <div className="text-xs text-white/25 tracking-widest uppercase mt-1">
+          Wealth Planner
         </div>
       </div>
 
       {/* Nav items */}
-      <div className="flex-1 py-3">
+      <div className="flex-1 py-4">
         {NAV_ITEMS.map(item => {
           const Icon = item.icon
           const active = page === item.id
@@ -34,13 +34,13 @@ export default function Sidebar({ onLogout }) {
             <button
               key={item.id}
               onClick={() => setPage(item.id)}
-              className={`w-full flex items-center gap-3 px-6 py-2.5 text-sm font-medium transition-all duration-200
+              className={`w-full flex items-center gap-3.5 px-7 py-3 text-sm font-medium transition-all duration-200
                 ${active
-                  ? 'text-white bg-white/[.06] border-l-[3px] border-accent'
-                  : 'text-white/40 hover:text-white/70 hover:bg-white/[.03] border-l-[3px] border-transparent'
+                  ? 'text-white bg-white/[.07] border-l-[3px] border-accent'
+                  : 'text-white/35 hover:text-white/60 hover:bg-white/[.03] border-l-[3px] border-transparent'
                 }`}
             >
-              <Icon size={17} strokeWidth={active ? 2 : 1.5} />
+              <Icon size={18} strokeWidth={active ? 2 : 1.5} />
               {item.label}
             </button>
           )
@@ -48,14 +48,14 @@ export default function Sidebar({ onLogout }) {
       </div>
 
       {/* User */}
-      <div className="px-6 py-5 border-t border-white/5">
-        <div className="text-sm font-semibold text-white/70">{username || '—'}</div>
-        <div className="text-[11px] text-white/30 mt-0.5">Personal account</div>
+      <div className="px-7 py-6 border-t border-white/[.06]">
+        <div className="text-sm font-semibold text-white/60">{username || '—'}</div>
+        <div className="text-xs text-white/25 mt-0.5">Personal account</div>
         <button
           onClick={onLogout}
-          className="flex items-center gap-1.5 mt-3 text-xs text-white/30 hover:text-white/60 transition-colors"
+          className="flex items-center gap-2 mt-4 text-xs text-white/25 hover:text-white/50 transition-colors min-h-[44px]"
         >
-          <LogOut size={12} /> Sign out
+          <LogOut size={14} /> Sign out
         </button>
       </div>
     </nav>
