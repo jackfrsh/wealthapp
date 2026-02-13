@@ -3,7 +3,7 @@ import { api } from '../api'
 import { useApp } from '../App'
 import Card from '../components/Card'
 import { CURRENCIES } from '../utils'
-import { Sun, Moon, RefreshCw, Save, Globe } from 'lucide-react'
+import { Sun, Moon, Monitor, RefreshCw, Save, Globe } from 'lucide-react'
 
 const CURRENCY_NAMES = {
   GBP: 'British Pound', USD: 'US Dollar', EUR: 'Euro', CHF: 'Swiss Franc',
@@ -13,8 +13,14 @@ const CURRENCY_NAMES = {
   BTC: 'Bitcoin', ETH: 'Ethereum',
 }
 
+const THEME_OPTIONS = [
+  { id: 'system', label: 'System', icon: Monitor },
+  { id: 'light', label: 'Light', icon: Sun },
+  { id: 'dark', label: 'Dark', icon: Moon },
+]
+
 export default function Settings() {
-  const { dark, setDark, baseCurrency, setBaseCurrency, showToast } = useApp()
+  const { dark, setDark, baseCurrency, setBaseCurrency, showToast, themePref, setThemePreference } = useApp()
   const [currency, setCurrency] = useState('GBP')
   const [goal, setGoal] = useState('')
   const [fxStatus, setFxStatus] = useState('')
@@ -41,7 +47,11 @@ export default function Settings() {
     try {
       await api('/settings', {
         method: 'PUT',
-        body: { base_currency: currency, goal: Number(String(goal || '0').replace(/,/g, '')) },
+        body: {
+          base_currency: currency,
+          goal: Number(String(goal || '0').replace(/,/g, '')),
+          theme_preference: themePref,
+        },
       })
       setBaseCurrency(currency)
       showToast('Settings saved')
@@ -81,28 +91,29 @@ export default function Settings() {
         <p className="text-sm text-ink-muted dark:text-white/40 mt-1">Configure your wealth tracker.</p>
       </div>
 
-      {/* Appearance */}
+      {/* Appearance — 3-way toggle */}
       <Card className="p-6">
         <h3 className="text-[10px] font-bold tracking-[.1em] uppercase text-ink-muted dark:text-white/40 mb-4 flex items-center gap-1.5">
           {dark ? <Moon size={12} /> : <Sun size={12} />} Appearance
         </h3>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setDark(false)}
-            className={`flex items-center gap-2 px-4 py-3 rounded-xl border-2 transition-all text-sm font-medium ${
-              !dark ? 'border-accent bg-accent/5 text-ink' : 'border-transparent bg-surface-2 dark:bg-white/5 text-ink-muted dark:text-white/40 hover:border-black/10 dark:hover:border-white/10'
-            }`}
-          >
-            <Sun size={16} /> Light
-          </button>
-          <button
-            onClick={() => setDark(true)}
-            className={`flex items-center gap-2 px-4 py-3 rounded-xl border-2 transition-all text-sm font-medium ${
-              dark ? 'border-accent bg-accent/5 dark:bg-accent/10 text-white' : 'border-transparent bg-surface-2 dark:bg-white/5 text-ink-muted dark:text-white/40 hover:border-black/10 dark:hover:border-white/10'
-            }`}
-          >
-            <Moon size={16} /> Dark
-          </button>
+        <div className="flex items-center gap-2">
+          {THEME_OPTIONS.map(opt => {
+            const Icon = opt.icon
+            const active = themePref === opt.id
+            return (
+              <button
+                key={opt.id}
+                onClick={() => setThemePreference(opt.id)}
+                className={`flex items-center gap-2 px-4 py-3 rounded-xl border-2 transition-all text-sm font-medium ${
+                  active
+                    ? 'border-accent bg-accent/5 dark:bg-accent/10 text-ink dark:text-white'
+                    : 'border-transparent bg-surface-2 dark:bg-white/5 text-ink-muted dark:text-white/40 hover:border-black/10 dark:hover:border-white/10'
+                }`}
+              >
+                <Icon size={16} /> {opt.label}
+              </button>
+            )
+          })}
         </div>
       </Card>
 

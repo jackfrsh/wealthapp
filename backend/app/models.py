@@ -36,6 +36,7 @@ class Settings(SQLModel, table=True):
     user_id: int = Field(foreign_key="users.id", index=True)
     base_currency: str = Field(default="GBP")
     goal: float = Field(default=0.0)
+    theme_preference: str = Field(default="system")  # "system" | "dark" | "light"
 
 
 # ─── Accounts ────────────────────────────────────────────────────────────────

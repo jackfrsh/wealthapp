@@ -14,28 +14,68 @@ import MobileNav from './components/MobileNav'
 export const AppContext = createContext()
 export const useApp = () => useContext(AppContext)
 
+function resolveTheme(pref) {
+  if (pref === 'dark') return true
+  if (pref === 'light') return false
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
 export default function App() {
   const [authed, setAuthed] = useState(false)
   const [checking, setChecking] = useState(true)
   const [username, setUsername] = useState('')
   const [page, setPage] = useState('dashboard')
-  const [dark, setDark] = useState(() => {
-    const saved = localStorage.getItem('theme')
-    if (saved) return saved === 'dark'
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
+  const [themePref, setThemePref] = useState(() => {
+    return localStorage.getItem('theme_pref') || 'system'
   })
+  const [dark, setDarkRaw] = useState(() => resolveTheme(localStorage.getItem('theme_pref') || 'system'))
   const [baseCurrency, setBaseCurrency] = useState('GBP')
   const [toast, setToast] = useState(null)
+
+  // Resolve dark from themePref
+  useEffect(() => {
+    setDarkRaw(resolveTheme(themePref))
+    localStorage.setItem('theme_pref', themePref)
+  }, [themePref])
+
+  // Listen for system theme changes when pref is 'system'
+  useEffect(() => {
+    if (themePref !== 'system') return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const handler = (e) => setDarkRaw(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [themePref])
 
   // Apply dark mode class
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
-    localStorage.setItem('theme', dark ? 'dark' : 'light')
   }, [dark])
+
+  const setThemePreference = useCallback((pref) => {
+    setThemePref(pref)
+    // Fire and forget save to backend
+    api('/settings', { method: 'PUT', body: { theme_preference: pref } }).catch(() => {})
+  }, [])
+
+  // For backward compat: setDark(bool) → set pref
+  const setDark = useCallback((val) => {
+    setThemePreference(val ? 'dark' : 'light')
+  }, [setThemePreference])
 
   const showToast = useCallback((msg, type = 'success') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 3000)
+  }, [])
+
+  // Load user theme from settings
+  const loadUserTheme = useCallback(async () => {
+    try {
+      const s = await api('/settings')
+      const pref = s.theme_preference || 'system'
+      setThemePref(pref)
+      setBaseCurrency(s.base_currency || 'GBP')
+    } catch (e) { /* ignore */ }
   }, [])
 
   // Check auth on mount
@@ -49,18 +89,21 @@ export default function App() {
       .then(me => {
         setUsername(me.username)
         setAuthed(true)
+        return loadUserTheme()
       })
       .catch(() => {
         clearToken()
       })
       .finally(() => setChecking(false))
-  }, [])
+  }, [loadUserTheme])
 
-  const handleLogin = (tok, uname) => {
+  const handleLogin = async (tok, uname) => {
     setToken(tok)
     setUsername(uname)
     setAuthed(true)
     setPage('dashboard')
+    // Load per-user theme after login
+    await loadUserTheme()
   }
 
   const handleLogout = () => {
@@ -68,11 +111,15 @@ export default function App() {
     setAuthed(false)
     setUsername('')
     setPage('dashboard')
+    // Reset to system theme
+    setThemePref('system')
+    localStorage.removeItem('theme_pref')
   }
 
   const ctx = {
     username, baseCurrency, setBaseCurrency,
     dark, setDark, showToast, page, setPage,
+    themePref, setThemePreference,
   }
 
   if (checking) {

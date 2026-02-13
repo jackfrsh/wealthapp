@@ -1,5 +1,5 @@
 """
-Settings router: GET/PUT per-user settings (base currency, goal).
+Settings router: GET/PUT per-user settings (base currency, goal, theme).
 """
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -17,11 +17,13 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 class SettingsResponse(BaseModel):
     base_currency: str
     goal: float
+    theme_preference: str
 
 
 class SettingsUpdate(BaseModel):
     base_currency: str = "GBP"
     goal: float = 0.0
+    theme_preference: str = "system"
 
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────
@@ -31,7 +33,7 @@ def _get_or_create_settings(user_id: int, session: Session) -> Settings:
         select(Settings).where(Settings.user_id == user_id)
     ).first()
     if not settings:
-        settings = Settings(user_id=user_id, base_currency="GBP", goal=0.0)
+        settings = Settings(user_id=user_id, base_currency="GBP", goal=0.0, theme_preference="system")
         session.add(settings)
         session.commit()
         session.refresh(settings)
@@ -47,6 +49,7 @@ def get_settings(
     return SettingsResponse(
         base_currency=settings.base_currency,
         goal=settings.goal,
+        theme_preference=getattr(settings, 'theme_preference', 'system') or 'system',
     )
 
 
@@ -59,10 +62,14 @@ def update_settings(
     settings = _get_or_create_settings(current_user.id, session)
     settings.base_currency = body.base_currency.upper()
     settings.goal = body.goal
+    # Validate theme
+    if body.theme_preference in ("system", "dark", "light"):
+        settings.theme_preference = body.theme_preference
     session.add(settings)
     session.commit()
     session.refresh(settings)
     return SettingsResponse(
         base_currency=settings.base_currency,
         goal=settings.goal,
+        theme_preference=getattr(settings, 'theme_preference', 'system') or 'system',
     )
