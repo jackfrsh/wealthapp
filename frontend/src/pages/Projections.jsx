@@ -161,8 +161,8 @@ export default function Projections() {
             <AreaChart data={chartData} margin={{ top: 10, right: 10, bottom: 0, left: 10 }}>
               <defs>
                 <linearGradient id="projFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="rgb(22,163,74)" stopOpacity={0.08} />
-                  <stop offset="100%" stopColor="rgb(22,163,74)" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#3b82c4" stopOpacity={0.08} />
+                  <stop offset="100%" stopColor="#3b82c4" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" strokeOpacity={0.04} />
@@ -173,8 +173,8 @@ export default function Projections() {
                 return v
               }} />
               <Tooltip content={<ProjTooltip ccy={ccy} />} />
-              <Area type="monotone" dataKey="actual" stroke="rgb(22,163,74)" strokeWidth={2.5} fill="url(#projFill)" dot={false} connectNulls={false} />
-              <Area type="monotone" dataKey="projected" stroke="rgb(22,163,74)" strokeWidth={2} strokeDasharray="6 4" fill="url(#projFill)" dot={false} connectNulls={false} />
+              <Area type="monotone" dataKey="actual" stroke="#3b82c4" strokeWidth={2.5} fill="url(#projFill)" dot={false} connectNulls={false} />
+              <Area type="monotone" dataKey="projected" stroke="#3b82c4" strokeWidth={2} strokeDasharray="6 4" fill="url(#projFill)" dot={false} connectNulls={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -199,7 +199,7 @@ export default function Projections() {
                   </div>
                   <div className="text-right">
                     <div className="font-display text-lg text-ink dark:text-white">{fmtCurrency(m.projected_net_worth, ccy)}</div>
-                    <div className={`text-[11px] font-semibold ${growth >= 0 ? 'text-accent' : 'text-danger'}`}>
+                    <div className={`text-[11px] font-semibold ${growth >= 0 ? 'text-gain' : 'text-loss'}`}>
                       {growth >= 0 ? '+' : ''}{growth.toFixed(0)}% from today
                     </div>
                   </div>

@@ -89,7 +89,7 @@ export default function Accounts() {
               )}
               <div className="flex items-center gap-2 mt-3 pt-3 border-t border-black/[.04] dark:border-white/[.04]">
                 <button onClick={()=>openEdit(a)} className="flex items-center gap-1 text-xs font-medium text-ink-muted dark:text-white/40 hover:text-ink dark:hover:text-white px-2 py-1.5 rounded-lg hover:bg-surface-2 dark:hover:bg-white/5 transition-colors"><Pencil size={12}/> Edit</button>
-                <button onClick={()=>del(a)} className="flex items-center gap-1 text-xs font-medium text-danger/60 hover:text-danger px-2 py-1.5 rounded-lg hover:bg-danger-light dark:hover:bg-danger/10 transition-colors"><Trash2 size={12}/> Delete</button>
+                <button onClick={()=>del(a)} className="flex items-center gap-1 text-xs font-medium text-loss/60 hover:text-loss px-2 py-1.5 rounded-lg hover:bg-loss-light dark:hover:bg-loss/10 transition-colors"><Trash2 size={12}/> Delete</button>
               </div>
             </Card>
           ))}
