@@ -14,7 +14,7 @@ import { Camera, TrendingUp, Clock, Target } from 'lucide-react'
 const RANGES = ['7D', '1M', '3M', '1Y', 'ALL']
 
 export default function Dashboard() {
-  const { baseCurrency, setBaseCurrency, showToast } = useApp()
+  const { baseCurrency, setBaseCurrency, showToast, setPage } = useApp()
   const [data, setData] = useState(null)
   const [range, setRange] = useState('1M')
   const [loading, setLoading] = useState(true)
@@ -36,7 +36,7 @@ export default function Dashboard() {
   const createSnapshot = async () => {
     try {
       await api('/snapshots', { method: 'POST' })
-      showToast('Snapshot created!')
+      showToast('Net worth recorded!')
       load(range)
     } catch (e) {
       showToast(e.message, 'error')
@@ -72,28 +72,20 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      {/* Page Header */}
-      <div>
-        <h1 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">Dashboard</h1>
-        <p className="text-sm text-ink-muted dark:text-white/40 mt-1">Your financial overview at a glance.</p>
-      </div>
-
-      {/* ═══ Hero Card ═══ */}
+      {/* ═══ Hero — dominant net worth ═══ */}
       <div className="relative overflow-hidden rounded-3xl bg-ink dark:bg-surface-dark-3 p-7 sm:p-9">
-        {/* Background gradients */}
-        <div className="absolute top-[-60px] right-[-60px] w-[300px] h-[300px] bg-accent/15 rounded-full blur-[80px] pointer-events-none" />
-        <div className="absolute bottom-[-80px] left-[-40px] w-[240px] h-[240px] bg-amber-500/8 rounded-full blur-[80px] pointer-events-none" />
+        {/* Accent glow */}
+        <div className="absolute top-[-60px] right-[-60px] w-[300px] h-[300px] bg-accent/10 rounded-full blur-[80px] pointer-events-none" />
 
         <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
           <div>
             <div className="text-[11px] font-semibold tracking-[.12em] uppercase text-white/40 mb-2">
-              Total Net Worth
+              Net Worth
             </div>
-            <div className="font-display text-[44px] sm:text-[56px] leading-none text-white tracking-tight mb-3">
+            <div className="font-display text-[44px] sm:text-[56px] leading-none text-white tracking-tight mb-3 tabular-nums">
               {fmtCurrency(total, ccy)}
             </div>
 
-            {/* ★ Change Pill — the key missing feature */}
             {data.total_snapshots > 0 && (
               <div className="mb-3">
                 <ChangePill
@@ -108,7 +100,7 @@ export default function Dashboard() {
 
             <div className="flex items-center gap-4 text-xs text-white/35">
               <span>{data.accounts_count || 0} accounts</span>
-              <span>{data.total_snapshots || 0} snapshots</span>
+              <span>{data.total_snapshots || 0} records</span>
               {data.excluded_accounts > 0 && (
                 <span className="text-amber-400/60">{data.excluded_accounts} excluded (FX)</span>
               )}
@@ -121,32 +113,48 @@ export default function Dashboard() {
               <div className="text-[10px] font-semibold tracking-[.1em] uppercase text-white/30 flex items-center gap-1 justify-end">
                 <Target size={11} /> Goal
               </div>
-              <div className="font-display text-xl text-amber-400 mt-1">
+              <div className="font-display text-xl text-amber-400 mt-1 tabular-nums">
                 {fmtCurrency(goal, ccy)}
               </div>
-              <div className="text-xs text-white/30 mt-0.5">
+              <div className="text-xs text-white/30 mt-0.5 tabular-nums">
                 {goalPct >= 100 ? '🎯 Reached!' : `${fmtCurrency(goal - total, ccy)} to go`}
               </div>
             </div>
           )}
         </div>
 
-        {/* Goal progress bar */}
+        {/* Goal progress */}
         {goal > 0 && (
           <div className="relative mt-6 pt-5 border-t border-white/[.06]">
             <div className="h-1.5 bg-white/[.08] rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-accent to-emerald-400 rounded-full transition-all duration-700"
+                className="h-full bg-gradient-to-r from-accent to-blue-400 rounded-full transition-all duration-700"
                 style={{ width: `${goalPct.toFixed(1)}%` }}
               />
             </div>
-            <div className="flex justify-between text-[10px] text-white/25 mt-1.5">
+            <div className="flex justify-between text-[10px] text-white/25 mt-1.5 tabular-nums">
               <span>{fmtCurrency(0, ccy)}</span>
               <span>{goalPct.toFixed(0)}%</span>
               <span>{fmtCurrency(goal, ccy)}</span>
             </div>
           </div>
         )}
+      </div>
+
+      {/* ═══ Quick Actions ═══ */}
+      <div className="flex gap-3">
+        <button
+          onClick={createSnapshot}
+          className="flex items-center gap-1.5 text-sm font-semibold px-5 py-2.5 rounded-xl bg-accent text-white hover:bg-accent-dark transition-colors active:scale-[.97]"
+        >
+          <Camera size={16} /> Record net worth
+        </button>
+        <button
+          onClick={() => setPage('accounts')}
+          className="flex items-center gap-1.5 text-sm font-medium px-4 py-2.5 rounded-xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-surface-2 dark:hover:bg-white/5 transition-colors"
+        >
+          Add account
+        </button>
       </div>
 
       {/* ═══ Stats Row ═══ */}
@@ -157,8 +165,8 @@ export default function Dashboard() {
           </div>
           {data.total_snapshots > 0 ? (
             <>
-              <div className={`font-display text-2xl tracking-tight ${
-                rangeChange >= 0 ? 'text-accent' : 'text-danger'
+              <div className={`font-display text-2xl tracking-tight tabular-nums ${
+                rangeChange >= 0 ? 'text-gain' : 'text-loss'
               }`}>
                 {rangeChange >= 0 ? '+' : ''}{fmtCurrency(rangeChange, ccy)}
               </div>
@@ -169,39 +177,28 @@ export default function Dashboard() {
           ) : (
             <div className="text-lg text-ink-muted dark:text-white/30">—</div>
           )}
+        </Card>
+
+        <Card className="p-5">
+          <div className="text-[10px] font-bold tracking-[.1em] uppercase text-ink-muted dark:text-white/40 mb-2.5 flex items-center gap-1.5">
+            <Clock size={12} /> Latest Record
+          </div>
+          <div className="font-display text-2xl text-ink dark:text-white tracking-tight tabular-nums">
+            {data.latest_snapshot_total > 0 ? fmtCurrency(data.latest_snapshot_total, ccy) : '—'}
+          </div>
           <div className="text-[11px] text-ink-muted/60 dark:text-white/25 mt-2">
-            {data.total_snapshots > 0 ? 'vs first snapshot in range' : 'Create a snapshot to track'}
+            {series.length > 0 ? fmtDate(series[series.length - 1]?.t) : 'No records yet'}
           </div>
         </Card>
 
         <Card className="p-5">
           <div className="text-[10px] font-bold tracking-[.1em] uppercase text-ink-muted dark:text-white/40 mb-2.5 flex items-center gap-1.5">
-            <Clock size={12} /> Latest Snapshot
+            <Camera size={12} /> History
           </div>
-          <div className="font-display text-2xl text-ink dark:text-white tracking-tight">
-            {data.latest_snapshot_total > 0 ? fmtCurrency(data.latest_snapshot_total, ccy) : '—'}
+          <div className="font-display text-2xl text-ink dark:text-white tracking-tight tabular-nums">
+            {data.total_snapshots || 0}
           </div>
-          <div className="text-[11px] text-ink-muted/60 dark:text-white/25 mt-2">
-            {series.length > 0 ? fmtDate(series[series.length - 1]?.t) : 'No snapshots yet'}
-          </div>
-        </Card>
-
-        <Card className="p-5 flex flex-col justify-between">
-          <div>
-            <div className="text-[10px] font-bold tracking-[.1em] uppercase text-ink-muted dark:text-white/40 mb-2.5 flex items-center gap-1.5">
-              <Camera size={12} /> Snapshots
-            </div>
-            <div className="font-display text-2xl text-ink dark:text-white tracking-tight">
-              {data.total_snapshots || 0}
-            </div>
-            <div className="text-[11px] text-ink-muted/60 dark:text-white/25 mt-1">Historical data points</div>
-          </div>
-          <button
-            onClick={createSnapshot}
-            className="mt-3 text-xs font-semibold px-3.5 py-2 rounded-xl bg-accent text-white hover:bg-accent-dark transition-colors active:scale-[.97]"
-          >
-            + Create snapshot
-          </button>
+          <div className="text-[11px] text-ink-muted/60 dark:text-white/25 mt-1">data points</div>
         </Card>
       </div>
 
@@ -230,10 +227,10 @@ export default function Dashboard() {
           <EmptyState
             icon="📈"
             title="Not enough data yet"
-            subtitle="Create at least 2 snapshots to see your trend"
+            subtitle="Record your net worth at least twice to see your trend"
             action={
               <button onClick={createSnapshot} className="text-xs font-semibold px-4 py-2 rounded-xl bg-accent text-white hover:bg-accent-dark transition-colors">
-                + Create snapshot
+                Record net worth
               </button>
             }
           />
@@ -243,8 +240,8 @@ export default function Dashboard() {
               <AreaChart data={series} margin={{ top: 5, right: 5, bottom: 0, left: 5 }}>
                 <defs>
                   <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="rgb(22,163,74)" stopOpacity={0.15} />
-                    <stop offset="100%" stopColor="rgb(22,163,74)" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#3b82c4" stopOpacity={0.15} />
+                    <stop offset="100%" stopColor="#3b82c4" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" strokeOpacity={0.04} />
@@ -270,11 +267,11 @@ export default function Dashboard() {
                 <Area
                   type="monotone"
                   dataKey="value"
-                  stroke="rgb(22,163,74)"
+                  stroke="#3b82c4"
                   strokeWidth={2.5}
                   fill="url(#areaFill)"
                   dot={false}
-                  activeDot={{ r: 5, stroke: 'rgb(22,163,74)', strokeWidth: 2, fill: 'white' }}
+                  activeDot={{ r: 5, stroke: '#3b82c4', strokeWidth: 2, fill: 'white' }}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -290,7 +287,7 @@ function ChartTooltip({ active, payload, ccy }) {
   const d = payload[0].payload
   return (
     <div className="bg-ink dark:bg-surface-dark-3 text-white px-3.5 py-2.5 rounded-xl shadow-lg text-xs border border-white/5">
-      <div className="font-bold text-sm">{fmtCurrency(d.value, ccy)}</div>
+      <div className="font-bold text-sm tabular-nums">{fmtCurrency(d.value, ccy)}</div>
       <div className="text-white/50 mt-0.5">{fmtDate(d.t)}</div>
     </div>
   )
