@@ -242,30 +242,34 @@ const loadUserTheme = useCallback(async () => {
   /* ──────────────────────────────────────────── */
 
   const handleLogin = async (tok, uname) => {
-    resetSessionGuard()
-    setToken(tok)
-    setUsername(uname)
-    setAuthed(true)
-    setGoalLoading(true)
-    setSettingsReady(false) // 🔒 gate until settings load
-    setPage('home')
-    await Promise.all([loadUserTheme(), loadPrimaryGoal()])
-  }
+  resetSessionGuard()
+  setToken(tok)
+  setUsername(uname)
+  setAuthed(true)
+  setGoalLoading(true)
+  setSettingsReady(false) // 🔒 gate until settings load
+  setPage('home')
+  await Promise.all([loadUserTheme(), loadPrimaryGoal()])
+}
 
-  const handleLogout = useCallback(async () => {
-    // Clear Supabase session
+const handleLogout = useCallback(() => {
+  // 1) UI first: instantly reset state + route
+  resetSession()
+
+  // 2) Best-effort Supabase sign out (do NOT block UI)
+  ;(async () => {
     try {
       const { supabase } = await import('./supabase')
-      if (supabase) await supabase.auth.signOut()
+      await supabase.auth.signOut()
     } catch {}
-    resetSession()
-  }, [resetSession])
+  })()
+}, [resetSession])
 
-  const handleGoalCreated = (goal) => {
-    setPrimaryGoal(goal)
-    bumpData()
-    setPage('home')
-  }
+const handleGoalCreated = (goal) => {
+  setPrimaryGoal(goal)
+  bumpData()
+  setPage('home')
+}
 
   /* ──────────────────────────────────────────── */
   /* Context                                     */
