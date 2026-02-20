@@ -159,20 +159,22 @@ const loadUserTheme = useCallback(async () => {
   const resetSessionRef = useRef(null)
 
   const resetSession = useCallback(() => {
-    clearToken()
-    setAuthed(false)
-    setUsername('')
-    setPage('home')
-    setPrimaryGoal(undefined)
-    setGoalLoading(false)
-    setBaseCurrency('GBP')
-    setThemePref('system')
-    setIsPro(false)
-    setSettingsReady(false) // 🔒 ensure we re-gate after logout/reset
-    setDataVersion(0)
-    localStorage.removeItem('theme_pref')
-    localStorage.removeItem('force_pro')
-  }, [])
+  clearToken()
+  setAuthed(false)
+  setUsername('')
+  setPage('auth')              // ✅ go to welcome/auth page
+  setPrimaryGoal(undefined)
+  setGoalLoading(false)
+  setBaseCurrency('GBP')
+  setThemePref('system')
+  setIsPro(false)
+
+  setSettingsReady(true)       // ✅ don't gate the logged-out UI
+
+  setDataVersion(0)
+  localStorage.removeItem('theme_pref')
+  localStorage.removeItem('force_pro')
+}, [])
 
   resetSessionRef.current = resetSession
 
