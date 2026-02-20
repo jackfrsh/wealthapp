@@ -347,12 +347,9 @@ export default function AuthPage({ onLogin }) {
                 and strategic planning tools — from £6/month.
               </p>
 
-              <button
-                onClick={scrollToForm}
-                className="text-sm font-semibold px-6 py-3 rounded-2xl bg-ink text-white dark:bg-white dark:text-ink hover:opacity-90 transition-all min-h-[48px]"
-              >
+              <UpgradeButton onClick={() => setPage('upgrade')} size="sm">
                 Start free, upgrade anytime
-              </button>
+              </UpgradeButton>
             </div>
           </div>
         </div>
