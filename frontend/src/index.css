@@ -1,0 +1,310 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design Tokens (CSS Variables) ───────────────────── */
+/* Light mode tuned to: Apple/Porsche — cool neutrals, engineered hierarchy, minimal softness */
+:root {
+  /* -----------------------------
+     Core surfaces (LIGHT)
+  ----------------------------- */
+  --bg:          #F5F7FA; /* app canvas */
+  --bg-card:     #FFFFFF; /* cards */
+  --bg-inset:    #F1F4F8; /* inset / subtle fills */
+
+  /* Hero / Strategy gradients (architectural, not glowy) */
+  --bg-hero:     #FFFFFF;
+  --bg-strategy: linear-gradient(145deg, #FFFFFF 0%, #F6F8FB 55%, #F2F5F9 100%);
+
+  /* -----------------------------
+     Typography (LIGHT)
+  ----------------------------- */
+  --text:        #0F172A; /* deep slate */
+  --text-2:      #1E293B;
+  --text-3:      #334155;
+  --text-muted:  #6B7280;
+
+  /* -----------------------------
+     Accent + semantics (LIGHT)
+  ----------------------------- */
+  --accent:       #2563EB;
+  --accent-dark:  #1D4ED8;
+  --accent-light: #EFF6FF;
+
+  --positive:      #166534;
+  --positive-soft: #ECFDF3;
+
+  --negative:      #DC2626;
+  --negative-soft: #FEF2F2;
+
+  /* -----------------------------
+     Border + shadows (LIGHT)
+     Apple-like: structure > softness
+  ----------------------------- */
+  --border: rgba(15, 23, 42, 0.10);
+
+  --shadow-card: 0 1px 1px rgba(15, 23, 42, 0.03);
+  --shadow-card-hover: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --shadow-card-lg:    0 12px 40px rgba(15, 23, 42, 0.10);
+
+  --shadow-glow:       0 0 60px rgba(37, 99, 235, 0.08);
+  --shadow-inner-ring: inset 0 0 0 1px rgba(15, 23, 42, 0.04);
+
+  --radius:      14px;
+  --radius-sm:   12px;
+  --radius-full: 9999px;
+
+  /* -----------------------------
+     RGB tokens for Tailwind opacity utilities
+     (so bg-ink/10 etc still works)
+  ----------------------------- */
+  --bg-rgb: 245 247 250;
+  --bg-card-rgb: 255 255 255;
+  --bg-inset-rgb: 241 244 248;
+
+  --border-rgb: 15 23 42;
+
+  --text-rgb: 15 23 42;
+  --text-2-rgb: 30 41 59;
+  --text-3-rgb: 51 65 85;
+  --text-muted-rgb: 100 116 139;
+
+  --accent-rgb: 37 99 235;
+  --accent-dark-rgb: 29 78 216;
+  --accent-light-rgb: 239 246 255;
+
+  --positive-rgb: 22 101 52;
+  --positive-soft-rgb: 236 253 243;
+
+  --negative-rgb: 220 38 38;
+  --negative-soft-rgb: 254 242 242;
+}
+
+/* Dark mode (keep your brand tone; mapped into same tokens) */
+.dark {
+  --bg:          #161921;
+  --bg-card:     #1c2029;
+  --bg-inset:    #242832;
+
+  --bg-hero:     linear-gradient(145deg, #1e2231 0%, #1c2029 40%, #191d28 100%);
+  --bg-strategy: linear-gradient(145deg, #1a1e28 0%, #1c2029 60%, #1e2231 100%);
+
+  --text:        #f0f0f0;
+  --text-2:      #c8c8c8;
+  --text-3:      #999999;
+  --text-muted:  #6b6b6b;
+
+  --accent:       #3b7cc4;
+  --accent-dark:  #2d64a0;
+  --accent-light: #e8f0fa;
+
+  --positive:      #1a9a5e;
+  --positive-soft: #e6f7ef;
+
+  --negative:      #d13415;
+  --negative-soft: #fde8e3;
+
+  --border:      rgba(255,255,255,.06);
+  --shadow-card: 0 1px 3px rgba(0,0,0,.20), 0 4px 12px rgba(0,0,0,.15);
+  --shadow-card-hover: 0 10px 32px rgba(0,0,0,.35), 0 4px 12px rgba(0,0,0,.18);
+  --shadow-card-lg: 0 18px 60px rgba(0,0,0,.35), 0 6px 16px rgba(0,0,0,.20);
+
+  --shadow-glow: 0 0 60px rgba(59,124,196,.10);
+  --shadow-inner-ring: inset 0 0 0 1px rgba(255,255,255,.06);
+
+  /* RGB tokens (DARK) */
+  --bg-rgb: 22 25 33;
+  --bg-card-rgb: 28 32 41;
+  --bg-inset-rgb: 36 40 50;
+
+  --border-rgb: 255 255 255;
+
+  --text-rgb: 240 240 240;
+  --text-2-rgb: 200 200 200;
+  --text-3-rgb: 153 153 153;
+  --text-muted-rgb: 107 107 107;
+
+  --accent-rgb: 59 124 196;
+  --accent-dark-rgb: 45 100 160;
+  --accent-light-rgb: 232 240 250;
+
+  --positive-rgb: 26 154 94;
+  --positive-soft-rgb: 230 247 239;
+
+  --negative-rgb: 209 52 21;
+  --negative-soft-rgb: 253 232 227;
+}
+
+/* ─── Base ─────────────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  @apply bg-surface text-ink font-sans text-base;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
+}
+
+/* Keeping this for compatibility with your existing selectors */
+.dark body,
+body.dark {
+  @apply bg-surface-dark text-white;
+}
+
+/* Tabular numbers for financial figures */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Safe area for notched phones */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ─── Premium typography helpers ───────────────────────── */
+.hero-number {
+  font-family: "Instrument Serif", Georgia, serif;
+  font-size: clamp(3.25rem, 8vw, 3.9rem);
+  line-height: 1;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (min-width: 640px) {
+  .hero-number {
+    font-size: clamp(3rem, 5vw, 3.75rem);
+  }
+}
+
+/* ─── Hero gradient panel ──────────────────────────────── */
+/* More structural separation in light mode; atmospheric in dark mode */
+.hero-panel {
+  background: var(--bg-hero);
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.hero-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid var(--border);
+  pointer-events: none;
+}
+
+/* Kill "glow blob" in light mode (keep it in dark mode) */
+.hero-panel .hero-glow {
+  display: none;
+}
+.dark .hero-panel .hero-glow {
+  display: block;
+}
+
+/* ─── Strategy header ──────────────────────────────────── */
+.strategy-header {
+  background: var(--bg-strategy);
+  position: relative;
+  box-shadow: var(--shadow-card);
+}
+
+.strategy-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid var(--border);
+  pointer-events: none;
+}
+
+/* ─── Custom scrollbar ─────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-ink/10 dark:bg-white/10 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-ink/20 dark:bg-white/20;
+}
+
+/* ─── Skeleton shimmer ─────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(15,23,42,.03) 25%,
+    rgba(15,23,42,.06) 50%,
+    rgba(15,23,42,.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+.dark .skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,.04) 25%,
+    rgba(255,255,255,.08) 50%,
+    rgba(255,255,255,.04) 75%
+  );
+  background-size: 200% 100%;
+}
+
+/* ─── Glass effect ─────────────────────────────────────── */
+.glass {
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+}
+
+/* ─── iOS-like touch interaction feedback ──────────────── */
+@media (hover: none) {
+  .touch-press:active {
+    opacity: 0.7;
+    transition: opacity 0.1s ease;
+  }
+}
+
+/* ─── Premium input styling ────────────────────────────── */
+input, select, textarea {
+  font-size: 1rem; /* Prevent iOS zoom on focus */
+}
+
+/* ─── Delta animation (subtle, no bounce) ──────────────── */
+@keyframes deltaFlash {
+  0%   { opacity: 1; }
+  30%  { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+.animate-delta {
+  animation: deltaFlash 0.6s ease-out;
+}
+
+/* Currency split styling */
+.currency {
+  opacity: 0.7;
+  margin-right: 2px;
+}
+
+.amount {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Prevent 300ms tap delay quirks / improve touch */
+button, a { -webkit-tap-highlight-color: transparent; }
+
+/* Helps iOS safe-area + avoids content hiding behind fixed bottom nav */
+:root { padding-bottom: env(safe-area-inset-bottom); }
