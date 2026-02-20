@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { supabase } from '../supabase'
+import UpgradeButton from '../components/UpgradeButton'
 import { useApp } from '../App'
 import {
   TrendingUp,
