@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { apiGet, apiPost, apiPatch, apiDelete } from "../api"
+import { api } from '../api'
 import { useApp } from '../App'
 import Card from '../components/Card'
 import Modal from '../components/Modal'
@@ -35,7 +35,7 @@ export default function Accounts() {
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(false)
-  const [editing, setEditing] = useState(null)
+  const [editing, setEditing] = useState(null) // id or null
   const [form, setForm] = useState({ ...emptyForm })
   const [saving, setSaving] = useState(false)
 
@@ -50,7 +50,7 @@ export default function Accounts() {
 
   const load = useCallback(async () => {
     try {
-      const res = await apiGet('/accounts')
+      const res = await api('/accounts')
       setAccounts(Array.isArray(res) ? res : [])
     } catch (e) {
       console.error(e)
@@ -64,10 +64,9 @@ export default function Accounts() {
     load()
   }, [load, dataVersion])
 
-  // Load snapshots
   const loadSnaps = useCallback(async () => {
     try {
-      const res = await apiGet('/snapshots')
+      const res = await api('/snapshots', { method: 'GET' })
       setSnaps(Array.isArray(res) ? res : [])
     } catch (e) {
       console.error(e)
@@ -82,9 +81,10 @@ export default function Accounts() {
 
   const recordSnapshot = async () => {
     try {
-      await apiPost('/snapshots')
+      await api('/snapshots', { method: 'POST' })
       showToast('Net worth recorded!')
       loadSnaps()
+      bumpData()
     } catch (e) {
       showToast(e?.message || 'Failed to record', 'error')
     }
@@ -93,9 +93,10 @@ export default function Accounts() {
   const deleteSnap = async (id) => {
     if (!confirm('Delete this record?')) return
     try {
-      await apiDelete(`/snapshots/${id}`)
+      await api(`/snapshots/${id}`, { method: 'DELETE' })
       showToast('Deleted')
       loadSnaps()
+      bumpData()
     } catch (e) {
       showToast(e?.message || 'Delete failed', 'error')
     }
@@ -144,17 +145,17 @@ export default function Accounts() {
     setSaving(true)
     try {
       if (editing) {
-        await apiPatch(`/accounts/${editing}`, body)
+        // If Swagger uses PATCH instead of PUT, change method to 'PATCH'
+        await api(`/accounts/${editing}`, { method: 'PUT', body })
         showToast('Account updated')
       } else {
-        // Frontend gate (backend is still source of truth)
         if (accountLimitReached) {
-  setModal(false)
-  localStorage.setItem('upgrade_reason', 'account_limit')
-  setPage('upgrade')
-  return
-}
-        await apiPost('/accounts', body)
+          setModal(false)
+          localStorage.setItem('upgrade_reason', 'account_limit')
+          setPage('upgrade')
+          return
+        }
+        await api('/accounts', { method: 'POST', body })
         showToast('Account added')
       }
 
@@ -162,13 +163,12 @@ export default function Accounts() {
       await load()
       bumpData()
     } catch (e) {
-      // ✅ Backend-enforced gate: route to upgrade
       if (e?.status === 403) {
-  setModal(false)
-  localStorage.setItem('upgrade_reason', 'account_limit')
-  setPage('upgrade')
-  return
-}
+        setModal(false)
+        localStorage.setItem('upgrade_reason', 'account_limit')
+        setPage('upgrade')
+        return
+      }
       showToast(e?.message || 'Save failed', 'error')
     } finally {
       setSaving(false)
@@ -180,7 +180,7 @@ export default function Accounts() {
 
     setSaving(true)
     try {
-      await apiDelete(`/accounts/${a.id}`)
+      await api(`/accounts/${a.id}`, { method: 'DELETE' })
       showToast('Deleted')
       await load()
       bumpData()
@@ -231,13 +231,13 @@ export default function Accounts() {
 
           <button
             onClick={() => {
-  if (accountLimitReached) {
-    localStorage.setItem('upgrade_reason', 'account_limit')
-    setPage('upgrade')
-    return
-  }
-  openAdd()
-}}
+              if (accountLimitReached) {
+                localStorage.setItem('upgrade_reason', 'account_limit')
+                setPage('upgrade')
+                return
+              }
+              openAdd()
+            }}
             className="flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-all active:scale-[.97] touch-press min-h-[44px] disabled:opacity-60 disabled:cursor-not-allowed"
             disabled={saving}
             title={accountLimitReached ? 'Upgrade to add more accounts' : 'Add an account'}
@@ -257,13 +257,13 @@ export default function Accounts() {
             action={
               <button
                 onClick={() => {
-  if (accountLimitReached) {
-    localStorage.setItem('upgrade_reason', 'account_limit')
-    setPage('upgrade')
-    return
-  }
-  openAdd()
-}}
+                  if (accountLimitReached) {
+                    localStorage.setItem('upgrade_reason', 'account_limit')
+                    setPage('upgrade')
+                    return
+                  }
+                  openAdd()
+                }}
                 className="flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-all min-h-[48px]"
                 type="button"
               >
@@ -285,14 +285,14 @@ export default function Accounts() {
                 </div>
 
                 <UpgradeButton
-  onClick={() => {
-    localStorage.setItem('upgrade_reason', 'account_limit')
-    setPage('upgrade')
-  }}
-  size="sm"
->
-  Upgrade
-</UpgradeButton>
+                  onClick={() => {
+                    localStorage.setItem('upgrade_reason', 'account_limit')
+                    setPage('upgrade')
+                  }}
+                  size="sm"
+                >
+                  Upgrade
+                </UpgradeButton>
               </div>
             </Card>
           )}
@@ -356,9 +356,8 @@ export default function Accounts() {
         </>
       )}
 
-      {/* ─── Net Worth History (collapsible) ─── */}
+      {/* Net Worth History */}
       <Card className="overflow-hidden">
-        {/* ✅ NOT a <button> anymore — avoids nested button warning */}
         <div
           role="button"
           tabIndex={0}
@@ -453,9 +452,7 @@ export default function Accounts() {
                               size="sm"
                             />
                           ) : (
-                            <span className="text-xs text-ink-muted dark:text-white/25 font-medium">
-                              First
-                            </span>
+                            <span className="text-xs text-ink-muted dark:text-white/25 font-medium">First</span>
                           )}
 
                           {breakdown.length > 0 && (
@@ -484,9 +481,7 @@ export default function Accounts() {
                             <div key={b.id} className="flex justify-between items-center text-sm">
                               <span className="text-ink-muted dark:text-white/45">
                                 {b.name}{' '}
-                                <span className="text-ink-muted/40 dark:text-white/20">
-                                  ({b.currency})
-                                </span>
+                                <span className="text-ink-muted/40 dark:text-white/20">({b.currency})</span>
                               </span>
                               <span className="text-ink dark:text-white font-medium tabular-nums">
                                 {fmtCurrency(b.value_base, snap.base_currency)}
@@ -504,11 +499,7 @@ export default function Accounts() {
         )}
       </Card>
 
-      <Modal
-        open={modal}
-        onClose={() => !saving && setModal(false)}
-        title={editing ? 'Edit account' : 'Add account'}
-      >
+      <Modal open={modal} onClose={() => !saving && setModal(false)} title={editing ? 'Edit account' : 'Add account'}>
         <div className="space-y-5">
           <div>
             <label className={lbl}>Account name</label>
@@ -603,9 +594,7 @@ export default function Accounts() {
               className="w-5 h-5 accent-accent rounded"
               disabled={saving}
             />
-            <label className="text-sm text-ink-3 dark:text-white/50 cursor-pointer">
-              Include in net worth
-            </label>
+            <label className="text-sm text-ink-3 dark:text-white/50 cursor-pointer">Include in net worth</label>
           </div>
 
           <div className="flex gap-3 pt-3">
@@ -630,7 +619,6 @@ export default function Accounts() {
         </div>
       </Modal>
 
-      {/* Mobile logout — only visible on small screens where sidebar is hidden */}
       <div className="lg:hidden mt-10 pb-4">
         <button
           onClick={handleLogout}

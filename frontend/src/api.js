@@ -1,171 +1,164 @@
-import { supabase } from "./supabase";
+// api.js
+export const SESSION_EXPIRED_EVENT = 'session-expired'
+
+// ---- Config ----
+const API_BASE =
+  (import.meta.env.VITE_API_URL || '').replace(/\/$/, '') ||
+  'http://127.0.0.1:8000/api'
+
+// Token provider is injectable (Supabase-ready).
+// In App.jsx (or bootstrap), call setAccessTokenProvider(async () => session?.access_token || null).
+let accessTokenProvider = async () => null
+
+export function setAccessTokenProvider(fn) {
+  accessTokenProvider = typeof fn === 'function' ? fn : async () => null
+}
+
+// Optional legacy helpers (safe to keep; can delete once you're fully Supabase-only)
+export function getToken() {
+  try {
+    return localStorage.getItem('access_token')
+  } catch {
+    return null
+  }
+}
+export function setToken(token) {
+  try {
+    localStorage.setItem('access_token', token)
+  } catch {}
+}
+export function clearToken() {
+  try {
+    localStorage.removeItem('access_token')
+  } catch {}
+}
+
+function isPlainObject(x) {
+  return Object.prototype.toString.call(x) === '[object Object]'
+}
+
+async function readBody(res) {
+  const ct = res.headers.get('content-type') || ''
+  if (res.status === 204) return null
+  if (ct.includes('application/json')) {
+    try {
+      return await res.json()
+    } catch {
+      return null
+    }
+  }
+  try {
+    return await res.text()
+  } catch {
+    return null
+  }
+}
+
+function makeError(res, data) {
+  const err = new Error()
+  err.status = res.status
+
+  // FastAPI often returns: { detail: ... }
+  const detail =
+    (data && typeof data === 'object' && (data.detail ?? data.message)) || null
+
+  err.detail = detail
+  err.data = data
+
+  // Human message
+  if (typeof detail === 'string') err.message = detail
+  else if (Array.isArray(detail))
+    err.message = detail.map((d) => d?.msg || String(d)).join(', ')
+  else if (typeof data === 'string' && data) err.message = data
+  else err.message = `Request failed (${res.status})`
+
+  return err
+}
 
 /**
- * Legacy API layer that App.jsx expects.
- * - api(path, options)
- * - token helpers
- * - session-expired event
+ * The ONLY fetch function you should use.
+ * Usage:
+ *   api('/goals/primary')
+ *   api('/goals', { method: 'POST', body: { ... } })  // body can be object (auto JSON)
  */
-
-export const SESSION_EXPIRED_EVENT = "wealthapp:session-expired";
-
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
-
-// ---------- Token helpers (legacy) ----------
-const TOKEN_KEY = "wealthapp-access-token";
-
-export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token) {
-  if (!token) return;
-  localStorage.setItem(TOKEN_KEY, token);
-}
-
-export function clearToken() {
-  localStorage.removeItem(TOKEN_KEY);
-}
-
-let _sessionGuard = 0;
-export function resetSessionGuard() {
-  _sessionGuard = 0;
-}
-
-// ---------- Error type ----------
-export class ApiError extends Error {
-  constructor(message, status, body) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.body = body;
-  }
-}
-
-// ---------- Helpers ----------
-function normalizeBody(body) {
-  if (body == null) return undefined;
-  // If caller passed a plain object, JSON-encode it
-  if (typeof body === "object" && !(body instanceof FormData) && !(body instanceof Blob)) {
-    return JSON.stringify(body);
-  }
-  return body;
-}
-
-function hasJsonHeader(headers) {
-  const h = headers || {};
-  const ct = h["Content-Type"] || h["content-type"];
-  return typeof ct === "string" && ct.toLowerCase().includes("application/json");
-}
-
-async function safeReadJson(res) {
-  try {
-    const text = await res.text();
-    if (!text) return null;
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
-}
-
-async function safeReadText(res) {
-  try {
-    return await res.text();
-  } catch {
-    return "";
-  }
-}
-
-// ---------- Core API wrapper ----------
 export async function api(path, options = {}) {
-  // Prefer Supabase session token if available
-  let token = null;
+  const { method = 'GET', headers = {}, body = undefined, signal } = options
 
+  const url =
+    path.startsWith('http')
+      ? path
+      : `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`
+
+  // Resolve access token (Supabase or injected provider)
+  let token = null
   try {
-    if (supabase) {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      token = session?.access_token || null;
-      if (token) setToken(token);
-    } else {
-      token = getToken();
-    }
+    token = await accessTokenProvider()
   } catch {
-    token = getToken();
+    token = null
+  }
+  // Legacy fallback (optional)
+  if (!token) token = getToken()
+
+  const finalHeaders = new Headers(headers)
+
+  // Prepare body
+  let finalBody = body
+
+  const isFormData =
+    typeof FormData !== 'undefined' && body instanceof FormData
+  const isBlob = typeof Blob !== 'undefined' && body instanceof Blob
+  const isString = typeof body === 'string'
+
+  if (body != null && !isFormData && !isBlob) {
+    // If a plain object/array was passed, JSON encode it
+    if (!isString && (isPlainObject(body) || Array.isArray(body))) {
+      finalBody = JSON.stringify(body)
+      if (!finalHeaders.has('Content-Type')) {
+        finalHeaders.set('Content-Type', 'application/json')
+      }
+    } else if (isString) {
+      // If they pass a string, assume they know what they’re doing.
+      // But set JSON content type if it looks like JSON and no header provided.
+      if (!finalHeaders.has('Content-Type')) {
+        const t = body.trim()
+        if (t.startsWith('{') || t.startsWith('[')) {
+          finalHeaders.set('Content-Type', 'application/json')
+        }
+      }
+    }
   }
 
-  const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
-
-  const headers = {
-    ...(options.headers || {}),
-  };
-
-  // If we're sending a JSON body and no content-type was set, set it.
-  const normalizedBody = normalizeBody(options.body);
-  const willSendBody = normalizedBody !== undefined;
-
-  if (willSendBody && !hasJsonHeader(headers) && !(normalizedBody instanceof FormData)) {
-    headers["Content-Type"] = "application/json";
+  if (token && !finalHeaders.has('Authorization')) {
+    finalHeaders.set('Authorization', `Bearer ${token}`)
   }
-
-  if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(url, {
-    ...options,
-    headers,
-    body: normalizedBody,
-  });
+    method,
+    headers: finalHeaders,
+    body: finalBody,
+    signal,
+  })
 
-  // Standardize error handling
-  if (res.status === 401) {
-    clearToken();
-    if (_sessionGuard < 1) {
-      _sessionGuard += 1;
-      window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
-    }
-
-    // Prefer JSON detail if present
-    const json = await safeReadJson(res);
-    const msg = json?.detail || json?.message || (await safeReadText(res)) || "Unauthorized";
-    throw new ApiError(msg, 401, json || msg);
-  }
+  const data = await readBody(res)
 
   if (!res.ok) {
-    const json = await safeReadJson(res);
-    const text = json ? "" : await safeReadText(res);
-    const msg = json?.detail || json?.message || text || `HTTP ${res.status}`;
-    throw new ApiError(msg, res.status, json || text);
+    // Broadcast session expiry for auth gate
+    if (res.status === 401 || res.status === 403) {
+      window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT))
+    }
+    throw makeError(res, data)
   }
 
-  // Success
-  const ct = res.headers.get("content-type") || "";
-  if (ct.includes("application/json")) {
-    // Read text first to avoid double-read issues
-    const json = await safeReadJson(res);
-    return json;
-  }
-  return safeReadText(res);
+  return data
 }
 
-// ---------- Convenience wrappers ----------
-export function apiGet(path) {
-  return api(path, { method: "GET" });
-}
-
-export function apiPost(path, body) {
-  return api(path, { method: "POST", body });
-}
-
-export function apiPut(path, body) {
-  return api(path, { method: "PUT", body });
-}
-
-export function apiPatch(path, body) {
-  return api(path, { method: "PATCH", body });
-}
-
-export function apiDelete(path) {
-  return api(path, { method: "DELETE" });
-}
+// Optional small wrappers
+export const apiGet = (path, opts) => api(path, { ...opts, method: 'GET' })
+export const apiPost = (path, body, opts) =>
+  api(path, { ...opts, method: 'POST', body })
+export const apiPut = (path, body, opts) =>
+  api(path, { ...opts, method: 'PUT', body })
+export const apiPatch = (path, body, opts) =>
+  api(path, { ...opts, method: 'PATCH', body })
+export const apiDelete = (path, opts) =>
+  api(path, { ...opts, method: 'DELETE' })

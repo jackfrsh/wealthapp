@@ -1,8 +1,9 @@
 import React from 'react'
 
 /**
- * Enhanced Glassmorphism Wealth Tooltip
- * Matches the dark, neutral charcoal theme of the "Wealth" app.
+ * Shared Recharts tooltip — styled with the app's card tokens.
+ *
+ * bg-card / dark:bg-surface-dark-2, subtle border, rounded-2xl, shadow-card
  */
 
 function fmtMoney(n, currency = 'GBP') {
@@ -29,19 +30,19 @@ export default function WealthTooltip({
 
   return (
     <div
-      className="
-        /* Significantly smaller padding & rounded corners */
-        rounded-xl px-2.5 py-2
-        /* Neutral Charcoal Glass */
-        bg-[#16171d]/85 backdrop-blur-xl
-        border border-white/10
-        shadow-[0_12px_40px_rgba(0,0,0,0.6)]
-        /* Reduced min-width to prevent it from stretching */
-        min-w-[140px] max-w-[200px]
-      "
+      className={
+        'rounded-2xl px-3 py-2.5 ' +
+        'bg-card dark:bg-surface-dark-2 ' +
+        'border border-black/[.06] dark:border-white/[.06] ' +
+        'shadow-card ' +
+        'min-w-[130px] max-w-[200px]'
+      }
     >
-      {/* Muted, tight header */}
-      <div className="text-[9px] font-bold tracking-wider text-white/40 uppercase mb-1.5 leading-none">
+      {/* Header */}
+      <div
+        className="text-[10px] font-medium tracking-wider text-ink-muted/60 dark:text-white/35 uppercase mb-1.5 leading-none"
+        style={{ fontVariantNumeric: 'tabular-nums' }}
+      >
         {title}
       </div>
 
@@ -55,18 +56,20 @@ export default function WealthTooltip({
           return (
             <div key={String(name)} className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-1.5">
-                {/* Smaller dot */}
                 <span
                   className="h-1.5 w-1.5 rounded-full"
-                  style={{ 
-                    background: p.color || 'rgba(255,255,255,0.5)',
+                  style={{
+                    background: p.color || 'currentColor',
                   }}
                 />
-                <span className="text-[11px] font-medium text-white/50 leading-none">
+                <span className="text-[11px] font-normal text-ink-muted dark:text-white/50 leading-none">
                   {name}
                 </span>
               </div>
-              <span className="text-[11px] font-bold text-white leading-none">
+              <span
+                className="text-[11px] font-medium text-ink dark:text-white leading-none"
+                style={{ fontVariantNumeric: 'tabular-nums' }}
+              >
                 {val}
               </span>
             </div>

@@ -8,12 +8,13 @@ const APP_VERSION = process.env.VITE_APP_VERSION || pkg.version || '0.0.0'
 
 export default defineConfig({
   plugins: [react()],
-  define: {
-    __APP_VERSION__: JSON.stringify(APP_VERSION),
-  },
   server: {
     proxy: {
-      '/api': 'http://localhost:8000',
+      '/api': {
+        target: 'http://127.0.0.1:8000', // FastAPI
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
 })

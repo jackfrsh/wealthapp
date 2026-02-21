@@ -21,3 +21,9 @@ dist/
 # IDE
 .vscode/
 .idea/
+
+# local env
+frontend/.env.local
+
+# exports
+*.zip

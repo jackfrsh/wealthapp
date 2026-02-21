@@ -1,10 +1,12 @@
-"""Accounts router: CRUD for user accounts.
+# backend/app/routers/accounts.py
+"""
+Accounts router: CRUD for user accounts.
 
-Minimal changes:
-- Adds per-account projection inputs:
+- Includes projection inputs:
   - monthly_contribution
   - annual_interest_rate_percent
 - Writes a net worth snapshot on create/update/delete (best-effort).
+- Supports BOTH PATCH and PUT for updates to avoid frontend method mismatch.
 """
 
 from __future__ import annotations
@@ -15,7 +17,6 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session, select
-
 from sqlalchemy.exc import SQLAlchemyError
 
 from ..auth import get_current_user
@@ -26,7 +27,7 @@ from ..services.networth import write_snapshot
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
 
-# ─── Schemas ─────────────────────────────────────────────────────────────────
+# ─── Schemas ────────────────────────────────────────────────────────────────
 
 class AccountCreate(BaseModel):
     name: str
@@ -75,12 +76,13 @@ def _get_account_or_404(session: Session, user_id: int, account_id: int) -> Acco
         select(Account).where(Account.id == account_id, Account.user_id == user_id)
     ).first()
     if not account:
-        raise HTTPException(404, "Account not found")
+        raise HTTPException(status_code=404, detail="Account not found")
     return account
 
 
 async def _best_effort_snapshot(session: Session, user_id: int) -> None:
-    """Write snapshot but never break the main request.
+    """
+    Write snapshot but never break the main request.
 
     IMPORTANT: If snapshot write fails, rollback the session so we don't poison it
     and cause PendingRollbackError when returning response models.
@@ -88,13 +90,27 @@ async def _best_effort_snapshot(session: Session, user_id: int) -> None:
     try:
         await write_snapshot(session, user_id)
     except SQLAlchemyError as e:
-        # DB-related errors (IntegrityError etc.)
         session.rollback()
         print(f"[snapshot] failed (db) user={user_id}: {e}")
     except Exception as e:
-        # Any other runtime error
         session.rollback()
         print(f"[snapshot] failed (other) user={user_id}: {e}")
+
+
+def _apply_patch(account: Account, patch: dict) -> None:
+    for field, value in patch.items():
+        if field == "currency" and value:
+            value = str(value).upper()
+
+        if field == "balance" and value is not None:
+            value = float(value)
+
+        if field in ("monthly_contribution", "annual_interest_rate_percent") and value is not None:
+            value = float(value)
+
+        setattr(account, field, value)
+
+    account.updated_at = datetime.utcnow()
 
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────
@@ -104,9 +120,7 @@ def list_accounts(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    return session.exec(
-        select(Account).where(Account.user_id == current_user.id)
-    ).all()
+    return session.exec(select(Account).where(Account.user_id == current_user.id)).all()
 
 
 @router.get("/{account_id}", response_model=AccountResponse)
@@ -126,16 +140,13 @@ async def create_account(
 ):
     # Enforce free-tier account limit
     from ..models import Settings
-    settings = session.exec(
-        select(Settings).where(Settings.user_id == current_user.id)
-    ).first()
+
+    settings = session.exec(select(Settings).where(Settings.user_id == current_user.id)).first()
     is_pro = bool(getattr(settings, "is_pro", False)) if settings else False
 
     if not is_pro:
         FREE_ACCOUNT_LIMIT = 3
-        count = len(session.exec(
-            select(Account).where(Account.user_id == current_user.id)
-        ).all())
+        count = len(session.exec(select(Account).where(Account.user_id == current_user.id)).all())
         if count >= FREE_ACCOUNT_LIMIT:
             raise HTTPException(
                 status_code=403,
@@ -159,14 +170,13 @@ async def create_account(
     session.commit()
     session.refresh(account)
 
-    # Snapshot on change (best-effort)
     await _best_effort_snapshot(session, current_user.id)
-
     return account
 
 
+# PATCH = partial update (recommended)
 @router.patch("/{account_id}", response_model=AccountResponse)
-async def update_account(
+async def patch_account(
     account_id: int,
     body: AccountPatch,
     current_user: User = Depends(get_current_user),
@@ -174,24 +184,36 @@ async def update_account(
 ):
     account = _get_account_or_404(session, current_user.id, account_id)
 
-    update_data = body.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        if field == "currency" and value:
-            value = value.upper()
-        if field == "balance" and value is not None:
-            value = float(value)
-        if field in ("monthly_contribution", "annual_interest_rate_percent") and value is not None:
-            value = float(value)
-        setattr(account, field, value)
+    patch = body.model_dump(exclude_unset=True)
+    _apply_patch(account, patch)
 
-    account.updated_at = datetime.utcnow()
     session.add(account)
     session.commit()
     session.refresh(account)
 
-    # Snapshot on change (best-effort)
     await _best_effort_snapshot(session, current_user.id)
+    return account
 
+
+# PUT = alias (accept it so frontend never 405s)
+@router.put("/{account_id}", response_model=AccountResponse)
+async def put_account(
+    account_id: int,
+    body: AccountPatch,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    # Treat PUT as "update these fields" (same as PATCH) for simplicity/stability.
+    account = _get_account_or_404(session, current_user.id, account_id)
+
+    patch = body.model_dump(exclude_unset=True)
+    _apply_patch(account, patch)
+
+    session.add(account)
+    session.commit()
+    session.refresh(account)
+
+    await _best_effort_snapshot(session, current_user.id)
     return account
 
 
@@ -206,7 +228,5 @@ async def delete_account(
     session.delete(account)
     session.commit()
 
-    # Snapshot on change (best-effort)
     await _best_effort_snapshot(session, current_user.id)
-
     return None

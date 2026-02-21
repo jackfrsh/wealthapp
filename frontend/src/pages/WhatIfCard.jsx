@@ -258,7 +258,7 @@ export default function WhatIfCard({
                 : 'text-ink-muted dark:text-white/40'
             }`}
           >
-            One-Off {!isPro && <span className="ml-1 text-[9px] font-bold tracking-wider text-amber-600 dark:text-amber-300">PRO</span>}
+            One-Off {!isPro && <span className="ml-1 text-[9px] font-medium tracking-wider text-amber-600 dark:text-amber-300">PRO</span>}
           </button>
         </div>
 

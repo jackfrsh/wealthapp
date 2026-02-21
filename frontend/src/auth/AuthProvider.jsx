@@ -42,9 +42,10 @@ export function AuthProvider({ children }) {
       loading,
       session,
       user: session?.user ?? null,
-      signOut: async () => {
-        await supabase.auth.signOut();
-      },
+      signOut: () => {
+  // fire-and-forget
+  supabase.auth.signOut().catch(() => {})
+},
     };
   }, [loading, session]);
 

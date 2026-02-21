@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { apiGet } from "../api";
+import { api } from "../api";
 import { useApp } from '../App'
 import Card from '../components/Card'
 import EmptyState from '../components/EmptyState'
@@ -9,6 +9,8 @@ import {
   ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 import { TrendingUp, Calendar } from 'lucide-react'
+import WealthTooltip from '../components/charts/WealthTooltip'
+import { xAxisProps, yAxisProps, gridProps, tooltipProps, compactTickFormatter, chartMargin, ACCENT_STROKE } from '../components/charts/chartTheme'
 
 const HORIZONS = [5, 10, 15, 20, 25, 30, 40]
 
@@ -22,8 +24,8 @@ export default function Projections() {
   const load = useCallback(async (y) => {
     try {
       const [proj, hist] = await Promise.all([
-        apiGet(`/projection/networth?years=${y || years}`),
-        apiGet('/history/networth?days=3650'),
+        api(`/projection/networth?years=${y || years}`),
+        api('/history/networth?days=3650'),
       ])
       setData(proj)
       setHistory(hist.points || [])
@@ -130,14 +132,14 @@ export default function Projections() {
             <Card key={m.year} className="p-5">
               <div className="flex items-center gap-2 mb-3">
                 <Calendar size={13} className="text-ink-muted dark:text-white/35" />
-                <span className="text-xs font-semibold tracking-[.08em] uppercase text-ink-muted dark:text-white/35">
+                <span className="text-[10px] sm:text-[11px] font-semibold tracking-[.14em] uppercase text-ink-muted/60 dark:text-white/30">
                   In {m.year} year{m.year !== 1 ? 's' : ''}
                 </span>
               </div>
-              <div className="font-display text-xl text-ink dark:text-white tracking-tight tabular-nums">
+              <div className="font-display text-3xl sm:text-[1.9rem] text-ink dark:text-white tracking-tight tabular-nums leading-none">
                 {fmtCurrency(m.projected_net_worth, ccy)}
               </div>
-              <div className="text-xs text-ink-muted/40 dark:text-white/20 mt-1.5">
+              <div className="text-xs text-ink-muted/45 dark:text-white/20 mt-1.5">
                 {fmtDate(m.date)}
               </div>
             </Card>
@@ -157,26 +159,22 @@ export default function Projections() {
 
         <div className="h-[260px] sm:h-[320px]">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 10, right: 10, bottom: 0, left: 10 }}>
+            <AreaChart data={chartData} margin={chartMargin}>
               <defs>
                 <linearGradient id="projFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#3b7cc4" stopOpacity={0.08} />
-                  <stop offset="100%" stopColor="#3b7cc4" stopOpacity={0} />
+                  <stop offset="0%" stopColor={ACCENT_STROKE} stopOpacity={0.08} />
+                  <stop offset="100%" stopColor={ACCENT_STROKE} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" strokeOpacity={0.04} />
-              <XAxis dataKey="label" tick={{fontSize:11, fill:'currentColor', fillOpacity:0.3}} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-              <YAxis tick={{fontSize:11, fill:'currentColor', fillOpacity:0.3}} axisLine={false} tickLine={false} width={65} tickFormatter={v => {
-                if (v >= 1e6) return `${(v/1e6).toFixed(1)}M`
-                if (v >= 1e3) return `${(v/1e3).toFixed(0)}K`
-                return v
-              }} />
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="label" {...xAxisProps} />
+              <YAxis {...yAxisProps} tickFormatter={compactTickFormatter} />
               <Tooltip
                 content={<WealthTooltip currency={baseCurrency} />}
-                cursor={{ stroke: 'rgba(255,255,255,0.08)' }}
+                {...tooltipProps}
               />
-              <Area type="monotone" dataKey="actual" stroke="#3b7cc4" strokeWidth={2.5} fill="url(#projFill)" dot={false} connectNulls={false} />
-              <Area type="monotone" dataKey="projected" stroke="#3b7cc4" strokeWidth={2} strokeDasharray="6 4" fill="url(#projFill)" dot={false} connectNulls={false} />
+              <Area type="monotone" dataKey="actual" stroke={ACCENT_STROKE} strokeWidth={2} fill="url(#projFill)" dot={false} connectNulls={false} />
+              <Area type="monotone" dataKey="projected" stroke={ACCENT_STROKE} strokeWidth={2} strokeDasharray="6 4" fill="url(#projFill)" dot={false} connectNulls={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -227,8 +225,8 @@ function ProjTooltip({ active, payload, ccy }) {
   if (!d) return null
   return (
     <div className="bg-ink dark:bg-surface-dark-3 text-white px-4 py-3 rounded-2xl shadow-lg text-sm border border-white/5">
-      {d.actual != null && <div className="font-bold tabular-nums">{fmtCurrency(d.actual, ccy)} <span className="font-normal text-white/50">actual</span></div>}
-      {d.projected != null && <div className="font-bold tabular-nums">{fmtCurrency(d.projected, ccy)} <span className="font-normal text-white/50">projected</span></div>}
+      {d.actual != null && <div className="font-medium tabular-nums" style={{fontVariantNumeric:"tabular-nums"}}>{fmtCurrency(d.actual, ccy)} <span className="font-normal text-white/50">actual</span></div>}
+      {d.projected != null && <div className="font-medium tabular-nums" style={{fontVariantNumeric:"tabular-nums"}}>{fmtCurrency(d.projected, ccy)} <span className="font-normal text-white/50">projected</span></div>}
       <div className="text-white/40 mt-0.5 text-xs">{d.date}</div>
     </div>
   )

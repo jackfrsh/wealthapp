@@ -1,6 +1,6 @@
 // frontend/src/pages/Outlook.jsx
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { apiGet, apiPatch } from '../api'
+import { api } from '../api'
 import { useApp } from '../App'
 import Card from '../components/Card'
 import { fmtCurrency, fmtCurrencyCompact } from '../utils'
@@ -16,6 +16,7 @@ import {
 } from 'recharts'
 
 import WealthTooltip from '../components/charts/WealthTooltip'
+import { xAxisProps, yAxisProps, gridProps, tooltipProps, compactTickFormatter, chartMargin, ACCENT_STROKE } from '../components/charts/chartTheme'
 import UpgradeButton from '../components/UpgradeButton'
 import {
   ChevronDown,
@@ -113,7 +114,7 @@ export default function Outlook() {
         if (er !== undefined && er !== '') params.push(`expected_return=${encodeURIComponent(er)}`)
         if (params.length) url += '?' + params.join('&')
 
-        const d = await apiGet(url)
+        const d = await api(url)
         setForecast(d)
       } catch (e) {
         console.error('Outlook forecast error:', e)
@@ -152,8 +153,8 @@ export default function Outlook() {
       try {
         const years = y || projYears
         const [proj, hist] = await Promise.all([
-          apiGet(`/projection/networth?years=${years}`),
-          apiGet('/history/networth?days=3650'),
+          api(`/projection/networth?years=${years}`),
+          api('/history/networth?days=3650'),
         ])
         setProjData(proj)
         setProjHistory(hist.points || [])
@@ -185,41 +186,52 @@ export default function Outlook() {
   }
 
   const applyAssumptions = async () => {
-    if (!goalId) return
-    const mc = Number(String(localContrib).replace(/,/g, ''))
-    const er = Number(String(localReturn).replace(/,/g, ''))
-    const prevStatus = forecast?.status
+  if (!goalId) return
 
-    try {
-      await apiPatch(`/goals/${goalId}`, {
+  const mc = Number(String(localContrib).replace(/,/g, ''))
+  const er = Number(String(localReturn).replace(/,/g, ''))
+  const prevStatus = forecast?.status
+
+  try {
+    // ✅ Explicit PATCH
+    await api(`/goals/${goalId}`, {
+      method: 'PATCH', // change to PUT if backend only supports PUT
+      body: {
         monthly_contribution: mc,
         expected_annual_return_pct: er,
-      })
-      await loadPrimaryGoal()
-      bumpData()
-      setDirty(false)
-      setLoading(true)
-      await loadForecast(mc, er)
+      },
+    })
 
-      try {
-        const newForecast = await apiGet(
-          `/goals/${goalId}/forecast?monthly_contribution=${encodeURIComponent(
-            mc
-          )}&expected_return=${encodeURIComponent(er)}`
-        )
-        if ((newForecast.status === 'on_track' || newForecast.status === 'ahead') && prevStatus === 'adjust') {
-          showFeedback("You're now on track.")
-        }
-      } catch {
-        // ignore
+    await loadPrimaryGoal()
+    bumpData()
+    setDirty(false)
+    setLoading(true)
+    await loadForecast(mc, er)
+
+    try {
+      const newForecast = await api(
+        `/goals/${goalId}/forecast?monthly_contribution=${encodeURIComponent(
+          mc
+        )}&expected_return=${encodeURIComponent(er)}`
+      )
+
+      if (
+        (newForecast.status === 'on_track' ||
+          newForecast.status === 'ahead') &&
+        prevStatus === 'adjust'
+      ) {
+        showFeedback("You're now on track.")
       }
-    } catch (e) {
-      console.error(e)
-      showToast(e?.message || String(e), 'error')
-    } finally {
-      setLoading(false)
+    } catch {
+      // ignore
     }
+  } catch (e) {
+    console.error(e)
+    showToast(e?.message || String(e), 'error')
+  } finally {
+    setLoading(false)
   }
+}
 
   const openEdit = () => {
     const g = forecast?.goal || primaryGoal
@@ -238,42 +250,56 @@ export default function Outlook() {
   const updateEdit = (field, value) => setEditForm((f) => ({ ...f, [field]: value }))
 
   const saveEditPlan = async () => {
-    if (!goalId) return
-    if (
-      !String(editForm.current_age || '').trim() ||
-      !String(editForm.target_age || '').trim() ||
-      !String(editForm.target_amount || '').trim()
-    ) {
-      showToast('Please fill in current age, target age and target amount', 'error')
-      return
-    }
+  if (!goalId) return
 
-    const payload = {
-      name: editForm.name,
-      current_age: Number(String(editForm.current_age).replace(/,/g, '')),
-      target_age: Number(String(editForm.target_age).replace(/,/g, '')),
-      target_amount: Number(String(editForm.target_amount).replace(/,/g, '')),
-      monthly_contribution: Number(String(editForm.monthly_contribution || 0).replace(/,/g, '')),
-      expected_annual_return_pct: Number(String(editForm.expected_annual_return_pct || 0).replace(/,/g, '')),
-    }
-
-    try {
-      setEditSaving(true)
-      await apiPatch(`/goals/${goalId}`, payload)
-      showToast('Plan updated', 'success')
-      await loadPrimaryGoal()
-      bumpData()
-      setEditOpen(false)
-      setLoading(true)
-      await loadForecast(payload.monthly_contribution, payload.expected_annual_return_pct)
-    } catch (e) {
-      console.error(e)
-      showToast(e?.message || String(e), 'error')
-    } finally {
-      setEditSaving(false)
-      setLoading(false)
-    }
+  if (
+    !String(editForm.current_age || '').trim() ||
+    !String(editForm.target_age || '').trim() ||
+    !String(editForm.target_amount || '').trim()
+  ) {
+    showToast('Please fill in current age, target age and target amount', 'error')
+    return
   }
+
+  const payload = {
+    name: editForm.name,
+    current_age: Number(String(editForm.current_age).replace(/,/g, '')),
+    target_age: Number(String(editForm.target_age).replace(/,/g, '')),
+    target_amount: Number(String(editForm.target_amount).replace(/,/g, '')),
+    monthly_contribution: Number(String(editForm.monthly_contribution || 0).replace(/,/g, '')),
+    expected_annual_return_pct: Number(
+      String(editForm.expected_annual_return_pct || 0).replace(/,/g, '')
+    ),
+  }
+
+  try {
+    setEditSaving(true)
+
+    // ✅ Explicit PATCH
+    await api(`/goals/${goalId}`, {
+      method: 'PATCH', // change to PUT if backend only supports PUT
+      body: payload,
+    })
+
+    showToast('Plan updated', 'success')
+
+    await loadPrimaryGoal()
+    bumpData()
+    setEditOpen(false)
+
+    setLoading(true)
+    await loadForecast(
+      payload.monthly_contribution,
+      payload.expected_annual_return_pct
+    )
+  } catch (e) {
+    console.error(e)
+    showToast(e?.message || String(e), 'error')
+  } finally {
+    setEditSaving(false)
+    setLoading(false)
+  }
+}
 
   // ─── Milestone selection (must be above early returns; uses hooks) ───────
   const milestones = projData?.milestones || []
@@ -585,44 +611,29 @@ export default function Outlook() {
       {chartData.length > 1 ? (
         <div className="h-[280px] sm:h-[340px]">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 10, right: 10, bottom: 0, left: 10 }}>
+            <AreaChart data={chartData} margin={chartMargin}>
               <defs>
                 <linearGradient id="trajFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#3b7cc4" stopOpacity={0.08} />
-                  <stop offset="100%" stopColor="#3b7cc4" stopOpacity={0} />
+                  <stop offset="0%" stopColor={ACCENT_STROKE} stopOpacity={0.08} />
+                  <stop offset="100%" stopColor={ACCENT_STROKE} stopOpacity={0} />
                 </linearGradient>
               </defs>
 
-              <CartesianGrid
-                strokeDasharray="3 3"
-                vertical={false}
-                stroke="currentColor"
-                strokeOpacity={0.04}
-              />
+              <CartesianGrid {...gridProps} />
 
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 11, fill: 'currentColor', fillOpacity: 0.3 }}
-                axisLine={false}
-                tickLine={false}
-                interval="preserveStartEnd"
+                {...xAxisProps}
               />
 
               <YAxis
-                tick={{ fontSize: 11, fill: 'currentColor', fillOpacity: 0.3 }}
-                axisLine={false}
-                tickLine={false}
-                width={65}
-                tickFormatter={(v) => {
-                  if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`
-                  if (v >= 1e3) return `${(v / 1e3).toFixed(0)}K`
-                  return v
-                }}
+                {...yAxisProps}
+                tickFormatter={compactTickFormatter}
               />
 
               <Tooltip
                 content={<WealthTooltip currency={ccy} />}
-                cursor={{ stroke: 'rgba(255,255,255,0.08)' }}
+                {...tooltipProps}
               />
 
               <ReferenceLine
@@ -647,8 +658,8 @@ export default function Outlook() {
               <Area
                 type="monotone"
                 dataKey="projected"
-                stroke="#3b7cc4"
-                strokeWidth={2.5}
+                stroke={ACCENT_STROKE}
+                strokeWidth={2}
                 fill="url(#trajFill)"
                 dot={false}
               />
@@ -726,7 +737,7 @@ export default function Outlook() {
             <TrendingUp size={16} className="text-accent" />
             <span>Account Projections</span>
             {settingsReady && !isPro && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300">
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium tracking-wider uppercase px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300">
                 <Crown size={10} /> Pro
               </span>
             )}
@@ -784,17 +795,18 @@ export default function Outlook() {
                     {filteredMilestones.map((m) => (
                       <div
                         key={m.year}
-                        className="p-4 rounded-2xl border border-black/[.05] dark:border-white/[.05] bg-surface dark:bg-surface-dark"
+                        className="p-4 sm:p-5 rounded-2xl border border-black/[.05] dark:border-white/[.05] bg-surface dark:bg-surface-dark"
                       >
                         <div className="flex items-center gap-1.5 mb-2">
-                          <Calendar size={11} className="text-ink-muted dark:text-white/35" />
-                          <span className="text-[11px] font-semibold tracking-[.08em] uppercase text-ink-muted dark:text-white/35">
-                            In {m.year}y
-                          </span>
-                        </div>
-                        <div className="font-display text-lg text-ink dark:text-white tracking-tight tabular-nums">
-                          {fmtCurrency(deflate(m.projected_net_worth, m.year), ccy)}
-                        </div>
+  <Calendar size={11} className="text-ink-muted/70 dark:text-white/30" />
+  <span className="text-[12px] font-semibold tracking-[.12em] uppercase text-ink-muted/65 dark:text-white/30">
+  In {m.year}y
+</span>
+</div>
+
+<div className="font-display text-xl sm:text-2xl text-ink dark:text-white tracking-tight tabular-nums leading-tight">
+  {fmtCurrency(deflate(m.projected_net_worth, m.year), ccy)}
+</div>
                       </div>
                     ))}
                   </div>
@@ -803,46 +815,31 @@ export default function Outlook() {
                 {/* Chart */}
                 <div className="h-[240px] sm:h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={projChartData} margin={{ top: 10, right: 10, bottom: 0, left: 10 }}>
+                    <AreaChart data={projChartData} margin={chartMargin}>
                       <defs>
                         <linearGradient id="projFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#3b7cc4" stopOpacity={0.08} />
-                          <stop offset="100%" stopColor="#3b7cc4" stopOpacity={0} />
+                          <stop offset="0%" stopColor={ACCENT_STROKE} stopOpacity={0.08} />
+                          <stop offset="100%" stopColor={ACCENT_STROKE} stopOpacity={0} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        vertical={false}
-                        stroke="currentColor"
-                        strokeOpacity={0.04}
-                      />
+                      <CartesianGrid {...gridProps} />
                       <XAxis
                         dataKey="label"
-                        tick={{ fontSize: 11, fill: 'currentColor', fillOpacity: 0.3 }}
-                        axisLine={false}
-                        tickLine={false}
-                        interval="preserveStartEnd"
+                        {...xAxisProps}
                       />
                       <YAxis
-                        tick={{ fontSize: 11, fill: 'currentColor', fillOpacity: 0.3 }}
-                        axisLine={false}
-                        tickLine={false}
-                        width={65}
-                        tickFormatter={(v) => {
-                          if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`
-                          if (v >= 1e3) return `${(v / 1e3).toFixed(0)}K`
-                          return v
-                        }}
+                        {...yAxisProps}
+                        tickFormatter={compactTickFormatter}
                       />
                       <Tooltip
   content={<WealthTooltip currency={baseCurrency} />}
-  cursor={{ stroke: 'rgba(255,255,255,0.08)' }}
+  {...tooltipProps}
 />
                       <Area
                         type="monotone"
                         dataKey="actual"
-                        stroke="#3b7cc4"
-                        strokeWidth={2.5}
+                        stroke={ACCENT_STROKE}
+                        strokeWidth={2}
                         fill="url(#projFill)"
                         dot={false}
                         connectNulls={false}
@@ -850,7 +847,7 @@ export default function Outlook() {
                       <Area
                         type="monotone"
                         dataKey="projected"
-                        stroke="#3b7cc4"
+                        stroke={ACCENT_STROKE}
                         strokeWidth={2}
                         strokeDasharray="6 4"
                         fill="url(#projFill)"
@@ -1003,12 +1000,12 @@ function StratTooltip({ active, payload, ccy }) {
   return (
     <div className="bg-ink dark:bg-surface-dark-3 text-white px-4 py-3 rounded-2xl shadow-lg text-sm border border-white/5">
       {d.projected != null && (
-        <div className="font-bold tabular-nums">
+        <div className="font-medium tabular-nums" style={{fontVariantNumeric:"tabular-nums"}}>
           {fmtCurrency(d.projected, ccy)} <span className="font-normal text-white/50">projected</span>
         </div>
       )}
       {d.required != null && (
-        <div className="font-bold tabular-nums mt-0.5">
+        <div className="font-medium tabular-nums mt-0.5">
           {fmtCurrency(d.required, ccy)} <span className="font-normal text-white/50">required</span>
         </div>
       )}

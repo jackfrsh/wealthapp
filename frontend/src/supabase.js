@@ -3,22 +3,24 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
-// If either value is missing, create a dummy client that won't crash the app.
-// Auth calls will fail gracefully, and the API layer will fall back to the
-// legacy token stored in localStorage.
-const _hasCreds = !!(supabaseUrl && supabaseAnonKey);
+// If either value is missing, export null so the app can fail gracefully.
+const hasCreds = Boolean(supabaseUrl && supabaseAnonKey);
 
-export const supabase = _hasCreds
+export const supabase = hasCreds
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
-        storage: window.localStorage,
+        // Vite runs in browser; keep localStorage
+        storage: typeof window !== "undefined" ? window.localStorage : undefined,
         storageKey: "wealthapp-auth",
       },
     })
   : null;
+
+// Also provide a default export so imports won't break if some file uses default import.
+export default supabase;
 
 if (typeof window !== "undefined") {
   window.supabase = supabase;

@@ -36,7 +36,7 @@ const NavItem = ({ icon: Icon, label, active, onClick, badge }) => {
       </span>
 
       {badge && (
-        <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+        <span className="text-[10px] font-medium tracking-wider uppercase px-2 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
           {badge}
         </span>
       )}
@@ -63,10 +63,10 @@ export default function Sidebar() {
           </div>
 
           {isPro && (
-            <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300">
-              Pro
-            </span>
-          )}
+  <span className="text-[10px] font-medium tracking-wider uppercase px-2 py-1 rounded-full border border-amber-500/20 dark:border-amber-400/20 bg-amber-500/12 dark:bg-amber-400/10 text-amber-700 dark:text-amber-300">
+    Pro
+  </span>
+)}
         </div>
 
         <div className="mt-2 text-xs text-ink-muted/60 dark:text-white/25">
@@ -117,7 +117,7 @@ export default function Sidebar() {
                   <Sparkles size={15} className="text-white" />
                 </div>
                 <div>
-                  <div className="text-sm font-bold text-ink dark:text-white tracking-tight">
+                  <div className="text-sm font-medium text-ink dark:text-white tracking-tight">
                     Wealth Pro
                   </div>
                   <div className="text-[11px] font-medium text-amber-700/70 dark:text-amber-300/60">
@@ -150,13 +150,13 @@ export default function Sidebar() {
                   </div>
                 </div>
 
-                <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+                <span className="text-[10px] font-medium tracking-wider uppercase px-2 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
                   New
                 </span>
               </div>
 
-              <UpgradeButton onClick={() => setPage('upgrade')} size="sm">
-  Upgrade
+              <UpgradeButton size="sm" icon={Crown} onClick={() => setPage('upgrade')}>
+  Upgrade to Pro
 </UpgradeButton>
 
               <div className="mt-2 text-[11px] text-ink-muted/60 dark:text-white/25">

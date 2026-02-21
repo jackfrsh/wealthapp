@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { apiGet } from "../api";
+import { api } from "../api";
 import { useAuth } from "../auth/AuthProvider";
 
 export default function DashboardPage() {
@@ -10,7 +10,12 @@ export default function DashboardPage() {
   useEffect(() => {
     let alive = true;
 
-    apiGet("/dashboard?range=1M")
+    console.log("DEBUG TOTALS", {
+  prev: prevTotal.current,
+  next: nextTotal,
+})
+
+    api("/dashboard?range=1M")
       .then((d) => {
         if (!alive) return;
         setData(d);

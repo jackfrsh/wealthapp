@@ -42,29 +42,6 @@ logger = logging.getLogger("wealth.auth")
 ENV_PATH = Path(__file__).resolve().parents[1] / ".env"  # backend/.env
 load_dotenv(dotenv_path=ENV_PATH)
 
-# ─── Legacy local-auth helpers (kept for import compatibility) ──────────────
-
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-unused")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
-
-
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
-
-
-def create_access_token(subject: str) -> str:
-    """Legacy helper — not used for Supabase auth."""
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    return pyjwt.encode({"sub": subject, "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
-
-
 # ─── Supabase JWT configuration ────────────────────────────────────────────
 
 SUPABASE_URL: str = os.getenv("SUPABASE_URL", "").strip().rstrip("/")

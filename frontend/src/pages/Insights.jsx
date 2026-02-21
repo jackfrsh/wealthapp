@@ -1,6 +1,6 @@
 // frontend/src/pages/Insights.jsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { apiGet, apiPost } from '../api'
+import { api } from '../api'
 import { useApp } from '../App'
 import Card from '../components/Card'
 import { ArrowRight, TrendingUp, Lightbulb, Award, Lock } from 'lucide-react'
@@ -58,10 +58,10 @@ export default function Insights() {
     try {
       // ✅ Add /dashboard so Insights knows: current_total + goal (milestone)
       const [insightsRes, accountsRes, settingsRes, dashboardRes] = await Promise.all([
-        apiGet('/insights'),
-        apiGet('/accounts'),
-        apiGet('/settings'),
-        apiGet('/dashboard?range=3M'),
+        api('/insights'),
+        api('/accounts'),
+        api('/settings'),
+        api('/dashboard?range=3M'),
       ])
 
       setData({ ...(insightsRes || {}), settings: settingsRes || null })
@@ -221,7 +221,7 @@ export default function Insights() {
                       <button
                         onClick={async () => {
                           try {
-                            await apiPost('/snapshots')
+                            await api('/snapshots')
                             load()
                           } catch {
                             // ignore

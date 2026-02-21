@@ -1,6 +1,6 @@
 // frontend/src/pages/Home.jsx
-import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { apiGet, apiPut } from '../api'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { api } from '../api'
 import { useApp } from '../App'
 import Card from '../components/Card'
 import { fmtCurrency, fmtCurrencyCompact } from '../utils'
@@ -11,6 +11,9 @@ import {
   CheckCircle,
   TrendingUp,
   TrendingDown,
+  LogOut,
+  Trophy,
+  X,
 } from 'lucide-react'
 
 /* ──────────────────────────────────────────── */
@@ -26,9 +29,7 @@ const MILESTONE_LADDER = [
 
 function getNextMilestone(total) {
   const t = Number(total || 0)
-  // First ladder step strictly greater than total
   const next = MILESTONE_LADDER.find((x) => x > t)
-  // If user is beyond ladder, keep last (won't ever be "reached" in UI but stays graceful)
   return next || MILESTONE_LADDER[MILESTONE_LADDER.length - 1]
 }
 
@@ -48,6 +49,16 @@ function fv(pv, pmt, r, n) {
   if (Math.abs(r) < 1e-9) return pv + pmt * n
   const a = Math.pow(1 + r, n)
   return pv * a + pmt * ((a - 1) / r)
+}
+
+function getHighestReached(total) {
+  const t = Number(total || 0)
+  let best = 0
+  for (const m of MILESTONE_LADDER) {
+    if (t >= m) best = m
+    else break
+  }
+  return best || null
 }
 
 function monthsToTarget({ pv, pmt, annualReturnPct, target }) {
@@ -81,27 +92,139 @@ function monthsToTarget({ pv, pmt, annualReturnPct, target }) {
 }
 
 /* ──────────────────────────────────────────── */
-/* Celebration: show once per crossed milestone  */
+/* Celebration persistence (receipt-style)       */
 /* ──────────────────────────────────────────── */
 
-const CELEBRATION_KEY = 'wealthapp:last-celebrated-milestone-v1'
+const CELEBRATION_LAST_KEY = 'wealthapp:last-celebrated-milestone-v1'
+const CELEBRATION_PENDING_KEY = 'wealthapp:pending-celebration-v1'
 
 function getLastCelebrated() {
   try {
-    return Number(localStorage.getItem(CELEBRATION_KEY) || 0) || 0
-  } catch {
+    return Number(localStorage.getItem(CELEBRATION_LAST_KEY) || 0) || 0
+  } catch (e) {
+    console.warn('[celebration] localStorage blocked (getLastCelebrated)', e)
     return 0
   }
 }
-
 function setLastCelebrated(m) {
   try {
-    localStorage.setItem(CELEBRATION_KEY, String(m || 0))
-  } catch {}
+    localStorage.setItem(CELEBRATION_LAST_KEY, String(m || 0))
+  } catch (e) {
+    console.warn('[celebration] localStorage blocked (setLastCelebrated)', e)
+  }
+}
+
+function getPendingCelebration() {
+  try {
+    const raw = localStorage.getItem(CELEBRATION_PENDING_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return null
+    if (!parsed.milestone) return null
+    return parsed
+  } catch (e) {
+    console.warn('[celebration] localStorage blocked (getPendingCelebration)', e)
+    return null
+  }
+}
+
+function setPendingCelebration(payload) {
+  try {
+    localStorage.setItem(CELEBRATION_PENDING_KEY, JSON.stringify(payload))
+  } catch (e) {
+    console.warn('[celebration] localStorage blocked (setPendingCelebration)', e)
+  }
+}
+
+function clearPendingCelebration() {
+  try {
+    localStorage.removeItem(CELEBRATION_PENDING_KEY)
+  } catch (e) {
+    console.warn('[celebration] localStorage blocked (clearPendingCelebration)', e)
+  }
+}
+
+function toCents(n) {
+  const x = Number(n || 0)
+  return Number.isFinite(x) ? Math.round(x * 100) : 0
+}
+
+/* ──────────────────────────────────────────── */
+/* Premium milestone receipt banner              */
+/* ──────────────────────────────────────────── */
+
+function MilestoneReceipt({ visible, milestone, ccy, onDismiss }) {
+  if (!milestone) return null
+
+  return (
+    <div
+      className={[
+        'rounded-3xl border overflow-hidden',
+        'bg-white/70 dark:bg-white/[.06] backdrop-blur-xl',
+        'border-black/[.06] dark:border-white/[.08]',
+        'shadow-[0_18px_50px_rgba(0,0,0,0.10)]',
+        'transition-all duration-500 ease-[cubic-bezier(.16,1,.3,1)]',
+        visible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none',
+      ].join(' ')}
+    >
+      {/* Rim light + subtle glow */}
+      <div className="relative">
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute -left-16 -top-16 w-40 h-40 rounded-full bg-emerald-500/10 blur-[40px]" />
+          <div className="absolute -right-16 -top-20 w-44 h-44 rounded-full bg-accent/10 blur-[45px]" />
+          <div className="absolute inset-x-0 top-0 h-px bg-white/70 dark:bg-white/10" />
+        </div>
+
+        <div className="relative px-5 sm:px-6 py-3.5 flex items-center gap-4">
+          <div className="shrink-0">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/15 flex items-center justify-center">
+              <Trophy size={18} className="text-emerald-600 dark:text-emerald-400" />
+            </div>
+          </div>
+
+          <div className="min-w-0 flex-1">
+  <div className="text-[10px] font-semibold tracking-[.18em] uppercase text-emerald-700/80 dark:text-emerald-300/80">
+    Milestone achieved
+  </div>
+
+  {/* Mobile: 3 lines. Desktop: amount + message inline */}
+  <div className="mt-1 min-w-0">
+    {/* Line 2: money */}
+    <div className="font-display text-lg sm:text-2xl text-ink dark:text-white tabular-nums leading-tight break-words">
+      {fmtCurrencyCompact(milestone, ccy)}
+    </div>
+
+    {/* Line 3: message */}
+    <div className="mt-1 text-xs sm:text-xs text-ink-muted/60 dark:text-white/35 leading-snug">
+      You’ve crossed a new net worth threshold.
+    </div>
+  </div>
+
+  {/* Optional: if you WANT inline on >=sm, swap to this pattern instead:
+      - keep the above for mobile only, and add an sm:flex row below.
+      But honestly 3-line looks premium and avoids layout stress.
+  */}
+</div>
+
+          <button
+            onClick={onDismiss}
+            className="shrink-0 p-2 rounded-2xl hover:bg-black/[.04] dark:hover:bg-white/[.06] transition-colors"
+            aria-label="Dismiss"
+            type="button"
+          >
+            <X size={16} className="text-ink-muted dark:text-white/50" />
+          </button>
+        </div>
+
+        {/* hairline bottom sparkle */}
+        <div className="h-px bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent" />
+      </div>
+    </div>
+  )
 }
 
 export default function Home() {
-  const { setBaseCurrency, setPage, dataVersion, bumpData, showToast, baseCurrency } = useApp()
+  const { setBaseCurrency, setPage, dataVersion, bumpData, showToast, baseCurrency, handleLogout } = useApp()
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -110,42 +233,122 @@ export default function Home() {
   const prevTotal = useRef(null)
   const [animatingDelta, setAnimatingDelta] = useState(false)
 
+  // milestone edit
   const [editingMilestone, setEditingMilestone] = useState(false)
   const [milestoneInput, setMilestoneInput] = useState('')
   const [savingMilestone, setSavingMilestone] = useState(false)
 
-  const [showCelebrate, setShowCelebrate] = useState(false)
-  const [celebratedMilestone, setCelebratedMilestone] = useState(null)
+  // celebration receipt (persistent)
+  const [pendingCelebrate, setPendingCelebrate] = useState(null)
+  const [celebrateVisible, setCelebrateVisible] = useState(false)
+
+  const [dismissAddAccountNudge, setDismissAddAccountNudge] = useState(() => {
+  try {
+    return localStorage.getItem('dismiss_add_account_nudge') === 'true'
+  } catch {
+    return false
+  }
+})
+
+const dismissNudge = () => {
+  setDismissAddAccountNudge(true)
+  try {
+    localStorage.setItem('dismiss_add_account_nudge', 'true')
+  } catch {}
+}
+
+    // Derived (safe even when data is null)
+  const total = useMemo(() => Number(data?.current_total || 0), [data])
+  const totalCents = useMemo(() => toCents(total), [total])
+  const ccy = useMemo(() => data?.base_currency || 'GBP', [data])
+
+  const clearCelebration = useCallback(() => {
+    // fade out, then clear storage
+    setCelebrateVisible(false)
+    window.setTimeout(() => {
+      clearPendingCelebration()
+      setPendingCelebrate(null)
+    }, 240)
+  }, [])
+
+  // 1) On mount: hydrate pending celebration from storage (so it survives page switching)
+  useEffect(() => {
+    const p = getPendingCelebration()
+    if (p?.milestone) {
+      setPendingCelebrate(p)
+      // allow CSS transition to animate in
+      const t = window.setTimeout(() => setCelebrateVisible(true), 30)
+      return () => window.clearTimeout(t)
+    }
+  }, [])
+
+  // 2) While Home is open: if net worth changes vs the saved receipt value, auto-close it
+  useEffect(() => {
+    if (!data) return
+    if (!pendingCelebrate?.milestone) return
+
+    const savedCents = Number(pendingCelebrate.total_at_time_cents ?? NaN)
+    if (!Number.isFinite(savedCents)) return
+
+    if (totalCents !== savedCents) {
+      clearCelebration()
+    }
+  }, [data, totalCents, pendingCelebrate?.milestone, pendingCelebrate?.total_at_time_cents, clearCelebration])
 
   const load = useCallback(async () => {
     setError(null)
     try {
-      const d = await apiGet('/dashboard?range=3M')
+      const d = await api('/dashboard?range=3M')
 
-      const nextTotal = Number(d?.current_total || 0)
-      const prev = Number(prevTotal.current ?? 0)
-
-      // Celebration based on crossing from previous → next
-      const crossed = getCrossedMilestone(prev, nextTotal)
-      if (crossed) {
-        const last = getLastCelebrated()
-        if (crossed > last) {
-          setCelebratedMilestone(crossed)
-          setShowCelebrate(true)
-          setLastCelebrated(crossed)
-          setTimeout(() => setShowCelebrate(false), 5000)
-        }
-      }
-
+      // Set data first so the page renders even if celebration logic fails
       setData(d)
       setBaseCurrency(d.base_currency || 'GBP')
 
-      if (prevTotal.current !== null && prevTotal.current !== d.current_total) {
+      const nextTotal = Number(d?.current_total || 0)
+      const nextTotalCents = toCents(nextTotal)
+
+      // delta animation
+      if (prevTotal.current !== null && prevTotal.current !== nextTotal) {
         setAnimatingDelta(true)
         setTimeout(() => setAnimatingDelta(false), 600)
       }
 
-      prevTotal.current = d.current_total
+// 1) If a pending receipt exists, keep showing it until net worth changes.
+const existingPending = getPendingCelebration()
+if (existingPending?.milestone) {
+  const savedCents = Number(existingPending.total_at_time_cents ?? NaN)
+
+  if (Number.isFinite(savedCents) && savedCents !== nextTotalCents) {
+    clearPendingCelebration()
+    setPendingCelebrate(null)
+    setCelebrateVisible(false)
+  } else {
+    setPendingCelebrate(existingPending)
+    setCelebrateVisible(true)
+  }
+}
+
+// 2) ✅ Reliable trigger: highest milestone reached based on current total
+const reached = getHighestReached(nextTotal)
+if (reached) {
+  const last = getLastCelebrated()
+
+  if (reached > last) {
+    setLastCelebrated(reached)
+
+    const payload = {
+  milestone: reached,
+  total_at_time_cents: nextTotalCents,
+  created_at: Date.now(), // optional
+}
+setPendingCelebration(payload)
+setPendingCelebrate(payload)
+setCelebrateVisible(false)
+setTimeout(() => setCelebrateVisible(true), 30)
+  }
+}
+
+prevTotal.current = nextTotal
     } catch (e) {
       console.error('Dashboard load error:', e)
       setError(e?.message || 'Failed to load dashboard')
@@ -157,6 +360,10 @@ export default function Home() {
   useEffect(() => {
     load()
   }, [load, dataVersion])
+
+  /* ──────────────────────────────────────────── */
+  /* Early UI states                              */
+  /* ──────────────────────────────────────────── */
 
   if (loading && !data) {
     return (
@@ -177,9 +384,7 @@ export default function Home() {
       <div className="space-y-6">
         <Card className="p-8 text-center">
           <AlertTriangle size={32} className="text-amber-500 mx-auto mb-4" />
-          <p className="text-sm text-ink-muted dark:text-white/50 mb-2">
-            Unable to load dashboard
-          </p>
+          <p className="text-sm text-ink-muted dark:text-white/50 mb-2">Unable to load dashboard</p>
           <p className="text-xs text-ink-muted/50 dark:text-white/25 mb-5">{error}</p>
           <button
             onClick={() => {
@@ -198,8 +403,9 @@ export default function Home() {
 
   if (!data) return null
 
-  const ccy = data.base_currency || 'GBP'
-  const total = Number(data.current_total || 0)
+  /* ──────────────────────────────────────────── */
+  /* Page computations                            */
+  /* ──────────────────────────────────────────── */
 
   // Trend
   const sparkValues = (data?.series || []).map((p) => Number(p.v)).filter(Number.isFinite)
@@ -212,29 +418,18 @@ export default function Home() {
       : 0
   const positive = sparkValues.length >= 2 ? delta >= 0 : true
 
-  /* ──────────────────────────────────────────── */
-  /* Milestone logic (premium, stable)             */
-  /* ──────────────────────────────────────────── */
-
-  // "Saved" milestone: user explicitly set it (via settings.goal) — stable until achieved
+  // Milestone target logic (saved goal is sticky until achieved)
   const savedMilestoneTarget = Number(data.goal || 0) || 0
   const hasSavedMilestone = savedMilestoneTarget > 0
-
-  // Achieved is based on the saved milestone only (closure that doesn't jitter)
   const milestoneAchieved = hasSavedMilestone && total >= savedMilestoneTarget
 
-  // Suggested next milestone (forward-looking) — not persisted unless user saves
   const suggestedNext = getNextMilestone(total)
-
-  // Active milestone target used for progress UI + reach-age math:
-  // - If user has a saved milestone and it's not achieved, use it.
-  // - Otherwise (no saved milestone OR achieved), use the suggested next.
   const activeMilestoneTarget =
     hasSavedMilestone && !milestoneAchieved ? savedMilestoneTarget : suggestedNext
 
   const hasMilestone = activeMilestoneTarget > 0
+  const usingSuggested = !(hasSavedMilestone && !milestoneAchieved)
 
-  const usingSuggested = !(hasSavedMilestone && !milestoneAchieved) // true when we're showing "next"
   const milestoneProgressPct = hasMilestone
     ? Math.min(100, (total / activeMilestoneTarget) * 100)
     : 0
@@ -248,14 +443,13 @@ export default function Home() {
   const retirementProgress =
     retirementTarget > 0 ? Math.min(100, (total / retirementTarget) * 100) : null
 
-  // Reach-age math (uses primary goal inputs)
-  const goal = retirementGoal
-  const currentAge = Number(goal?.current_age ?? NaN)
-  const er = Number(goal?.expected_annual_return_pct ?? 0)
-  const mc = Number(goal?.monthly_contribution ?? 0)
+  // reach-age estimate
+  const currentAge = Number(retirementGoal?.current_age ?? NaN)
+  const er = Number(retirementGoal?.expected_annual_return_pct ?? 0)
+  const mc = Number(retirementGoal?.monthly_contribution ?? 0)
 
   const mToMilestone =
-    hasMilestone && goal && Number.isFinite(currentAge)
+    hasMilestone && retirementGoal && Number.isFinite(currentAge)
       ? monthsToTarget({
           pv: total,
           pmt: mc,
@@ -270,7 +464,6 @@ export default function Home() {
       : Math.round(currentAge + mToMilestone / 12)
 
   const startEditMilestone = () => {
-    // Edit whatever is currently active (saved if in-progress, otherwise suggested next)
     setMilestoneInput(String(activeMilestoneTarget || ''))
     setEditingMilestone(true)
   }
@@ -284,9 +477,10 @@ export default function Home() {
 
     setSavingMilestone(true)
     try {
-      await apiPut('/settings', { goal: cleaned })
+      await api('/settings', { method: 'PUT', body: { goal: cleaned } })
       showToast('Next target updated')
       setEditingMilestone(false)
+
       bumpData()
       setLoading(true)
       await load()
@@ -297,14 +491,27 @@ export default function Home() {
     }
   }
 
+  const heroRing =
+    pendingCelebrate?.milestone
+      ? 'ring-2 ring-emerald-400/20 dark:ring-emerald-400/15 transition-all duration-700'
+      : milestoneAchieved
+      ? 'ring-2 ring-emerald-400/40 dark:ring-emerald-400/25'
+      : ''
+
   return (
     <div className="space-y-6">
+      {/* Thin premium receipt (persists + fades) */}
+      {pendingCelebrate?.milestone ? (
+        <MilestoneReceipt
+          visible={celebrateVisible}
+          milestone={pendingCelebrate.milestone}
+          ccy={ccy}
+          onDismiss={clearCelebration}
+        />
+      ) : null}
+
       {/* ═══ Hero Card ═══ */}
-      <div
-        className={`hero-panel rounded-3xl p-7 sm:p-10 ${
-          milestoneAchieved ? 'ring-2 ring-emerald-400/40 dark:ring-emerald-400/25' : ''
-        }`}
-      >
+      <div className={`hero-panel relative rounded-3xl p-7 sm:p-10 ${heroRing}`}>
         <div className="hero-glow absolute top-[-80px] right-[-40px] w-[350px] h-[350px] bg-accent/[.05] dark:bg-accent/[.07] rounded-full blur-[120px] pointer-events-none" />
 
         <div className="relative space-y-5">
@@ -313,22 +520,14 @@ export default function Home() {
               <span className="text-xs font-semibold tracking-[.14em] uppercase text-ink-muted/60 dark:text-white/30">
                 Total Wealth
               </span>
+
               {milestoneAchieved && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium tracking-wider uppercase px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
                   <CheckCircle size={10} /> Target reached
                 </span>
               )}
             </div>
           </div>
-
-          {showCelebrate && celebratedMilestone && (
-            <div className="inline-flex items-center gap-2 px-3 py-2 rounded-2xl bg-emerald-100/70 dark:bg-emerald-900/25 text-emerald-800 dark:text-emerald-300 border border-emerald-500/20">
-              <span className="text-base">✨</span>
-              <span className="text-sm font-semibold">
-                Milestone reached — {fmtCurrencyCompact(celebratedMilestone, ccy)}
-              </span>
-            </div>
-          )}
 
           <div
             className={`hero-number mt-1 mb-2 text-ink dark:text-white transition-all duration-300 ${
@@ -357,7 +556,7 @@ export default function Home() {
                     </button>
 
                     {usingSuggested && (
-                      <span className="ml-2 text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full bg-black/[.04] dark:bg-white/[.06] text-ink-muted/60 dark:text-white/30">
+                      <span className="ml-2 text-[10px] font-medium tracking-wider uppercase px-2 py-0.5 rounded-full bg-black/[.04] dark:bg-white/[.06] text-ink-muted/60 dark:text-white/30">
                         Suggested
                       </span>
                     )}
@@ -438,6 +637,51 @@ export default function Home() {
         </div>
       </div>
 
+{(data.accounts_count || 0) === 0 && !dismissAddAccountNudge && (
+  <Card className="px-5 py-4 mt-4">
+    <div className="flex items-start justify-between gap-4">
+      <div className="min-w-0 flex-1">
+        <div className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/60 dark:text-white/30">
+          Next step
+        </div>
+        <div className="mt-1 text-sm font-semibold text-ink dark:text-white">
+          Add your first account
+        </div>
+        <div className="mt-1 text-xs text-ink-muted/60 dark:text-white/30 leading-snug">
+          Add your ISA, SIPP, bank & savings accounts — anything you want included in your net worth.
+        </div>
+
+        <div className="mt-3 flex items-center gap-2">
+          <button
+            onClick={() => setPage('accounts')}
+            className="px-4 py-2 rounded-2xl bg-accent text-white text-sm font-semibold hover:bg-accent-dark active:scale-[.98] transition-all"
+            type="button"
+          >
+            Add account
+          </button>
+
+          <button
+            onClick={dismissNudge}
+            className="px-3 py-2 rounded-2xl text-xs font-semibold text-ink-muted/70 dark:text-white/35 hover:bg-black/[.04] dark:hover:bg-white/[.06] transition-colors"
+            type="button"
+          >
+            Not now
+          </button>
+        </div>
+      </div>
+
+      <button
+        onClick={dismissNudge}
+        className="p-2 -mr-1 rounded-xl text-ink-muted dark:text-white/35 hover:bg-black/5 dark:hover:bg-white/5 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+        type="button"
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
+    </div>
+  </Card>
+)}
+
       {/* ═══ Trend + Retirement ═══ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card className="p-6">
@@ -477,11 +721,7 @@ export default function Home() {
           </div>
 
           <div className="mt-3 text-xs text-ink-muted/55 dark:text-white/25 tabular-nums">
-            {sparkValues.length >= 2 ? (
-              <>{fmtCurrency(delta, ccy)} over 90D</>
-            ) : (
-              <>Add another snapshot to see trend</>
-            )}
+            {sparkValues.length >= 2 ? <>{fmtCurrency(delta, ccy)} over 90D</> : <>Add another snapshot to see trend</>}
           </div>
         </Card>
 
@@ -492,9 +732,7 @@ export default function Home() {
                 Retirement plan
               </div>
               {retirementGoal?.name ? (
-                <div className="text-xs text-ink-muted/60 dark:text-white/25 mt-1">
-                  {retirementGoal.name}
-                </div>
+                <div className="text-xs text-ink-muted/60 dark:text-white/25 mt-1">{retirementGoal.name}</div>
               ) : (
                 <div className="text-xs text-ink-muted/60 dark:text-white/25 mt-1">Primary goal</div>
               )}
@@ -532,39 +770,59 @@ export default function Home() {
         </Card>
       </div>
 
-      {/* ═══ Stats bar ═══ */}
-      <Card className="px-5 py-4">
-        <div className="flex items-center justify-between gap-4">
-          <button
-            onClick={() => setPage('accounts')}
-            className="text-left flex-1 min-w-0 hover:opacity-90 transition-opacity"
-            type="button"
-          >
-            <div className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/60 dark:text-white/30">
-              Accounts
-            </div>
-            <div className="text-sm font-semibold text-ink dark:text-white tabular-nums mt-1">
-              {data.accounts_count || 0}{' '}
-              <span className="text-ink-muted/60 dark:text-white/30 font-medium">total</span>
-            </div>
-          </button>
+      {/* ═══ Stats bar (Accounts + Snapshots) ═══ */}
+<Card className="px-5 py-4">
+  <div className="flex items-center justify-between gap-4">
+    <button
+      onClick={() => setPage('accounts')}
+      className="text-left flex-1 min-w-0 hover:opacity-90 transition-opacity"
+      type="button"
+    >
+      <div className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/60 dark:text-white/30">
+        Accounts
+      </div>
+      <div className="text-sm font-semibold text-ink dark:text-white tabular-nums mt-1">
+        {data.accounts_count || 0}{' '}
+        <span className="text-ink-muted/60 dark:text-white/30 font-medium">total</span>
+      </div>
+    </button>
 
-          <div className="w-px h-10 bg-black/[.06] dark:bg-white/[.06]" />
+    <div className="w-px h-10 bg-black/[.06] dark:bg-white/[.06]" />
 
-          <div className="flex-1 min-w-0">
-            <div className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/60 dark:text-white/30">
-              Snapshots
-            </div>
-            <div className="text-sm font-semibold text-ink dark:text-white tabular-nums mt-1">
-              {data.total_snapshots || 0}{' '}
-              <span className="text-ink-muted/60 dark:text-white/30 font-medium">recorded</span>
-            </div>
-          </div>
-        </div>
-      </Card>
+    <button
+      onClick={() => setPage('snapshots')}
+      className="text-left flex-1 min-w-0 hover:opacity-90 transition-opacity"
+      type="button"
+    >
+      <div className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/60 dark:text-white/30">
+        Snapshots
+      </div>
+      <div className="text-sm font-semibold text-ink dark:text-white tabular-nums mt-1">
+        {data.total_snapshots || 0}{' '}
+        <span className="text-ink-muted/60 dark:text-white/30 font-medium">recorded</span>
+      </div>
+    </button>
+  </div>
+</Card>
+
+      {/* Mobile logout — only visible on small screens */}
+      <div className="lg:hidden mt-6 pb-2">
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-sm font-medium text-loss/80 hover:text-loss border border-loss/20 hover:bg-loss-light/60 dark:hover:bg-loss/10 transition-colors"
+          type="button"
+        >
+          <LogOut size={16} />
+          Sign out
+        </button>
+      </div>
     </div>
   )
 }
+
+/* ──────────────────────────────────────────── */
+/* Mini sparkline (no deps)                      */
+/* ──────────────────────────────────────────── */
 
 function MiniSparkline({ data = [] }) {
   if (!data || data.length === 0) return null

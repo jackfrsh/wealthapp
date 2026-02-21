@@ -15,6 +15,7 @@ import {
 } from 'recharts'
 
 import WealthTooltip from '../components/charts/WealthTooltip'
+import { xAxisProps, yAxisProps, gridProps, tooltipProps, compactTickFormatter } from '../components/charts/chartTheme'
 
 /* ───────────────────────────────────────────── */
 /* Helpers */
@@ -294,7 +295,7 @@ export default function ProProjectionCard({
           </div>
         </div>
 
-        <span className="shrink-0 text-[10px] font-bold tracking-wider uppercase px-2 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+        <span className="shrink-0 text-[10px] font-medium tracking-wider uppercase px-2 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
           Pro
         </span>
       </div>
@@ -360,32 +361,24 @@ export default function ProProjectionCard({
             <div className={`h-[240px] ${chartOpacity} transition-opacity`}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={series}>
-                  <CartesianGrid
-                    vertical={false}
-                    stroke={dark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)'}
-                    strokeDasharray="3 6"
-                  />
+                  <CartesianGrid {...gridProps} />
 
                   <XAxis
                     dataKey="label"
-                    tickLine={false}
-                    axisLine={false}
+                    {...xAxisProps}
                     interval={xInterval}
                     minTickGap={10}
-                    tick={{ fontSize: 11 }}
                   />
 
                   <YAxis
-                    tickLine={false}
-                    axisLine={false}
+                    {...yAxisProps}
                     width={46}
-                    tick={{ fontSize: 11 }}
                     tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
                   />
 
                   <Tooltip
   content={<WealthTooltip currency={baseCurrency} />}
-  cursor={{ stroke: 'rgba(255,255,255,0.08)' }}
+  {...tooltipProps}
 />
 
                   {/* Goal lines */}
@@ -418,7 +411,7 @@ export default function ProProjectionCard({
                     type="monotone"
                     dataKey="simulated"
                     stroke={simStroke}
-                    strokeWidth={3}
+                    strokeWidth={2}
                     dot={false}
                     isAnimationActive
                   />
@@ -430,7 +423,7 @@ export default function ProProjectionCard({
               <div className="absolute inset-0 flex items-center justify-center">
                 <UpgradeButton
   onClick={() => setPage('upgrade')}
-  icon={<Lock size={16} />}
+  icon={Lock}
   size="md"
 >
   Unlock projections

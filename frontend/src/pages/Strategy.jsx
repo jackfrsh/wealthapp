@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { apiGet, apiPatch } from "../api"
+import { api } from "../api"
 import { useApp } from '../App'
 import Card from '../components/Card'
 import { fmtCurrency, fmtCurrencyCompact } from '../utils'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, ReferenceLine,
+  ResponsiveContainer, ReferenceLine, CartesianGrid,
 } from 'recharts'
 import {
   ChevronDown,
@@ -17,8 +17,8 @@ import {
   X,
   Save,
 } from 'lucide-react'
-import { Tooltip } from 'recharts'
 import WealthTooltip from '../components/charts/WealthTooltip'
+import { xAxisProps, yAxisProps, gridProps, tooltipProps, compactTickFormatter, chartMargin, ACCENT_STROKE, activeDotStyle } from '../components/charts/chartTheme'
 
 export default function Strategy() {
   const { baseCurrency, setPage, primaryGoal, showToast, loadPrimaryGoal, bumpData } = useApp()
@@ -26,17 +26,14 @@ export default function Strategy() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  // Existing assumptions panel
   const [assumptionsOpen, setAssumptionsOpen] = useState(false)
   const [localContrib, setLocalContrib] = useState('')
   const [localReturn, setLocalReturn] = useState('')
   const [dirty, setDirty] = useState(false)
 
-  // Micro feedback
   const [feedback, setFeedback] = useState(null)
   const feedbackTimer = useRef(null)
 
-  // Edit-plan modal
   const [editOpen, setEditOpen] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
   const [editForm, setEditForm] = useState({
@@ -61,7 +58,7 @@ export default function Strategy() {
       if (er !== undefined && er !== '') params.push(`expected_return=${encodeURIComponent(er)}`)
       if (params.length) url += '?' + params.join('&')
 
-      const d = await apiGet(url)
+      const d = await api(url)
       setForecast(d)
     } catch (e) {
       console.error('Strategy forecast error:', e)
@@ -71,13 +68,11 @@ export default function Strategy() {
     }
   }, [goalId])
 
-  // Initialize local controls when primaryGoal changes
   useEffect(() => {
     if (primaryGoal) {
       setLocalContrib(String(primaryGoal.monthly_contribution || 0))
       setLocalReturn(String(primaryGoal.expected_annual_return_pct || 7))
 
-      // Seed edit form (Edit plan opens prefilled)
       setEditForm({
         name: primaryGoal.name || 'Retirement',
         current_age: String(primaryGoal.current_age ?? ''),
@@ -107,7 +102,6 @@ export default function Strategy() {
     loadForecast()
   }
 
-  // Existing assumptions apply (quick tweak only)
   const applyAssumptions = async () => {
     if (!goalId) return
 
@@ -117,11 +111,14 @@ export default function Strategy() {
     const prevStatus = forecast?.status
 
     try {
-      // ✅ PATCH goal assumptions
-      await apiPatch(`/goals/${goalId}`, {
+      // ✅ PATCH goal assumptions (explicit method/body)
+      await api(`/goals/${goalId}`, {
+        method: 'PATCH', // change to 'PUT' if your backend only supports PUT
+        body: {
           monthly_contribution: mc,
           expected_annual_return_pct: er,
-        })
+        },
+      })
 
       await loadPrimaryGoal()
       bumpData()
@@ -132,7 +129,7 @@ export default function Strategy() {
 
       // Optional feedback check (non-blocking)
       try {
-        const newForecast = await apiGet(
+        const newForecast = await api(
           `/goals/${goalId}/forecast?monthly_contribution=${encodeURIComponent(mc)}&expected_return=${encodeURIComponent(er)}`
         )
         if (newForecast.status === 'on_track' || newForecast.status === 'ahead') {
@@ -149,7 +146,6 @@ export default function Strategy() {
     }
   }
 
-  // Edit plan modal open + sync
   const openEdit = () => {
     const g = forecast?.goal || primaryGoal
     if (!g) return
@@ -170,7 +166,6 @@ export default function Strategy() {
   const saveEditPlan = async () => {
     if (!goalId) return
 
-    // Minimal validation
     if (
       !String(editForm.current_age || '').trim() ||
       !String(editForm.target_age || '').trim() ||
@@ -192,7 +187,11 @@ export default function Strategy() {
     try {
       setEditSaving(true)
 
-      await apiPatch(`/goals/${goalId}`, payload)
+      // ✅ PATCH goal (explicit method/body)
+      await api(`/goals/${goalId}`, {
+        method: 'PATCH', // change to 'PUT' if your backend only supports PUT
+        body: payload,
+      })
 
       showToast('Plan updated', 'success')
 
@@ -222,6 +221,7 @@ export default function Strategy() {
           <button
             onClick={() => setPage('home')}
             className="text-sm font-semibold px-5 py-2.5 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-colors"
+            type="button"
           >
             Set up goal
           </button>
@@ -240,7 +240,6 @@ export default function Strategy() {
     )
   }
 
-  // Blocking error (no data)
   if (error && !forecast) {
     return (
       <div className="space-y-7">
@@ -252,6 +251,7 @@ export default function Strategy() {
           <button
             onClick={retryForecast}
             className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-colors"
+            type="button"
           >
             <RefreshCw size={15} /> Retry
           </button>
@@ -279,7 +279,6 @@ export default function Strategy() {
     adjust: 'text-amber-600 dark:text-amber-400 bg-amber-500/10',
   }
 
-  // Build chart data — sample every 6 months for readability
   const projPoints = forecast?.projected_points || []
   const reqPoints = forecast?.required_points || []
   const chartData = []
@@ -312,18 +311,16 @@ export default function Strategy() {
 
   return (
     <div className="space-y-7">
-      {/* Non-blocking error banner */}
       {error && forecast && (
         <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-sm text-amber-700 dark:text-amber-400">
           <AlertTriangle size={16} />
           <span>
             Forecast may be outdated.{' '}
-            <button onClick={retryForecast} className="underline font-medium">Retry</button>
+            <button onClick={retryForecast} className="underline font-medium" type="button">Retry</button>
           </span>
         </div>
       )}
 
-      {/* Executive Summary */}
       <div className="strategy-header rounded-3xl p-7 sm:p-9">
         <div className="space-y-4">
           <div className="flex items-start justify-between gap-4">
@@ -334,6 +331,7 @@ export default function Strategy() {
             <button
               onClick={openEdit}
               className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-2xl bg-white/70 dark:bg-white/[.06] text-ink dark:text-white border border-black/[.06] dark:border-white/[.08] hover:bg-white transition-colors"
+              type="button"
             >
               <Pencil size={16} /> Edit plan
             </button>
@@ -377,7 +375,6 @@ export default function Strategy() {
         </div>
       </div>
 
-      {/* Trajectory Chart */}
       <Card className="p-6 sm:p-8">
         <div className="flex items-center gap-4 mb-5">
           <h3 className="text-sm font-semibold text-ink dark:text-white">Trajectory</h3>
@@ -397,41 +394,18 @@ export default function Strategy() {
         {chartData.length > 1 ? (
           <div className="h-[280px] sm:h-[340px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 10, bottom: 0, left: 10 }}>
+              <AreaChart data={chartData} margin={chartMargin}>
                 <defs>
                   <linearGradient id="stratFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3b7cc4" stopOpacity={0.08} />
-                    <stop offset="100%" stopColor="#3b7cc4" stopOpacity={0} />
+                    <stop offset="0%" stopColor={ACCENT_STROKE} stopOpacity={0.08} />
+                    <stop offset="100%" stopColor={ACCENT_STROKE} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 11, fill: 'currentColor', fillOpacity: 0.3 }}
-                  axisLine={false}
-                  tickLine={false}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: 'currentColor', fillOpacity: 0.3 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={65}
-                  tickFormatter={v => {
-                    if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`
-                    if (v >= 1e3) return `${(v / 1e3).toFixed(0)}K`
-                    return v
-                  }}
-                />
-                <Tooltip
-  content={<WealthTooltip currency={baseCurrency} />}
-  cursor={{ stroke: 'rgba(255,255,255,0.08)' }}
-/>
-                <ReferenceLine
-                  y={targetAmt}
-                  stroke="#d97706"
-                  strokeDasharray="4 4"
-                  strokeOpacity={0.5}
-                />
+                <CartesianGrid {...gridProps} />
+                <XAxis dataKey="label" {...xAxisProps} />
+                <YAxis {...yAxisProps} tickFormatter={compactTickFormatter} />
+                <Tooltip content={<WealthTooltip currency={baseCurrency} />} {...tooltipProps} />
+                <ReferenceLine y={targetAmt} stroke="#d97706" strokeDasharray="4 4" strokeOpacity={0.5} />
                 <Area
                   type="monotone"
                   dataKey="required"
@@ -446,11 +420,11 @@ export default function Strategy() {
                 <Area
                   type="monotone"
                   dataKey="projected"
-                  stroke="#3b7cc4"
-                  strokeWidth={2.5}
+                  stroke={ACCENT_STROKE}
+                  strokeWidth={2}
                   fill="url(#stratFill)"
                   dot={false}
-                  activeDot={{ r: 5, stroke: '#3b7cc4', strokeWidth: 2, fill: 'white' }}
+                  activeDot={activeDotStyle}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -462,11 +436,11 @@ export default function Strategy() {
         )}
       </Card>
 
-      {/* Assumptions Panel */}
       <Card className="overflow-hidden">
         <button
           onClick={() => setAssumptionsOpen(!assumptionsOpen)}
           className="w-full flex items-center justify-between px-7 py-5 text-sm font-semibold text-ink dark:text-white hover:bg-surface-2/50 dark:hover:bg-white/[.02] transition-colors"
+          type="button"
         >
           <span>Assumptions</span>
           {assumptionsOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
@@ -501,6 +475,7 @@ export default function Strategy() {
               <button
                 onClick={applyAssumptions}
                 className="text-sm font-semibold px-6 py-3 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-all min-h-[44px] animate-fade-in"
+                type="button"
               >
                 Update projection
               </button>
@@ -514,13 +489,9 @@ export default function Strategy() {
         )}
       </Card>
 
-      {/* Edit Plan Modal */}
       {editOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={closeEdit}
-          />
+          <div className="absolute inset-0 bg-black/40" onClick={closeEdit} />
           <div className="relative w-full max-w-[560px] bg-white dark:bg-surface-dark-2 rounded-3xl shadow-card-lg border border-black/[.06] dark:border-white/[.08] p-6 sm:p-7">
             <div className="flex items-start justify-between gap-4 mb-5">
               <div>
@@ -535,6 +506,7 @@ export default function Strategy() {
                 onClick={closeEdit}
                 className="p-2 rounded-2xl hover:bg-black/[.04] dark:hover:bg-white/[.06] transition-colors"
                 aria-label="Close"
+                type="button"
               >
                 <X size={18} className="text-ink dark:text-white" />
               </button>
@@ -612,6 +584,7 @@ export default function Strategy() {
                 <button
                   onClick={closeEdit}
                   className="px-5 py-3 rounded-2xl text-sm font-semibold bg-surface-2 dark:bg-white/[.06] text-ink dark:text-white hover:opacity-90 transition-opacity"
+                  type="button"
                 >
                   Cancel
                 </button>
@@ -620,6 +593,7 @@ export default function Strategy() {
                   onClick={saveEditPlan}
                   disabled={!editValid || editSaving}
                   className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-semibold bg-accent text-white hover:bg-accent-dark transition-colors disabled:opacity-40"
+                  type="button"
                 >
                   <Save size={16} /> {editSaving ? 'Saving...' : 'Save changes'}
                 </button>
@@ -639,12 +613,12 @@ function StratTooltip({ active, payload, ccy }) {
   return (
     <div className="bg-ink dark:bg-surface-dark-3 text-white px-4 py-3 rounded-2xl shadow-lg text-sm border border-white/5">
       {d.projected != null && (
-        <div className="font-bold tabular-nums">
+        <div className="font-medium tabular-nums" style={{ fontVariantNumeric: "tabular-nums" }}>
           {fmtCurrency(d.projected, ccy)} <span className="font-normal text-white/50">projected</span>
         </div>
       )}
       {d.required != null && (
-        <div className="font-bold tabular-nums mt-0.5">
+        <div className="font-medium tabular-nums mt-0.5">
           {fmtCurrency(d.required, ccy)} <span className="font-normal text-white/50">required</span>
         </div>
       )}

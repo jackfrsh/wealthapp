@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { apiGet, apiPut, apiPost } from "../api";
+import { api } from '../api'
 import { useApp } from '../App'
 import Card from '../components/Card'
 import UpgradeButton from '../components/UpgradeButton'
 import { CURRENCIES } from '../utils'
-import { Sun, Moon, Monitor, RefreshCw, Save, Globe, Crown, CreditCard, ExternalLink } from 'lucide-react'
+import { Sun, Moon, Monitor, RefreshCw, Save, Globe, Crown, CreditCard } from 'lucide-react'
 
 const CURRENCY_NAMES = {
   GBP: 'British Pound',
@@ -31,17 +31,8 @@ const THEME_OPTIONS = [
 ]
 
 export default function Settings() {
-  const {
-    dark,
-    baseCurrency,
-    setBaseCurrency,
-    showToast,
-    themePref,
-    setThemePreference,
-    bumpData,
-    isPro,
-    setIsPro,
-  } = useApp()
+  const { dark, baseCurrency, setBaseCurrency, showToast, themePref, setThemePreference, bumpData, isPro, setIsPro } =
+    useApp()
 
   const [currency, setCurrency] = useState(baseCurrency || 'GBP')
   const [fxStatus, setFxStatus] = useState('')
@@ -51,7 +42,7 @@ export default function Settings() {
 
   const load = useCallback(async () => {
     try {
-      const s = await apiGet('/settings')
+      const s = await api('/settings') // ✅ GET
       setCurrency(s?.base_currency || 'GBP')
       setBaseCurrency(s?.base_currency || 'GBP')
     } catch (e) {
@@ -68,10 +59,13 @@ export default function Settings() {
   const save = async () => {
     setSaving(true)
     try {
-      await apiPut('/settings', {
+      await api('/settings', {
+        method: 'PUT', // matches your FastAPI @router.put("")
+        body: {
           base_currency: currency,
           theme_preference: themePref,
-        })
+        },
+      })
       setBaseCurrency(currency)
       bumpData()
       showToast('Settings saved')
@@ -86,9 +80,11 @@ export default function Settings() {
     setTogglingPro(true)
     const newValue = !isPro
     try {
-      await apiPut('/settings', { is_pro: newValue })
+      await api('/settings', {
+        method: 'PUT',
+        body: { is_pro: newValue },
+      })
       setIsPro(newValue)
-      // Keep localStorage in sync for dev override
       if (newValue) localStorage.setItem('force_pro', 'true')
       else localStorage.removeItem('force_pro')
       bumpData()
@@ -103,7 +99,8 @@ export default function Settings() {
   const refreshFx = async () => {
     setFxStatus('Refreshing...')
     try {
-      const data = await apiPost(`/fx/refresh?base=${currency}`)
+      // Typically a GET endpoint; adjust to POST if your backend expects POST.
+      const data = await api(`/fx/refresh?base=${currency}`)
       const rates = data?.rates || {}
       const sample = Object.entries(rates)
         .filter(([k]) => ['USD', 'EUR', 'GBP'].includes(k))
@@ -133,15 +130,11 @@ export default function Settings() {
   return (
     <div className="space-y-7">
       <div>
-        <h1 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">
-          Settings
-        </h1>
-        <p className="text-sm text-ink-muted dark:text-white/35 mt-1.5">
-          Configure your wealth planner.
-        </p>
+        <h1 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">Settings</h1>
+        <p className="text-sm text-ink-muted dark:text-white/35 mt-1.5">Configure your wealth planner.</p>
       </div>
 
-      {/* ─── Subscription ─── */}
+      {/* Subscription */}
       <Card className="p-7 overflow-hidden relative">
         {isPro && (
           <div className="absolute top-0 right-0 w-32 h-32 opacity-[.04] pointer-events-none">
@@ -158,7 +151,7 @@ export default function Settings() {
             <div className="flex items-center gap-3">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500/10 to-amber-600/5 border border-amber-500/20">
                 <Crown size={14} className="text-amber-500" />
-                <span className="text-sm font-bold text-amber-700 dark:text-amber-300 tracking-wide">Wealth Pro</span>
+                <span className="text-sm font-medium text-amber-700 dark:text-amber-300 tracking-wide">Wealth Pro</span>
               </div>
               <span className="text-xs text-ink-muted/60 dark:text-white/25">Active</span>
             </div>
@@ -168,10 +161,10 @@ export default function Settings() {
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-1">
-              {/* Placeholder for Stripe Customer Portal — swap href when Stripe is live */}
               <button
                 className="inline-flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-surface-2 dark:hover:bg-white/5 transition-colors min-h-[44px]"
                 onClick={() => showToast('Stripe billing portal coming soon')}
+                type="button"
               >
                 <CreditCard size={15} /> Manage billing
               </button>
@@ -180,6 +173,7 @@ export default function Settings() {
                 onClick={togglePro}
                 disabled={togglingPro}
                 className="inline-flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-2xl text-loss/80 hover:text-loss hover:bg-loss-light dark:hover:bg-loss/10 transition-colors min-h-[44px] disabled:opacity-50"
+                type="button"
               >
                 {togglingPro ? 'Updating…' : 'Cancel subscription'}
               </button>
@@ -192,19 +186,12 @@ export default function Settings() {
             </p>
 
             <div className="flex flex-wrap items-center gap-3">
-              <UpgradeButton
-  onClick={togglePro}
-  disabled={togglingPro}
-  size="lg"
-  className="min-h-[48px]"
->
-  <Crown size={15} />
-  {togglingPro ? 'Activating…' : 'Upgrade to Pro'}
-</UpgradeButton>
+              <UpgradeButton onClick={togglePro} disabled={togglingPro} size="lg" className="min-h-[48px]">
+                <Crown size={15} />
+                {togglingPro ? 'Activating…' : 'Upgrade to Pro'}
+              </UpgradeButton>
 
-              <span className="text-xs text-ink-muted/50 dark:text-white/25">
-                From £6/month · Cancel anytime
-              </span>
+              <span className="text-xs text-ink-muted/50 dark:text-white/25">From £6/month · Cancel anytime</span>
             </div>
           </div>
         )}
@@ -229,6 +216,7 @@ export default function Settings() {
                     ? 'border-accent bg-accent/5 dark:bg-accent/10 text-ink dark:text-white'
                     : 'border-transparent bg-surface-2 dark:bg-white/5 text-ink-muted dark:text-white/35 hover:border-black/10 dark:hover:border-white/10'
                 }`}
+                type="button"
               >
                 <Icon size={17} /> {opt.label}
               </button>
@@ -246,11 +234,7 @@ export default function Settings() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
           <div>
             <label className={lbl}>Base currency</label>
-            <select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className={inp}
-            >
+            <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inp}>
               {CURRENCIES.map((c) => (
                 <option key={c} value={c}>
                   {c} — {CURRENCY_NAMES[c] || c}
@@ -267,6 +251,7 @@ export default function Settings() {
           onClick={save}
           disabled={saving}
           className="flex items-center gap-2 text-sm font-semibold px-6 py-3 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-all disabled:opacity-50 min-h-[48px]"
+          type="button"
         >
           <Save size={15} /> {saving ? 'Saving...' : 'Save settings'}
         </button>
@@ -279,22 +264,18 @@ export default function Settings() {
         </h3>
 
         <p className="text-sm text-ink-muted dark:text-white/35 mb-5 leading-relaxed">
-          Rates are cached daily. If APIs are unavailable, approximate fallback
-          rates are used.
+          Rates are cached daily. If APIs are unavailable, approximate fallback rates are used.
         </p>
 
         <button
           onClick={refreshFx}
           className="flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-surface-2 dark:hover:bg-white/5 transition-colors min-h-[48px]"
+          type="button"
         >
           <RefreshCw size={15} /> Refresh FX rates
         </button>
 
-        {fxStatus && (
-          <div className="text-xs text-ink-muted dark:text-white/25 mt-4">
-            {fxStatus}
-          </div>
-        )}
+        {fxStatus && <div className="text-xs text-ink-muted dark:text-white/25 mt-4">{fxStatus}</div>}
       </Card>
 
       {/* Developer */}
@@ -305,36 +286,24 @@ export default function Settings() {
 
         <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-sm font-medium text-ink dark:text-white">
-              Pro Simulation
-            </div>
-            <div className="text-xs text-ink-muted dark:text-white/35 mt-1">
-              Toggle Pro access for testing (syncs with backend).
-            </div>
+            <div className="text-sm font-medium text-ink dark:text-white">Pro Simulation</div>
+            <div className="text-xs text-ink-muted dark:text-white/35 mt-1">Toggle Pro access for testing.</div>
           </div>
 
           {isPro ? (
-  <button
-    onClick={togglePro}
-    disabled={togglingPro}
-    className="px-4 py-2 rounded-2xl text-sm font-semibold transition-all
-               bg-amber-500/10 text-amber-600 dark:text-amber-300
-               border border-amber-500/20
-               hover:bg-amber-500/15
-               disabled:opacity-50"
-    type="button"
-  >
-    {togglingPro ? '...' : 'Disable Pro'}
-  </button>
-) : (
-  <UpgradeButton
-    onClick={togglePro}
-    disabled={togglingPro}
-    size="sm"
-  >
-    {togglingPro ? '...' : 'Enable Pro'}
-  </UpgradeButton>
-)}
+            <button
+              onClick={togglePro}
+              disabled={togglingPro}
+              className="px-4 py-2 rounded-2xl text-sm font-semibold transition-all bg-amber-500/10 text-amber-600 dark:text-amber-300 border border-amber-500/20 hover:bg-amber-500/15 disabled:opacity-50"
+              type="button"
+            >
+              {togglingPro ? '...' : 'Disable Pro'}
+            </button>
+          ) : (
+            <UpgradeButton onClick={togglePro} disabled={togglingPro} size="sm">
+              {togglingPro ? '...' : 'Enable Pro'}
+            </UpgradeButton>
+          )}
         </div>
       </Card>
     </div>

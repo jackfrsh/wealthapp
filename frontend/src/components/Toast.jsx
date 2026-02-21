@@ -1,20 +1,46 @@
-import React from 'react'
-import { CheckCircle2, XCircle, AlertCircle } from 'lucide-react'
+import React, { useEffect } from 'react'
+import { X, CheckCircle, AlertTriangle, Info } from 'lucide-react'
 
-export default function Toast({ message, type = 'success' }) {
-  const icons = { success: CheckCircle2, error: XCircle, warning: AlertCircle }
-  const colors = {
-    success: 'bg-accent text-white',
-    error: 'bg-danger text-white',
-    warning: 'bg-amber-500 text-white',
-  }
-  const Icon = icons[type] || CheckCircle2
+export default function Toast({ toast, onClose }) {
+  // Hard guard: never render empty toasts
+  if (!toast?.message) return null
+
+  useEffect(() => {
+    const t = window.setTimeout(() => onClose?.(), 2600)
+    return () => window.clearTimeout(t)
+  }, [toast?.id, onClose])
+
+  const type = toast?.type || 'success'
+
+  const Icon =
+    type === 'error' ? AlertTriangle : type === 'info' ? Info : CheckCircle
+
+  // Keep your existing accent style but allow error/info to feel correct
+  const cls =
+    type === 'error'
+      ? 'bg-loss text-white'
+      : type === 'info'
+      ? 'bg-black/80 text-white dark:bg-white/10'
+      : 'bg-accent text-white'
 
   return (
     <div className="fixed bottom-24 lg:bottom-8 right-4 sm:right-6 z-[9999] animate-slide-up">
-      <div className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-card-lg ${colors[type]} text-sm font-medium`}>
+      <div
+        className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-card-lg ${cls} text-sm font-medium`}
+        role="status"
+        aria-live="polite"
+      >
         <Icon size={18} />
-        <span>{message}</span>
+        <span className="min-w-0">{toast.message}</span>
+
+        <button
+          onClick={onClose}
+          className="ml-1 p-1.5 rounded-xl hover:bg-white/10 transition-colors"
+          type="button"
+          aria-label="Dismiss"
+        >
+          <X size={16} />
+        </button>
       </div>
     </div>
   )

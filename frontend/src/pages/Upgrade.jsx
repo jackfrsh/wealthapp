@@ -1,16 +1,44 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react' // Added useState
 import { useApp } from '../App'
 import UpgradeButton from '../components/UpgradeButton'
 
 export default function Upgrade() {
-  const { setPage, isPro } = useApp()
+  const { setPage, isPro, api } = useApp() // Assuming api is provided here
+  const [isLoading, setIsLoading] = useState(false)
 
   const reason = useMemo(() => {
-    const r = localStorage.getItem('upgrade_reason') || ''
-    return r
+    try {
+      return localStorage.getItem('upgrade_reason') || ''
+    } catch {
+      return ''
+    }
   }, [])
 
   const isAccountLimit = reason === 'account_limit'
+
+  const handleUpgrade = async () => {
+    setIsLoading(true)
+    
+    // 1. Track intent
+    try {
+      localStorage.setItem('upgrade_reason', 'upgrade_cta')
+    } catch {}
+
+    // 2. Checkout redirect
+    try {
+      const res = await api('/billing/create-checkout', { method: 'POST' })
+      if (res?.url) {
+        window.location.href = res.url
+      } else {
+        throw new Error("No URL returned")
+      }
+    } catch (err) {
+      console.error('Checkout error:', err)
+      // Stay on page so user can try again or see error
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   return (
     <div className="space-y-10">
@@ -36,7 +64,7 @@ export default function Upgrade() {
         <div className="rounded-3xl border border-black/[.08] dark:border-white/[.08] bg-white dark:bg-white/5 shadow-[0_20px_40px_rgba(0,0,0,.08)] p-8 space-y-6">
           <div className="text-center">
             <div className="text-lg font-semibold text-ink dark:text-white">
-              Wealth Pro
+              [Paddock]. Pro
             </div>
 
             <div className="mt-3 text-4xl font-display tracking-tight text-ink dark:text-white">
@@ -49,52 +77,36 @@ export default function Upgrade() {
 
           {/* Features */}
           <div className="space-y-3 text-sm">
-            <div className="flex justify-between">
-              <span>Unlimited accounts</span>
-              <span>✓</span>
-            </div>
-            <div className="flex justify-between">
-              <span>One-off projection modelling</span>
-              <span>✓</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Advanced timeline acceleration</span>
-              <span>✓</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Deeper contribution insights</span>
-              <span>✓</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Inflation adjustments</span>
-              <span>✓</span>
-            </div>
-            <div className="flex justify-between text-ink-muted/60 dark:text-white/30">
-              <span>Priority features</span>
-              <span>Coming Soon</span>
-            </div>
+            {[
+              ['Unlimited accounts', '✓'],
+              ['One-off projection modelling', '✓'],
+              ['Advanced timeline acceleration', '✓'],
+              ['Deeper contribution insights', '✓'],
+              ['Inflation adjustments', '✓'],
+              ['Priority features', 'Coming Soon', 'text-ink-muted/60 dark:text-white/30'],
+            ].map(([label, value, className]) => (
+              <div key={label} className={`flex justify-between ${className || ''}`}>
+                <span>{label}</span>
+                <span>{value}</span>
+              </div>
+            ))}
           </div>
 
           {/* CTA */}
-{!isPro ? (
-  <UpgradeButton
-    onClick={() => {
-      // Optional: track why they clicked
-      try {
-        localStorage.setItem('upgrade_reason', 'upgrade_cta')
-      } catch {}
-      setPage('upgrade')
-    }}
-    size="lg"
-    className="w-full"
-  >
-    Upgrade to Pro
-  </UpgradeButton>
-) : (
-  <div className="text-center text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-    You’re already Pro ✓
-  </div>
-)}
+          {!isPro ? (
+            <UpgradeButton
+              onClick={handleUpgrade}
+              size="lg"
+              className="w-full"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Loading...' : 'Upgrade to Pro'}
+            </UpgradeButton>
+          ) : (
+            <div className="text-center text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+              You’re already Pro ✓
+            </div>
+          )}
 
           <button
             onClick={() => {

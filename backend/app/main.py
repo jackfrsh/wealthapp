@@ -9,6 +9,7 @@ load_dotenv(dotenv_path=ENV_PATH, override=False)
 from fastapi import FastAPI
 from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from .routers import billing
 
 import os
 
@@ -48,6 +49,7 @@ app.include_router(fx.router, prefix=API_PREFIX)
 app.include_router(insights.router, prefix=API_PREFIX)
 app.include_router(projection.router, prefix=API_PREFIX)
 app.include_router(history.router, prefix=API_PREFIX)
+app.include_router(billing.router, prefix=API_PREFIX)
 
 @app.get("/health")
 def health():

@@ -167,7 +167,8 @@ body.dark {
 
 /* ─── Premium typography helpers ───────────────────────── */
 .hero-number {
-  font-family: "Instrument Serif", Georgia, serif;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-weight: 600;
   font-size: clamp(3.25rem, 8vw, 3.9rem);
   line-height: 1;
   letter-spacing: -0.025em;
@@ -308,3 +309,15 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 /* Helps iOS safe-area + avoids content hiding behind fixed bottom nav */
 :root { padding-bottom: env(safe-area-inset-bottom); }
+
+@keyframes fadeGlow {
+  0% { opacity: 0; }
+  40% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes milestoneSweep {
+  0% { transform: translateX(-40%); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translateX(60%); opacity: 0; }
+}
