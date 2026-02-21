@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 # Load backend/.env first, before importing auth/router modules
 BASE_DIR = Path(__file__).resolve().parents[1]  # backend/
 ENV_PATH = BASE_DIR / ".env"
-load_dotenv(dotenv_path=ENV_PATH, override=True)
+load_dotenv(dotenv_path=ENV_PATH, override=False)
 
 from fastapi import FastAPI
 from fastapi import HTTPException
