@@ -102,6 +102,31 @@ def _ensure_sqlite_schema() -> None:
 
             # If you ever add more columns later, add more guards here.
 
+                        # stripe_customer_id + stripe_subscription_id on users (Stripe billing mapping)
+            if _sqlite_has_column(session, "users", "id") and not _sqlite_has_column(
+                session, "users", "stripe_customer_id"
+            ):
+                logger.warning("ensure_schema: adding users.stripe_customer_id (SQLite)")
+                session.exec(text("ALTER TABLE users ADD COLUMN stripe_customer_id TEXT"))
+                session.exec(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_users_stripe_customer_id "
+                        "ON users (stripe_customer_id)"
+                    )
+                )
+
+            if _sqlite_has_column(session, "users", "id") and not _sqlite_has_column(
+                session, "users", "stripe_subscription_id"
+            ):
+                logger.warning("ensure_schema: adding users.stripe_subscription_id (SQLite)")
+                session.exec(text("ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT"))
+                session.exec(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_users_stripe_subscription_id "
+                        "ON users (stripe_subscription_id)"
+                    )
+                )
+
             # Ensure unique index on settings.user_id
             try:
                 session.exec(

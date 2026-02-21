@@ -25,6 +25,11 @@ class User(SQLModel, table=True):
     username: str = Field(index=True, unique=True)
     password_hash: str = Field(default="")
     supabase_user_id: Optional[str] = Field(default=None, index=True)
+
+    # Stripe (nullable; added for Pro billing)
+    stripe_customer_id: Optional[str] = Field(default=None, index=True)
+    stripe_subscription_id: Optional[str] = Field(default=None, index=True)
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
