@@ -1,5 +1,5 @@
 // frontend/src/pages/Outlook.jsx
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo, act } from 'react'
 import { api } from '../api'
 import { useApp } from '../App'
 import Card from '../components/Card'
@@ -16,7 +16,7 @@ import {
 } from 'recharts'
 
 import WealthTooltip from '../components/charts/WealthTooltip'
-import { xAxisProps, yAxisProps, gridProps, tooltipProps, compactTickFormatter, chartMargin, ACCENT_STROKE } from '../components/charts/chartTheme'
+import { xAxisProps, yAxisProps, gridProps, tooltipProps, compactTickFormatter, chartMargin, ACCENT_STROKE, activeDotStyle} from '../components/charts/chartTheme'
 import UpgradeButton from '../components/UpgradeButton'
 import {
   ChevronDown,
@@ -152,10 +152,12 @@ export default function Outlook() {
       setProjLoading(true)
       try {
         const years = y || projYears
-        const [proj, hist] = await Promise.all([
-          api(`/projection/networth?years=${years}`),
-          api('/history/networth?days=3650'),
-        ])
+        const days = Math.max(365, Math.round(years * 365))
+
+const [proj, hist] = await Promise.all([
+  api(`/projection/networth?years=${years}`),
+  api(`/history/networth?days=${days}`),
+])
         setProjData(proj)
         setProjHistory(hist.points || [])
       } catch (e) {
@@ -434,29 +436,34 @@ export default function Outlook() {
 
   // ─── Account Projections chart data ─────────────────────
   const projChartData = []
-  if (projData) {
-    const pHist = projHistory || []
-    for (const h of pHist) {
+
+if (projData) {
+  const pHist = projHistory || []
+  const pPoints = projData.points || []
+
+  // History window should already match horizon after your "days = years*365" change
+  for (const h of pHist) {
+    projChartData.push({
+      date: h.date,
+      actual: h.net_worth,
+      projected: null,
+    })
+  }
+
+  for (let i = 0; i < pPoints.length; i++) {
+    if (i === 0 || i % 3 === 0 || i === pPoints.length - 1) {
+      const yearsOut = i / 12
       projChartData.push({
-        date: h.date,
-        label: new Date(h.date).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }),
-        actual: h.net_worth,
-        projected: null,
+        date: pPoints[i].date,
+        actual: null, // keep actual for history only
+        projected: deflate(pPoints[i].projected_net_worth, yearsOut),
       })
     }
-    const pPoints = projData.points || []
-    for (let i = 0; i < pPoints.length; i++) {
-      if (i === 0 || i % 3 === 0 || i === pPoints.length - 1) {
-        const yearsOut = i / 12
-        projChartData.push({
-          date: pPoints[i].date,
-          label: new Date(pPoints[i].date).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }),
-          actual: i === 0 ? pPoints[i].projected_net_worth : null,
-          projected: deflate(pPoints[i].projected_net_worth, yearsOut),
-        })
-      }
-    }
   }
+
+  // IMPORTANT: sort by date so Recharts draws correctly
+  projChartData.sort((a, b) => new Date(a.date) - new Date(b.date))
+}
 
   const inp =
     'w-full px-4 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] bg-white dark:bg-surface-dark text-base text-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all'
@@ -566,7 +573,7 @@ export default function Outlook() {
       </div>
 
       {/* ═══ Trajectory (collapsible) ═══ */}
-<Card className="p-0 overflow-hidden">
+<Card className="p-0 overflow-hidden sm:rounded-3xl rounded-2xl">
   <details
     className="group"
     open={trajOpen}
@@ -576,7 +583,7 @@ export default function Outlook() {
       className="
         [&::-webkit-details-marker]:hidden
         list-none cursor-pointer select-none
-        px-6 sm:px-8 py-5
+        px-4 sm:px-8 py-4
         flex items-start justify-between gap-4
         bg-white/60 dark:bg-white/[.04]
         border-b border-black/[.06] dark:border-white/[.08]
@@ -590,7 +597,7 @@ export default function Outlook() {
           Projected net worth over time
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-ink-muted dark:text-white/35">
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-ink-muted dark:text-white/35">
           <span className="flex items-center gap-1.5">
             <span className="w-4 h-0.5 bg-accent rounded-full inline-block" /> Projected
           </span>
@@ -606,10 +613,10 @@ export default function Outlook() {
       <ChevronDown className="h-5 w-5 text-ink-muted dark:text-white/50 shrink-0 group-open:rotate-180 transition-transform mt-0.5" />
     </summary>
 
-    <div className="px-6 sm:px-8 py-6">
+    <div className="px-4 sm:px-8 py-5 sm:py-6">
       {/* Chart */}
       {chartData.length > 1 ? (
-        <div className="h-[280px] sm:h-[340px]">
+        <div className="h-[320px] sm:h-[340px]">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={chartMargin}>
               <defs>
@@ -622,9 +629,12 @@ export default function Outlook() {
               <CartesianGrid {...gridProps} />
 
               <XAxis
-                dataKey="label"
-                {...xAxisProps}
-              />
+  dataKey="date"
+  {...xAxisProps}
+  tickFormatter={(d) =>
+    new Date(d).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
+  }
+/>
 
               <YAxis
                 {...yAxisProps}
@@ -637,32 +647,33 @@ export default function Outlook() {
               />
 
               <ReferenceLine
-                y={displayTarget}
-                stroke="#d97706"
-                strokeDasharray="4 4"
-                strokeOpacity={0.5}
-              />
+  y={displayTarget}
+  stroke="#d97706"
+  strokeDasharray="4 6"
+  strokeOpacity={0.35}
+/>
 
-              <Area
-                type="monotone"
-                dataKey="required"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                strokeOpacity={0.15}
-                strokeDasharray="6 4"
-                fill="none"
-                dot={false}
-                connectNulls
-              />
+<Area
+  type="monotone"
+  dataKey="required"
+  stroke="currentColor"
+  strokeWidth={1.75}
+  strokeOpacity={0.12}
+  strokeDasharray="6 4"
+  fill="none"
+  dot={false}
+  connectNulls
+/>
 
-              <Area
-                type="monotone"
-                dataKey="projected"
-                stroke={ACCENT_STROKE}
-                strokeWidth={2}
-                fill="url(#trajFill)"
-                dot={false}
-              />
+<Area
+  type="monotone"
+  dataKey="projected"
+  stroke={ACCENT_STROKE}
+  strokeWidth={2.25}
+  fill="url(#trajFill)"
+  dot={false}
+  activeDot={activeDotStyle}
+/>
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -673,12 +684,12 @@ export default function Outlook() {
       )}
 
       {/* Assumptions underneath chart */}
-      <div className="mt-6 rounded-3xl bg-white/70 dark:bg-white/[.05] border border-black/[.06] dark:border-white/[.08] p-4">
+      <div className="mt-5 rounded-3xl bg-white/70 dark:bg-white/[.05] border border-black/[.06] dark:border-white/[.08] p-4 sm:p-5">
         <div className="text-xs font-semibold text-ink-muted dark:text-white/50 mb-3">
           Assumptions
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div>
             <label className={lbl}>Monthly contribution ({ccy})</label>
             <input
@@ -730,7 +741,7 @@ export default function Outlook() {
       <Card className="overflow-hidden">
         <button
           onClick={() => setProjOpen(!projOpen)}
-          className="w-full flex items-center justify-between px-7 py-5 text-sm font-semibold text-ink dark:text-white hover:bg-surface-2/50 dark:hover:bg-white/[.02] transition-colors"
+          className="w-full flex items-center justify-between px-4 sm:px-7 py-5 text-sm font-semibold text-ink dark:text-white hover:bg-surface-2/50 dark:hover:bg-white/[.02] transition-colors"
           type="button"
         >
           <div className="flex items-center gap-2.5">
@@ -748,7 +759,7 @@ export default function Outlook() {
         {projOpen && (
           <div className="border-t border-black/[.04] dark:border-white/[.04] animate-fade-in">
             {/* Horizon selector */}
-            <div className="px-7 pt-5 pb-3 flex items-center justify-between gap-4 flex-wrap">
+            <div className="px-4 sm:px-7 pt-5 pb-3 flex items-center justify-between gap-4 flex-wrap">
               <p className="text-xs text-ink-muted dark:text-white/35">Based on your accounts' contributions and expected returns.</p>
 
               <div className="flex bg-surface-2 dark:bg-white/5 rounded-full p-0.5 gap-0.5">
@@ -788,7 +799,7 @@ export default function Outlook() {
                 <p className="text-sm text-ink-muted dark:text-white/35">Add accounts with balances to see projections.</p>
               </div>
             ) : (
-              <div className="px-7 pb-7 space-y-5">
+              <div className="px-4 sm:px-7 pb-7 space-y-5">
                 {/* Milestone cards */}
                 {filteredMilestones.length > 0 && (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -813,7 +824,7 @@ export default function Outlook() {
                 )}
 
                 {/* Chart */}
-                <div className="h-[240px] sm:h-[300px]">
+                <div className="h-[280px] sm:h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={projChartData} margin={chartMargin}>
                       <defs>
@@ -824,36 +835,41 @@ export default function Outlook() {
                       </defs>
                       <CartesianGrid {...gridProps} />
                       <XAxis
-                        dataKey="label"
-                        {...xAxisProps}
-                      />
+  dataKey="date"
+  {...xAxisProps}
+  tickFormatter={(d) =>
+    new Date(d).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
+  }
+/>
                       <YAxis
                         {...yAxisProps}
                         tickFormatter={compactTickFormatter}
                       />
                       <Tooltip
-  content={<WealthTooltip currency={baseCurrency} />}
+  content={<WealthTooltip currency={ccy} />}
   {...tooltipProps}
 />
                       <Area
-                        type="monotone"
-                        dataKey="actual"
-                        stroke={ACCENT_STROKE}
-                        strokeWidth={2}
-                        fill="url(#projFill)"
-                        dot={false}
-                        connectNulls={false}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="projected"
-                        stroke={ACCENT_STROKE}
-                        strokeWidth={2}
-                        strokeDasharray="6 4"
-                        fill="url(#projFill)"
-                        dot={false}
-                        connectNulls={false}
-                      />
+  type="monotone"
+  dataKey="actual"
+  stroke={ACCENT_STROKE}
+  strokeWidth={2}
+  fill="url(#projFill)"
+  dot={false}
+  connectNulls={false}
+  activeDot={activeDotStyle}
+/>
+
+<Area
+  type="monotone"
+  dataKey="projected"
+  stroke={ACCENT_STROKE}
+  strokeWidth={2}
+  strokeDasharray="6 4"
+  fill="none"
+  dot={false}
+  connectNulls
+/>
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>

@@ -27,3 +27,6 @@ frontend/.env.local
 
 # exports
 *.zip
+frontend/env.local
+frontend/.env.local
+frontend/.env

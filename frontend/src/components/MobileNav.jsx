@@ -10,18 +10,15 @@ const Item = ({ active, icon: Icon, label, onClick, badge }) => (
         ? 'text-ink dark:text-white'
         : 'text-ink-muted/70 dark:text-white/35'
     }`}
+    type="button"
   >
     <div className="relative">
       <Icon size={18} />
-
       {badge && (
         <span className="absolute -top-2 -right-2 h-2 w-2 rounded-full bg-amber-500" />
       )}
     </div>
-
-    <span className="text-[10px] font-semibold tracking-wide">
-      {label}
-    </span>
+    <span className="text-[10px] font-semibold tracking-wide">{label}</span>
   </button>
 )
 
@@ -29,14 +26,16 @@ export default function MobileNav() {
   const { page, setPage, isPro } = useApp()
 
   return (
-    <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 safe-bottom">
+    <div
+      className="lg:hidden fixed left-0 right-0 bottom-0 z-40"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
       {/* Background */}
       <div className="absolute inset-0 bg-white/80 dark:bg-[#141821]/75 glass border-t border-black/[.06] dark:border-white/[.06]" />
 
       {/* Content */}
-      <div className="relative max-w-[960px] mx-auto px-3 pb-3 pt-2">
+      <div className="relative max-w-[960px] mx-auto px-3 pt-2 pb-2">
         <div className="flex items-center justify-between">
-
           <Item
             icon={Home}
             label="Home"
@@ -72,6 +71,7 @@ export default function MobileNav() {
                 ? 'text-ink dark:text-white'
                 : 'text-ink-muted/70 dark:text-white/35'
             }`}
+            type="button"
           >
             <div className="relative">
               {isPro ? (
@@ -91,7 +91,6 @@ export default function MobileNav() {
               {isPro ? 'Pro' : 'Upgrade'}
             </span>
           </button>
-
         </div>
       </div>
     </div>

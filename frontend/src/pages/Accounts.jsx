@@ -500,7 +500,8 @@ export default function Accounts() {
       </Card>
 
       <Modal open={modal} onClose={() => !saving && setModal(false)} title={editing ? 'Edit account' : 'Add account'}>
-        <div className="space-y-5">
+        <div className="flex flex-col max-h-[75vh] sm:max-h-none">
+  <div className="flex-1 overflow-y-auto pr-1 space-y-4">
           <div>
             <label className={lbl}>Account name</label>
             <input
@@ -544,6 +545,7 @@ export default function Accounts() {
                 ))}
               </select>
             </div>
+          </div>
           </div>
 
           <div>
@@ -597,26 +599,29 @@ export default function Accounts() {
             <label className="text-sm text-ink-3 dark:text-white/50 cursor-pointer">Include in net worth</label>
           </div>
 
-          <div className="flex gap-3 pt-3">
-            <button
-              onClick={save}
-              className="flex-1 py-3 rounded-2xl bg-accent text-white font-semibold text-sm hover:bg-accent-dark transition-all min-h-[48px] disabled:opacity-60 disabled:cursor-not-allowed"
-              disabled={saving}
-              type="button"
-            >
-              {saving ? 'Saving…' : editing ? 'Save changes' : 'Add account'}
-            </button>
+            </div>
 
-            <button
-              onClick={() => setModal(false)}
-              className="px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-sm font-medium text-ink-muted dark:text-white/40 hover:bg-surface-2 dark:hover:bg-white/5 transition-colors min-h-[48px] disabled:opacity-60 disabled:cursor-not-allowed"
-              disabled={saving}
-              type="button"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+  <div className="sticky bottom-0 pt-3 mt-3 border-t border-black/[.06] dark:border-white/[.06] bg-white/95 dark:bg-surface-dark-2/95 backdrop-blur">
+    <div className="flex gap-3">
+      <button
+        onClick={save}
+        className="flex-1 py-3 rounded-2xl bg-accent text-white font-semibold text-sm hover:bg-accent-dark transition-all min-h-[48px] disabled:opacity-60 disabled:cursor-not-allowed"
+        disabled={saving}
+        type="button"
+      >
+        {saving ? 'Saving…' : editing ? 'Save changes' : 'Add account'}
+      </button>
+
+      <button
+        onClick={() => setModal(false)}
+        className="px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-sm font-medium text-ink-muted dark:text-white/40 hover:bg-surface-2 dark:hover:bg-white/5 transition-colors min-h-[48px] disabled:opacity-60 disabled:cursor-not-allowed"
+        disabled={saving}
+        type="button"
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
       </Modal>
 
       <div className="lg:hidden mt-10 pb-4">

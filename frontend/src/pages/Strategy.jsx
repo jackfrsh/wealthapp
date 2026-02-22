@@ -375,7 +375,7 @@ export default function Strategy() {
         </div>
       </div>
 
-      <Card className="p-6 sm:p-8">
+      <Card className="px-4 py-5 sm:p-8">
         <div className="flex items-center gap-4 mb-5">
           <h3 className="text-sm font-semibold text-ink dark:text-white">Trajectory</h3>
           <div className="flex items-center gap-4 text-xs text-ink-muted dark:text-white/35">
@@ -392,7 +392,7 @@ export default function Strategy() {
         </div>
 
         {chartData.length > 1 ? (
-          <div className="h-[280px] sm:h-[340px]">
+          <div className="h-[320px] sm:h-[340px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={chartMargin}>
                 <defs>
@@ -402,30 +402,28 @@ export default function Strategy() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid {...gridProps} />
-                <XAxis dataKey="label" {...xAxisProps} />
+                <XAxis
+  dataKey="date"
+  {...xAxisProps}
+  tickFormatter={(d) =>
+    new Date(d).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
+  }
+/>
                 <YAxis {...yAxisProps} tickFormatter={compactTickFormatter} />
-                <Tooltip content={<WealthTooltip currency={baseCurrency} />} {...tooltipProps} />
-                <ReferenceLine y={targetAmt} stroke="#d97706" strokeDasharray="4 4" strokeOpacity={0.5} />
-                <Area
-                  type="monotone"
-                  dataKey="required"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                  strokeOpacity={0.15}
-                  strokeDasharray="6 4"
-                  fill="none"
-                  dot={false}
-                  connectNulls
-                />
-                <Area
-                  type="monotone"
-                  dataKey="projected"
-                  stroke={ACCENT_STROKE}
-                  strokeWidth={2}
-                  fill="url(#stratFill)"
-                  dot={false}
-                  activeDot={activeDotStyle}
-                />
+                <Tooltip content={<WealthTooltip currency={ccy} />} {...tooltipProps} />
+                <ReferenceLine y={targetAmt} stroke="#d97706" strokeDasharray="4 4" strokeOpacity={0.42} />
+
+<Area
+  {...secondaryLineProps}
+  dataKey="required"
+/>
+
+<Area
+  {...primaryLineProps}
+  dataKey="projected"
+  fill="url(#stratFill)"
+  activeDot={activeDotStyle}
+/>
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -447,7 +445,7 @@ export default function Strategy() {
         </button>
 
         {assumptionsOpen && (
-          <div className="px-7 pb-7 space-y-5 animate-fade-in border-t border-black/[.04] dark:border-white/[.04] pt-5">
+          <div className="px-4 sm:px-7 pb-6 sm:pb-7 space-y-4 sm:space-y-5 animate-fade-in border-t border-black/[.04] dark:border-white/[.04] pt-4 sm:pt-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
                 <label className={lbl}>Monthly contribution ({ccy})</label>

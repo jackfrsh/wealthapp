@@ -23,10 +23,12 @@ export default function Projections() {
 
   const load = useCallback(async (y) => {
     try {
-      const [proj, hist] = await Promise.all([
-        api(`/projection/networth?years=${y || years}`),
-        api('/history/networth?days=3650'),
-      ])
+      const days = Math.max(365, Math.round(years * 365))
+
+const [proj, hist] = await Promise.all([
+  api(`/projection/networth?years=${years}`),
+  api(`/history/networth?days=${days}`),
+])
       setData(proj)
       setHistory(hist.points || [])
     } catch (e) {
@@ -167,7 +169,13 @@ export default function Projections() {
                 </linearGradient>
               </defs>
               <CartesianGrid {...gridProps} />
-              <XAxis dataKey="label" {...xAxisProps} />
+              <XAxis
+  dataKey="date"
+  {...xAxisProps}
+  tickFormatter={(d) =>
+    new Date(d).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
+  }
+/>
               <YAxis {...yAxisProps} tickFormatter={compactTickFormatter} />
               <Tooltip
                 content={<WealthTooltip currency={baseCurrency} />}

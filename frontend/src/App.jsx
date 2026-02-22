@@ -43,8 +43,13 @@ function resolveTheme(pref) {
 // If you already have this, keep yours. This is a safe no-op fallback.
 function clearCelebrationStorage() {
   try {
+    // Legacy keys (older builds)
     localStorage.removeItem('milestone_celebration_seen')
     localStorage.removeItem('milestone_celebration_last_shown')
+
+    // Current keys (v1)
+    localStorage.removeItem('wealthapp:last-celebrated-milestone-v1')
+    localStorage.removeItem('wealthapp:pending-celebration-v1')
   } catch {}
 }
 
@@ -79,6 +84,24 @@ export default function App() {
 
   // One-time per authed session bootstrap guard (prevents reloading on token refresh)
   const bootstrappedRef = useRef(false)
+
+  async function healSupabaseSessionIfBroken() {
+  try {
+    const { data, error } = await supabase.auth.getSession()
+    if (error && /refresh token/i.test(error.message)) {
+      // local-only sign out clears persisted session without touching server
+      await supabase.auth.signOut({ scope: 'local' })
+      return null
+    }
+    return data?.session ?? null
+  } catch {
+    // if anything weird happens, clear local session to recover
+    try {
+      await supabase.auth.signOut({ scope: 'local' })
+    } catch {}
+    return null
+  }
+}
 
   /* ──────────────────────────────────────────── */
   /* Toast                                       */
@@ -221,11 +244,11 @@ export default function App() {
   )
 
   /* ──────────────────────────────────────────── */
-  /* Bootstrap + Auth Sync                        */
-  /* ──────────────────────────────────────────── */
+/* Bootstrap + Auth Sync                        */
+/* ──────────────────────────────────────────── */
 
-  useEffect(() => {
-  // Wire API to Supabase access tokens once
+useEffect(() => {
+  // Wire API to Supabase access tokens once (safe to call more than once)
   setAccessTokenProvider(async () => {
     const { data } = await supabase.auth.getSession()
     return data?.session?.access_token || null
@@ -258,34 +281,33 @@ export default function App() {
         setSettingsReady(true)
       }
 
-      setPage((p) =>
-        p === 'privacy' || p === 'security' || p === 'auth' ? 'home' : p
-      )
+      setPage((p) => (p === 'privacy' || p === 'security' || p === 'auth' ? 'home' : p))
     } catch (e) {
       console.error('Bootstrap failed:', e)
-      // Never hang the app on refresh
       setSettingsReady(true)
     } finally {
-      // Safety: always clear the initial loading gate
       setChecking(false)
     }
   }
 
   ;(async () => {
-    // Initial hydration on refresh
-    const { data, error } = await supabase.auth.getSession()
-    if (error) console.warn('getSession failed:', error)
-    await handleSession(data?.session)
+    setChecking(true)
+
+    // heal broken refresh token sessions once
+    const healed = await healSupabaseSessionIfBroken()
+    if (cancelled) return
+
+    await handleSession(healed)
   })()
 
-  // Subscribe for ongoing changes
+  // Subscribe for ongoing auth changes
   const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
     handleSession(session)
   })
 
   return () => {
     cancelled = true
-    sub.subscription.unsubscribe()
+    sub?.subscription?.unsubscribe?.()
   }
 }, [loadUserTheme, loadPrimaryGoal])
 
@@ -315,6 +337,7 @@ export default function App() {
     setIsPro,
     primaryGoal,
     setPrimaryGoal,
+    loadPrimaryGoal,
     goalLoading,
     settingsReady,
     dataVersion,

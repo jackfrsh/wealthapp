@@ -263,24 +263,33 @@ const dismissNudge = () => {
   const ccy = useMemo(() => data?.base_currency || 'GBP', [data])
 
   const clearCelebration = useCallback(() => {
-    // fade out, then clear storage
+  // animate out
+  setCelebrateVisible(false)
+
+  window.setTimeout(() => {
+    setPendingCelebrate(null)
     setCelebrateVisible(false)
-    window.setTimeout(() => {
-      clearPendingCelebration()
-      setPendingCelebrate(null)
-    }, 240)
-  }, [])
+
+    // Clear pending payload
+    clearPendingCelebration()
+
+    // Clear all gating keys (legacy + current)
+    clearCelebrationStorage()
+
+    // (Optional) also reset in-memory gate, if your logic uses it
+    setLastCelebrated(0)
+  }, 220)
+}, [])
 
   // 1) On mount: hydrate pending celebration from storage (so it survives page switching)
   useEffect(() => {
-    const p = getPendingCelebration()
-    if (p?.milestone) {
-      setPendingCelebrate(p)
-      // allow CSS transition to animate in
-      const t = window.setTimeout(() => setCelebrateVisible(true), 30)
-      return () => window.clearTimeout(t)
-    }
-  }, [])
+  const p = getPendingCelebration()
+  if (p?.milestone) {
+    setPendingCelebrate(p)
+    const t = window.setTimeout(() => setCelebrateVisible(true), 30)
+    return () => window.clearTimeout(t)
+  }
+}, [])
 
   // 2) While Home is open: if net worth changes vs the saved receipt value, auto-close it
   useEffect(() => {
@@ -503,11 +512,11 @@ prevTotal.current = nextTotal
       {/* Thin premium receipt (persists + fades) */}
       {pendingCelebrate?.milestone ? (
         <MilestoneReceipt
-          visible={celebrateVisible}
-          milestone={pendingCelebrate.milestone}
-          ccy={ccy}
-          onDismiss={clearCelebration}
-        />
+  visible={celebrateVisible}
+  milestone={pendingCelebrate?.milestone}
+  ccy={baseCurrency}
+  onDismiss={clearCelebration}
+/>
       ) : null}
 
       {/* ═══ Hero Card ═══ */}
