@@ -1,6 +1,3 @@
-from logging.config import fileConfig
-from alembic import context
-from sqlalchemy import engine_from_config, pool
 import os
 from urllib.parse import quote_plus
 
@@ -11,12 +8,11 @@ def build_db_url() -> str:
             url = url.replace("postgres://", "postgresql://", 1)
         return url
 
-    # Build from PG* (Railway-safe)
-    host = os.getenv("PGHOST", "").strip()
-    port = os.getenv("PGPORT", "5432").strip()
-    db = os.getenv("PGDATABASE", "").strip()
-    user = os.getenv("PGUSER", "").strip()
-    pw = os.getenv("PGPASSWORD", "").strip()
+    host = (os.getenv("PGHOST") or "").strip()
+    port = (os.getenv("PGPORT") or "5432").strip()
+    db = (os.getenv("PGDATABASE") or "").strip()
+    user = (os.getenv("PGUSER") or "").strip()
+    pw = (os.getenv("PGPASSWORD") or "").strip()
 
     if not all([host, db, user, pw]):
         raise RuntimeError("DATABASE_URL or PG* vars are required for migrations.")
