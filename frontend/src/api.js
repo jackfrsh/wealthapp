@@ -2,9 +2,23 @@
 export const SESSION_EXPIRED_EVENT = 'session-expired'
 
 // ---- Config ----
+// Priority:
+// 1) Explicit env override (VITE_API_URL)
+// 2) Auto: local dev -> http://127.0.0.1:8000/api
+//          deployed  -> /api (same-origin, no CORS, no mixed content)
+const envBase = (import.meta.env.VITE_API_URL || '').trim().replace(/\/$/, '')
+
+const isLocalHost = (() => {
+  try {
+    const h = window.location.hostname
+    return h === 'localhost' || h === '127.0.0.1'
+  } catch {
+    return false
+  }
+})()
+
 const API_BASE =
-  (import.meta.env.VITE_API_URL || '').replace(/\/$/, '') ||
-  'http://127.0.0.1:8000/api'
+  envBase || (isLocalHost ? 'http://127.0.0.1:8000/api' : '/api')
 
 // Token provider is injectable (Supabase-ready).
 // In App.jsx (or bootstrap), call setAccessTokenProvider(async () => session?.access_token || null).
