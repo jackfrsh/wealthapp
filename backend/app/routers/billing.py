@@ -4,7 +4,7 @@ import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlmodel import Session, select
 
-from app.auth import get_current_user
+from ..auth import get_current_user
 from app.database import get_session
 from app.models import User
 
