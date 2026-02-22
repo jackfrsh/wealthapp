@@ -2,27 +2,28 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 import os
+from urllib.parse import quote_plus
 
-from sqlmodel import SQLModel
+def build_db_url() -> str:
+    url = (os.getenv("DATABASE_URL") or "").strip()
+    if url:
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql://", 1)
+        return url
 
-# Alembic Config object
-config = context.config
+    # Build from PG* (Railway-safe)
+    host = os.getenv("PGHOST", "").strip()
+    port = os.getenv("PGPORT", "5432").strip()
+    db = os.getenv("PGDATABASE", "").strip()
+    user = os.getenv("PGUSER", "").strip()
+    pw = os.getenv("PGPASSWORD", "").strip()
 
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    if not all([host, db, user, pw]):
+        raise RuntimeError("DATABASE_URL or PG* vars are required for migrations.")
 
-# Load DATABASE_URL from env (required for Postgres-only)
-DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is required for migrations.")
+    return f"postgresql://{quote_plus(user)}:{quote_plus(pw)}@{host}:{port}/{db}"
 
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
-# IMPORTANT: import models so SQLModel.metadata is populated
-import app.models  # noqa: F401
-
-target_metadata = SQLModel.metadata
+DATABASE_URL = build_db_url()
 
 
 def run_migrations_offline():
