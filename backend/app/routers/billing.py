@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlmodel import Session, select
 
 from ..auth import get_current_user
-from app.database import get_session
-from app.models import User
+from ..database import get_session
+from ..models import User
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
