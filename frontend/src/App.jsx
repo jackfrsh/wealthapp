@@ -122,43 +122,47 @@ export default function App() {
   }, [themePref])
 
   /* ──────────────────────────────────────────── */
-  /* Data Loaders                                */
-  /* ──────────────────────────────────────────── */
+/* Data Loaders                                */
+/* ──────────────────────────────────────────── */
 
-  const loadPrimaryGoal = useCallback(async () => {
-    setGoalLoading(true)
-    try {
-      const g = await api('/goals/primary')
-      setPrimaryGoal(g)
-    } catch (e) {
-      if (e?.status === 404) {
-        // New user: no goal yet — normal
-        setPrimaryGoal(null)
-      } else {
-        console.error('Primary goal load failed:', e)
-        // Safe fallback: treat as no goal so the app stays usable
-        setPrimaryGoal(null)
-      }
-    } finally {
-      setGoalLoading(false)
+const loadPrimaryGoal = useCallback(async () => {
+  setGoalLoading(true)
+  try {
+    const g = await api('/goals/primary')
+    setPrimaryGoal(g)
+  } catch (e) {
+    if (e?.status === 404) {
+      setPrimaryGoal(null)
+    } else {
+      console.error('Primary goal load failed:', e)
+      setPrimaryGoal(null)
     }
-  }, [])
+  } finally {
+    setGoalLoading(false)
+  }
+}, [api])
 
-  const loadUserTheme = useCallback(async () => {
-    try {
-      const s = await api('/settings')
-      setThemePref(s?.theme_preference || 'system')
-      setBaseCurrency(s?.base_currency || 'GBP')
+const loadUserTheme = useCallback(async () => {
+  try {
+    const s = await api('/settings')
+    setThemePref(s?.theme_preference || 'system')
+    setBaseCurrency(s?.base_currency || 'GBP')
 
-      setIsPro(
-        !!s?.is_pro ||
-          (import.meta.env.DEV &&
-            localStorage.getItem('force_pro') === 'true')
-      )
-    } catch (e) {
-      console.error('Settings load failed:', e)
-    }
-  }, [])
+    const devForcePro =
+      import.meta.env.DEV && localStorage.getItem('force_pro') === 'true'
+
+    setIsPro(!!s?.is_pro || !!devForcePro)
+
+    return s
+  } catch (e) {
+    console.error('Settings load failed:', e)
+    return null
+  }
+}, [api])
+
+const refreshSettings = useCallback(async () => {
+  return await loadUserTheme()
+}, [loadUserTheme])
 
   /* ──────────────────────────────────────────── */
   /* Session Reset                               */
@@ -344,6 +348,7 @@ useEffect(() => {
     bumpData,
     showToast,
     handleLogout,
+    refreshSettings,
   }
 
   /* ──────────────────────────────────────────── */

@@ -1,4 +1,5 @@
 import os
+import logging
 import stripe
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -6,7 +7,9 @@ from sqlmodel import Session, select
 
 from ..auth import get_current_user
 from ..database import get_session
-from ..models import User
+from ..models import User, Settings
+
+logger = logging.getLogger("wealth.billing")
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -19,42 +22,69 @@ def _require_env(name: str) -> str:
 
 
 def _frontend_base() -> str:
-    # Ensure no trailing slash
     return _require_env("FRONTEND_URL").rstrip("/")
 
 
-def _stripe_init():
+def _stripe_init() -> None:
     stripe.api_key = _require_env("STRIPE_SECRET_KEY")
 
 
-# ─────────────────────────────────────────────
+def _get_or_create_settings(db: Session, user_id: int) -> Settings:
+    s = db.exec(select(Settings).where(Settings.user_id == user_id)).first()
+    if s:
+        return s
+    s = Settings(user_id=user_id, base_currency="GBP", goal=0.0, theme_preference="system", is_pro=False)
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    return s
+
+
+## ─────────────────────────────────────────────
 # Create Checkout Session
 # ─────────────────────────────────────────────
 
 @router.post("/create-checkout")
-def create_checkout(current_user: User = Depends(get_current_user)):
+def create_checkout(current_user: User = Depends(get_current_user), db: Session = Depends(get_session)):
     _stripe_init()
 
     price_id = _require_env("STRIPE_PRICE_ID")
     success_url = _frontend_base() + "/upgrade?success=true"
     cancel_url = _frontend_base() + "/upgrade?cancel=true"
 
-    # If we already have a Stripe customer ID, reuse it so subscriptions attach cleanly
     customer_id = getattr(current_user, "stripe_customer_id", None) or None
 
-    session = stripe.checkout.Session.create(
+    metadata = {"user_id": str(current_user.id)}
+    if getattr(current_user, "supabase_user_id", None):
+        metadata["supabase_user_id"] = str(current_user.supabase_user_id)
+
+    params = dict(
         mode="subscription",
-        payment_method_types=["card"],
-        customer=customer_id,  # optional
-        customer_email=None if customer_id else current_user.email,
         line_items=[{"price": price_id, "quantity": 1}],
         success_url=success_url,
         cancel_url=cancel_url,
-        metadata={"user_id": str(current_user.id)},
+        metadata=metadata,
+        client_reference_id=str(current_user.id),
+        # Optional but recommended: ensures subscription events also carry user_id
+        subscription_data={"metadata": metadata},
     )
 
+    if customer_id:
+        params["customer"] = customer_id
+    else:
+        # For subscription Checkout, Stripe will create a Customer automatically.
+        # Provide email to prefill and to tie the customer to the user.
+        if getattr(current_user, "email", None):
+            params["customer_email"] = current_user.email
+
+    session = stripe.checkout.Session.create(**params)
     return {"url": session.url}
 
+
+# Backwards/forwards compatible alias
+@router.post("/checkout-session")
+def checkout_session_alias(current_user: User = Depends(get_current_user), db: Session = Depends(get_session)):
+    return create_checkout(current_user=current_user, db=db)
 
 # ─────────────────────────────────────────────
 # Stripe Webhook (CRITICAL)
@@ -71,86 +101,83 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_session)):
     try:
         event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
     except Exception as e:
-        print("stripe_webhook: invalid signature:", str(e))
+        logger.warning("stripe_webhook: invalid signature: %s", str(e))
         raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
     event_type = event.get("type")
-    obj = event.get("data", {}).get("object", {})
+    obj = event.get("data", {}).get("object", {}) or {}
 
-    # Minimal log (Railway-friendly)
-    print("stripe_webhook:", event_type)
+    logger.info("stripe_webhook: %s", event_type)
 
-    # 1) Checkout completed -> mark Pro + store customer/subscription IDs
+    # ── Helper: set pro flag safely ─────────────────────────────────────────
+    def set_pro_for_user(user: User, pro: bool, customer: str | None = None, subscription_id: str | None = None):
+        settings = _get_or_create_settings(db, user.id)
+        settings.is_pro = bool(pro)
+
+        # Persist Stripe ids on User (nullable fields exist + migrated)
+        if customer is not None:
+            user.stripe_customer_id = customer
+        if subscription_id is not None:
+            user.stripe_subscription_id = subscription_id
+
+        db.add(user)
+        db.add(settings)
+        db.commit()
+
+    # 1) Checkout completed -> attach customer/subscription and set pro true
     if event_type == "checkout.session.completed":
-        # NOTE: For subscription mode, checkout session includes:
-        # - customer
-        # - subscription
-        # - metadata.user_id (we set it)
         user_id = (obj.get("metadata") or {}).get("user_id")
         customer = obj.get("customer")
         subscription_id = obj.get("subscription")
 
-        print(
-            "checkout.session.completed",
-            {"user_id": user_id, "customer": customer, "subscription": subscription_id},
-        )
-
         if user_id:
             user = db.get(User, int(user_id))
             if user:
-                user.is_pro = True
-
-                # These fields must exist on your User model for this to persist.
-                # If they don't exist yet, add them (nullable) and run a migration.
-                if hasattr(user, "stripe_customer_id"):
-                    user.stripe_customer_id = customer
-                if hasattr(user, "stripe_subscription_id"):
-                    user.stripe_subscription_id = subscription_id
-
-                db.add(user)
-                db.commit()
+                set_pro_for_user(user, True, customer=customer, subscription_id=subscription_id)
 
         return {"status": "ok"}
 
-    # 2) Subscription deleted -> downgrade (lookup by stored customer id)
+    # 2) Subscription deleted -> downgrade
     if event_type == "customer.subscription.deleted":
         customer = obj.get("customer")
         subscription_id = obj.get("id")
 
-        print(
-            "customer.subscription.deleted",
-            {"customer": customer, "subscription": subscription_id},
-        )
-
-        if customer and hasattr(User, "stripe_customer_id"):
+        if customer:
             user = db.exec(select(User).where(User.stripe_customer_id == customer)).first()
             if user:
-                user.is_pro = False
-                if hasattr(user, "stripe_subscription_id"):
-                    user.stripe_subscription_id = None
-                db.add(user)
-                db.commit()
+                set_pro_for_user(user, False, subscription_id=None)
+                # optional: keep stripe_customer_id for re-upgrades, so don't clear it
 
         return {"status": "ok"}
 
-    # 3) Subscription updated -> optionally downgrade if unpaid/past_due
+    # 3) Subscription updated -> pro only when active/trialing
     if event_type == "customer.subscription.updated":
         customer = obj.get("customer")
         status = obj.get("status")
-
-        print("customer.subscription.updated", {"customer": customer, "status": status})
-
-        # Consider pro active only when status is active or trialing
         pro_active = status in ("active", "trialing")
 
-        if customer and hasattr(User, "stripe_customer_id"):
+        if customer:
             user = db.exec(select(User).where(User.stripe_customer_id == customer)).first()
             if user:
-                user.is_pro = bool(pro_active)
-                db.add(user)
-                db.commit()
+                set_pro_for_user(user, pro_active)
 
         return {"status": "ok"}
 
-    # Ignore other events for now
+    # Optional but useful: payment succeeded/failed
+    if event_type == "invoice.payment_succeeded":
+        customer = obj.get("customer")
+        if customer:
+            user = db.exec(select(User).where(User.stripe_customer_id == customer)).first()
+            if user:
+                set_pro_for_user(user, True)
+        return {"status": "ok"}
+
+    if event_type == "invoice.payment_failed":
+        customer = obj.get("customer")
+        if customer:
+            user = db.exec(select(User).where(User.stripe_customer_id == customer)).first()
+            if user:
+                set_pro_for_user(user, False)
+        return {"status": "ok"}
+
     return {"status": "ignored"}
