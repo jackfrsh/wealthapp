@@ -31,7 +31,7 @@ const THEME_OPTIONS = [
 ]
 
 export default function Settings() {
-  const { dark, baseCurrency, setBaseCurrency, showToast, themePref, setThemePreference, bumpData, isPro, setIsPro } =
+  const { dark, baseCurrency, setBaseCurrency, showToast, themePref, setThemePref, setThemePreference, bumpData, isPro, setIsPro } =
     useApp()
 
   const [currency, setCurrency] = useState(baseCurrency || 'GBP')
@@ -210,7 +210,7 @@ export default function Settings() {
             return (
               <button
                 key={opt.id}
-                onClick={() => setThemePreference(opt.id)}
+                onClick={() => setThemePref(opt.id)}
                 className={`flex items-center gap-2.5 px-5 py-3.5 rounded-2xl border-2 transition-all text-sm font-medium min-h-[48px] ${
                   active
                     ? 'border-accent bg-accent/5 dark:bg-accent/10 text-ink dark:text-white'
