@@ -135,7 +135,6 @@ export default function Strategy() {
       bumpData()
       setDirty(false)
 
-      setLoading(true)
       await loadForecast(mc, er)
 
       // Optional feedback check (non-blocking)
