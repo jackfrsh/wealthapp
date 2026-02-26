@@ -140,6 +140,9 @@ export default function Outlook() {
   )
 
   useEffect(() => {
+    // still loading goal from App boot
+    if (primaryGoal === undefined) return
+  
     if (primaryGoal) {
       setLocalContrib(String(primaryGoal.monthly_contribution || 0))
       setLocalReturn(String(primaryGoal.expected_annual_return_pct || 7))
@@ -154,6 +157,7 @@ export default function Outlook() {
       setLoading(true)
       loadForecast()
     } else {
+      // primaryGoal === null only
       setForecast(null)
       setLoading(false)
     }
@@ -213,7 +217,7 @@ export default function Outlook() {
   useEffect(() => {
     track('projection_opened')
   }, [])
-  
+
   // ─── Strategy actions ───────────────────────────────────
   const showFeedback = (msg) => {
     setFeedback(msg)
@@ -382,7 +386,18 @@ export default function Outlook() {
   }, [milestones, effectiveProjYears])
 
   // ─── Renders ────────────────────────────────────────────
-  if (!primaryGoal) {
+  if (primaryGoal === undefined) {
+  // still loading goal
+  return (
+    <div className="space-y-6">
+      <div className="h-12 w-64 rounded-lg skeleton" />
+      <div className="h-[180px] rounded-2xl skeleton" />
+      <div className="h-[320px] rounded-2xl skeleton" />
+    </div>
+  )
+}
+
+if (primaryGoal === null) {
     return (
       <div className="space-y-7">
         <h1 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">
