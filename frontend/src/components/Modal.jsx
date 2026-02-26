@@ -32,7 +32,17 @@ export default function Modal({ open, onClose, title, children }) {
           className="w-full max-w-[560px]"
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <div className="rounded-3xl border border-black/[.08] dark:border-white/[.10] bg-white dark:bg-surface-dark-2 shadow-[0_24px_60px_rgba(0,0,0,.18)] overflow-hidden">
+          <div
+            className={[
+              'rounded-3xl border border-black/[.08] dark:border-white/[.10]',
+              'bg-white dark:bg-surface-dark-2',
+              'shadow-[0_24px_60px_rgba(0,0,0,.18)]',
+              // ✅ mobile-safe sizing
+              'max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)]',
+              // ✅ allow body scroll while keeping header fixed
+              'overflow-hidden flex flex-col',
+            ].join(' ')}
+          >
             <div className="px-6 sm:px-7 py-5 border-b border-black/[.06] dark:border-white/[.07] flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <div className="text-base font-semibold text-ink dark:text-white truncate">
@@ -50,7 +60,10 @@ export default function Modal({ open, onClose, title, children }) {
               </button>
             </div>
 
-            <div className="p-6 sm:p-7">{children}</div>
+            {/* ✅ scrolling body */}
+            <div className="p-6 sm:p-7 overflow-y-auto overscroll-contain">
+              {children}
+            </div>
           </div>
         </div>
       </div>
