@@ -86,7 +86,6 @@ export default function Outlook() {
   const [trajOpen, setTrajOpen] = useState(true)
   const [projData, setProjData] = useState(null)
   const [projHistory, setProjHistory] = useState([])
-  // Store user preference; free users get clamped via effective horizon
   const [projYears, setProjYears] = useState(25)
   const [projLoading, setProjLoading] = useState(false)
 
@@ -94,21 +93,23 @@ export default function Outlook() {
   const INFLATION_RATE = 0.025
   const [inflationAdj, setInflationAdj] = useState(false)
 
-  // Deflate a nominal value to real terms (only applies for Pro + toggle)
   const deflate = (value, yearsFromNow) => {
     if (!settingsReady) return value
     if (!inflationAdj || !isPro) return value
     return value / Math.pow(1 + INFLATION_RATE, yearsFromNow)
   }
 
-  // Horizons list
   const HORIZONS = settingsReady && isPro ? [1, 5, 10, 15, 20, 25, 30, 40] : [1]
-
-  // Effective horizon: free users always 1y (even if projYears is 25)
-  const effectiveProjYears =
-    settingsReady && isPro ? projYears : FREE_HORIZON
+  const effectiveProjYears = settingsReady && isPro ? projYears : FREE_HORIZON
 
   const goalId = primaryGoal?.id
+
+  // ─── SELF-HEAL: if Outlook mounts and goal is still "unknown", fetch it once ──
+  useEffect(() => {
+    if (!settingsReady) return
+    if (primaryGoal !== undefined) return
+    loadPrimaryGoal?.()
+  }, [settingsReady, primaryGoal, loadPrimaryGoal])
 
   // ─── Strategy loaders ───────────────────────────────────
   const loadForecast = useCallback(
@@ -140,9 +141,8 @@ export default function Outlook() {
   )
 
   useEffect(() => {
-    // still loading goal from App boot
-    if (primaryGoal === undefined) return
-  
+    if (primaryGoal === undefined) return // loading state: do nothing yet
+
     if (primaryGoal) {
       setLocalContrib(String(primaryGoal.monthly_contribution || 0))
       setLocalReturn(String(primaryGoal.expected_annual_return_pct || 7))
@@ -163,7 +163,7 @@ export default function Outlook() {
     }
   }, [primaryGoal, loadForecast])
 
-  // ─── Projections loader (DEFINE BEFORE EFFECTS THAT USE IT) ──────────────
+  // ─── Projections loader ─────────────────────────────────
   const loadProjections = useCallback(async (years) => {
     const horizon = years ?? FREE_HORIZON
 
@@ -185,28 +185,21 @@ export default function Outlook() {
     }
   }, [])
 
-  // Keep a sensible default when entitlement becomes known
   useEffect(() => {
     if (!settingsReady) return
-
-    // If user is Pro and still on 1y, bump to 25y once
     if (isPro) {
       setProjYears((prev) => (prev && prev !== FREE_HORIZON ? prev : 25))
     } else {
-      // Don’t force projYears to 1 (keep preference for when they upgrade),
-      // but we do clamp via effectiveProjYears anyway.
       setProjYears((prev) => prev || 25)
     }
   }, [settingsReady, isPro])
 
-  // Load whenever projections panel is open and effective horizon changes
   useEffect(() => {
     if (!projOpen) return
     if (!settingsReady) return
     loadProjections(effectiveProjYears)
   }, [projOpen, settingsReady, effectiveProjYears, loadProjections])
 
-  // If Pro flips on while panel is open, force-load 25y immediately
   useEffect(() => {
     if (!projOpen) return
     if (!settingsReady) return
@@ -255,9 +248,7 @@ export default function Outlook() {
 
       try {
         const newForecast = await api(
-          `/goals/${goalId}/forecast?monthly_contribution=${encodeURIComponent(
-            mc
-          )}&expected_return=${encodeURIComponent(er)}`
+          `/goals/${goalId}/forecast?monthly_contribution=${encodeURIComponent(mc)}&expected_return=${encodeURIComponent(er)}`
         )
 
         if (
@@ -312,9 +303,7 @@ export default function Outlook() {
       target_age: Number(String(editForm.target_age).replace(/,/g, '')),
       target_amount: Number(String(editForm.target_amount).replace(/,/g, '')),
       monthly_contribution: Number(String(editForm.monthly_contribution || 0).replace(/,/g, '')),
-      expected_annual_return_pct: Number(
-        String(editForm.expected_annual_return_pct || 0).replace(/,/g, '')
-      ),
+      expected_annual_return_pct: Number(String(editForm.expected_annual_return_pct || 0).replace(/,/g, '')),
     }
 
     try {
@@ -387,17 +376,16 @@ export default function Outlook() {
 
   // ─── Renders ────────────────────────────────────────────
   if (primaryGoal === undefined) {
-  // still loading goal
-  return (
-    <div className="space-y-6">
-      <div className="h-12 w-64 rounded-lg skeleton" />
-      <div className="h-[180px] rounded-2xl skeleton" />
-      <div className="h-[320px] rounded-2xl skeleton" />
-    </div>
-  )
-}
+    return (
+      <div className="space-y-6">
+        <div className="h-12 w-64 rounded-lg skeleton" />
+        <div className="h-[180px] rounded-2xl skeleton" />
+        <div className="h-[320px] rounded-2xl skeleton" />
+      </div>
+    )
+  }
 
-if (primaryGoal === null) {
+  if (primaryGoal === null) {
     return (
       <div className="space-y-7">
         <h1 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">
@@ -408,7 +396,7 @@ if (primaryGoal === null) {
             Set a primary goal to unlock your financial outlook.
           </p>
           <button
-            onClick={() => setPage('home')}
+            onClick={() => setPage('goal_setup')}
             className="text-sm font-semibold px-5 py-2.5 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-colors"
             type="button"
           >
@@ -473,7 +461,6 @@ if (primaryGoal === null) {
   const displayProjEnd = deflate(projEnd, yearsRemaining)
   const displayTarget = deflate(targetAmt, yearsRemaining)
 
-  // Trajectory chart data
   const projPoints = forecast?.projected_points || []
   const reqPoints = forecast?.required_points || []
   const chartData = []
@@ -491,7 +478,6 @@ if (primaryGoal === null) {
     }
   }
 
-  // Account Projections chart data
   const projChartData = []
   if (projData) {
     const pHist = projHistory || []

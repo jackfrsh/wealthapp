@@ -28,7 +28,7 @@ import Admin from './pages/Admin'
 import Toast from './components/Toast'
 import Sidebar from './components/Sidebar'
 import MobileNav from './components/MobileNav'
-import BottomNav from './components/BottomNav'
+import BottomNav from './components/Bottomnav'
 
 export const AppContext = createContext()
 export const useApp = () => useContext(AppContext)
@@ -183,13 +183,15 @@ export default function App() {
     }
   }, [])
 
-  // ✅ FIXED: goal fetch always resolves to null or a valid-looking goal object
+  /**
+   * ✅ FIX: Primary goal fetch must NOT clobber a real goal on transient errors.
+   * Only a genuine 404 means "no goal".
+   */
   const fetchPrimaryGoal = useCallback(async () => {
     setGoalLoading(true)
     try {
       const g = await api('/goals/primary')
 
-      // Basic sanity check: if backend ever returns {} / [] / empty, treat as missing
       const looksLikeGoal =
         g &&
         typeof g === 'object' &&
@@ -197,6 +199,7 @@ export default function App() {
         (g.id != null || g.goal_id != null)
 
       if (!looksLikeGoal) {
+        // Treat weird empty shapes as missing (rare), but this was a *successful* call.
         setPrimaryGoal(null)
         return null
       }
@@ -209,24 +212,29 @@ export default function App() {
         return null
       }
 
-      // ✅ Never preserve previous goal here — it causes stale “goal set” state.
+      // ✅ transient error: DO NOT overwrite goal state.
+      // If we were still loading (undefined), keep undefined (so pages show skeleton, not "missing").
       console.error('Primary goal load failed:', e)
-      setPrimaryGoal(null)
+      setPrimaryGoal((prev) => (prev === undefined ? undefined : prev))
       return null
     } finally {
       setGoalLoading(false)
     }
   }, [])
 
+  /**
+   * ✅ Same idea: don't turn transient failures into "0 accounts".
+   */
   const fetchAccountsCount = useCallback(async () => {
     try {
       const rows = await api('/accounts')
       const n = Array.isArray(rows) ? rows.length : 0
       setAccountsCount(n)
       return n
-    } catch {
-      setAccountsCount(0)
-      return 0
+    } catch (e) {
+      console.error('Accounts count load failed:', e)
+      setAccountsCount((prev) => (prev === undefined ? undefined : prev))
+      return null
     }
   }, [])
 
@@ -275,7 +283,6 @@ export default function App() {
 
   // Auth bootstrap (storm-proof + cached token)
   const bootIdRef = useRef(0)
-  const inFlightRef = useRef(false)
   const tokenRef = useRef(null)
 
   useEffect(() => {
@@ -288,20 +295,20 @@ export default function App() {
     }
 
     // Cached token provider: fast path uses tokenRef, fallback pulls session once on refresh races
-  setAccessTokenProvider(async () => {
-  if (tokenRef.current) return tokenRef.current
+    setAccessTokenProvider(async () => {
+      if (tokenRef.current) return tokenRef.current
 
-  try {
-    const { data } = await supabase.auth.getSession()
-    const t = data?.session?.access_token || null
-    tokenRef.current = t
-    return t
-  } catch {
-    return null
-  }
-})
+      try {
+        const { data } = await supabase.auth.getSession()
+        const t = data?.session?.access_token || null
+        tokenRef.current = t
+        return t
+      } catch {
+        return null
+      }
+    })
 
-    // ✅ PRIME THE TOKEN immediately (so coming back from Stripe doesn't “stall”)
+    // Prime token quickly
     supabase.auth
       .getSession()
       .then(({ data }) => {
@@ -315,8 +322,6 @@ export default function App() {
 
     const bootstrap = async (session) => {
       const myId = ++bootIdRef.current
-      if (inFlightRef.current) return // but DON'T leave gates closed
-      inFlightRef.current = true
 
       try {
         setChecking(true)
@@ -336,18 +341,18 @@ export default function App() {
 
         setAuthed(true)
 
+        // Mark "unknown" so pages render loading skeletons, not "missing"
         setPrimaryGoal(undefined)
         setAccountsCount(undefined)
 
-        // Settings once (theme, currency, pro)
+        // Settings first
         await refreshSettings({ force: true })
         if (cancelled || myId !== bootIdRef.current) return
 
-        // Preload onboarding facts (goal + accounts count)
+        // Preload goal + accounts
         await Promise.allSettled([fetchPrimaryGoal(), fetchAccountsCount()])
         if (cancelled || myId !== bootIdRef.current) return
 
-        // Deep links (authed pages) still respected
         const fromPath = pageFromPath(window.location.pathname)
         const isPublic =
           fromPath === 'landing' ||
@@ -361,14 +366,12 @@ export default function App() {
           return
         }
 
-        // DEFAULT: always send authed users to Home
         setPage('home', { replace: true })
         setSettingsReady(true)
       } catch (e) {
         console.error('Bootstrap failed:', e)
         setSettingsReady(true)
       } finally {
-        inFlightRef.current = false
         if (!cancelled) setSettingsReady(true)
         if (!cancelled) setChecking(false)
       }
@@ -387,7 +390,7 @@ export default function App() {
         setPage('landing', { replace: true })
       })
 
-    // Auth change listener (also keeps tokenRef hot)
+    // Auth change listener (keeps tokenRef hot)
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (cancelled) return
       tokenRef.current = session?.access_token || null
