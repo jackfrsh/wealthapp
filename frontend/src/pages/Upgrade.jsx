@@ -13,7 +13,17 @@ function withTimeout(promise, ms = 3500) {
 }
 
 export default function Upgrade() {
-  const { setPage, isPro, api, setIsPro, refreshSettings, syncBilling } = useApp()
+  const {
+    setPage,
+    isPro,
+    api,
+    setIsPro,
+    refreshSettings,
+    syncBilling,
+    loadPrimaryGoal,
+    loadAccountsCount,
+    bumpData,
+  } = useApp()
 
   const [isLoading, setIsLoading] = useState(false)
   const [statusMsg, setStatusMsg] = useState('')
@@ -31,6 +41,18 @@ export default function Upgrade() {
 
   // 🔒 Dev/StrictMode guard so return flow only runs once
   const returnRanRef = useRef(false)
+
+  const postUpgradeSync = async () => {
+    // Source-of-truth entitlement first
+    await syncBilling?.()
+    await refreshSettings?.({ force: true })
+  
+    // Refresh onboarding facts so Home/Outlook don’t “lose” state on return
+    await Promise.allSettled([loadPrimaryGoal?.(), loadAccountsCount?.()])
+  
+    bumpData?.()
+    setPage?.('home', { replace: true })
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -85,6 +107,19 @@ export default function Upgrade() {
           // ignore
         }
       }
+        // 2) Always do a full sync after return (even if checkout-status timed out)
+  try {
+    if (cancelled) return
+    setStatusMsg('Syncing your dashboard…')
+    await postUpgradeSync()
+    if (cancelled) return
+    setStatusMsg('All set.')
+  } catch (e) {
+    console.error('Post-upgrade sync failed:', e)
+    try {
+      await refreshSettings?.({ force: true })
+    } catch {}
+  }
 
       // 2) Do ONE sync path with a timeout; don’t chain multiple slow calls.
       //    This is the most common source of “hang”.
