@@ -3,6 +3,20 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   darkMode: 'class',
   theme: {
+    container: {
+      center: true,
+      padding: {
+        DEFAULT: '1.25rem', // 20px
+        sm: '1.5rem', // 24px
+        lg: '2rem', // 32px
+        xl: '2.5rem', // 40px
+        '2xl': '3rem', // 48px
+      },
+      screens: {
+        xl: '1280px',
+        '2xl': '1400px',
+      },
+    },
     extend: {
       fontFamily: {
         display: ['"Inter"', 'system-ui', '-apple-system', 'sans-serif'],
@@ -10,29 +24,37 @@ export default {
         mono: ['"Inter"', 'ui-monospace', 'monospace'],
       },
       fontSize: {
-        /* iOS-aligned scale for readability */
-        xs: ['0.8125rem', { lineHeight: '1.25rem' }], /* 13px */
-        sm: ['0.9375rem', { lineHeight: '1.375rem' }], /* 15px */
-        base: ['1.0625rem', { lineHeight: '1.625rem' }], /* 17px — iOS default */
-        lg: ['1.1875rem', { lineHeight: '1.75rem' }], /* 19px */
-        xl: ['1.375rem', { lineHeight: '1.875rem' }], /* 22px */
-        '2xl': ['1.625rem', { lineHeight: '2rem' }], /* 26px */
-        '3xl': ['2rem', { lineHeight: '2.375rem' }], /* 32px */
-        '4xl': ['2.5rem', { lineHeight: '2.75rem' }], /* 40px */
-        '5xl': ['3.25rem', { lineHeight: '3.5rem' }], /* 52px */
+        xs: ['0.8125rem', { lineHeight: '1.25rem' }],
+        sm: ['0.9375rem', { lineHeight: '1.375rem' }],
+        base: ['1.0625rem', { lineHeight: '1.625rem' }],
+        lg: ['1.1875rem', { lineHeight: '1.75rem' }],
+        xl: ['1.375rem', { lineHeight: '1.875rem' }],
+        '2xl': ['1.625rem', { lineHeight: '2rem' }],
+        '3xl': ['2rem', { lineHeight: '2.375rem' }],
+        '4xl': ['2.5rem', { lineHeight: '2.75rem' }],
+        '5xl': ['3.25rem', { lineHeight: '3.5rem' }],
       },
 
-      /**
-       * IMPORTANT:
-       * These colors pull from CSS variables (defined in src/index.css).
-       * Using rgb(var(--x) / <alpha-value>) keeps Tailwind opacity modifiers working:
-       * e.g. bg-ink/10, border-surface-3/40, etc.
-       */
+      letterSpacing: {
+        tightish: '-0.015em',
+        tighterish: '-0.02em',
+      },
+
+      transitionTimingFunction: {
+        smooth: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+      },
+      transitionDuration: {
+        150: '150ms',
+        180: '180ms',
+        220: '220ms',
+        280: '280ms',
+      },
+
       colors: {
         surface: {
-          DEFAULT: 'rgb(var(--bg-rgb) / <alpha-value>)', // app canvas
-          2: 'rgb(var(--bg-inset-rgb) / <alpha-value>)', // inset / subtle fills
-          3: 'rgb(var(--border-rgb) / <alpha-value>)', // borders/dividers
+          DEFAULT: 'rgb(var(--bg-rgb) / <alpha-value>)',
+          2: 'rgb(var(--bg-inset-rgb) / <alpha-value>)',
+          3: 'rgb(var(--border-rgb) / <alpha-value>)',
           dark: 'rgb(var(--bg-rgb) / <alpha-value>)',
           'dark-2': 'rgb(var(--bg-card-rgb) / <alpha-value>)',
           'dark-3': 'rgb(var(--bg-inset-rgb) / <alpha-value>)',
@@ -73,10 +95,6 @@ export default {
         '3xl': '24px',
       },
 
-      /**
-       * Shadows: using CSS vars keeps the “material” consistent across light/dark.
-       * Your components can use: shadow-card, shadow-card-hover, shadow-card-lg
-       */
       boxShadow: {
         card: 'var(--shadow-card)',
         'card-hover': 'var(--shadow-card-hover)',
@@ -85,32 +103,17 @@ export default {
         'inner-ring': 'var(--shadow-inner-ring)',
       },
 
-      spacing: {
-        '4.5': '1.125rem',
-        '5.5': '1.375rem',
-        '13': '3.25rem',
-        '18': '4.5rem',
-      },
-
       animation: {
         'fade-in': 'fadeIn .3s ease-out',
         'slide-up': 'slideUp .35s ease-out',
-        'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
         delta: 'deltaFlash .6s ease-out',
       },
 
       keyframes: {
-        fadeIn: {
-          from: { opacity: '0' },
-          to: { opacity: '1' },
-        },
+        fadeIn: { from: { opacity: '0' }, to: { opacity: '1' } },
         slideUp: {
           from: { opacity: '0', transform: 'translateY(12px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
-        },
-        pulseSoft: {
-          '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '.6' },
         },
         deltaFlash: {
           '0%': { opacity: '1' },

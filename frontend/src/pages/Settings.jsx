@@ -1,10 +1,22 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import { api } from '../api'
+// frontend/src/pages/Settings.jsx
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useApp } from '../App'
 import Card from '../components/Card'
 import UpgradeButton from '../components/UpgradeButton'
+import { track } from '../track'
 import { CURRENCIES } from '../utils'
-import { Sun, Moon, Monitor, RefreshCw, Save, Globe, Crown, CreditCard } from 'lucide-react'
+import {
+  Sun,
+  Moon,
+  Monitor,
+  RefreshCw,
+  Save,
+  Globe,
+  Crown,
+  CreditCard,
+  ChevronRight,
+  Mail,
+} from 'lucide-react'
 
 const CURRENCY_NAMES = {
   GBP: 'British Pound',
@@ -30,76 +42,140 @@ const THEME_OPTIONS = [
   { id: 'dark', label: 'Dark', icon: Moon },
 ]
 
-export default function Settings() {
-  const { dark, baseCurrency, setBaseCurrency, showToast, themePref, setThemePref, setThemePreference, bumpData, isPro, setIsPro } =
-    useApp()
+function billingLabel(status) {
+  if (!status) return ''
+  if (status === 'active') return 'Active'
+  if (status === 'trialing') return 'Trial'
+  if (status === 'past_due') return 'Payment issue'
+  if (status === 'canceled') return 'Cancelled'
+  if (status === 'incomplete') return 'Incomplete'
+  if (status === 'incomplete_expired') return 'Expired'
+  if (status === 'unpaid') return 'Unpaid'
+  return status
+}
 
-  const [currency, setCurrency] = useState(baseCurrency || 'GBP')
+export default function Settings() {
+  const {
+    api,
+    username,
+    dark,
+    baseCurrency,
+    setBaseCurrency,
+    showToast,
+    themePref,
+    setThemePref,
+    isPro,
+    setIsPro,
+    refreshSettings,
+    setPage,
+    logout,
+  } = useApp()
+
+  const isDark = !!dark
+
+  const [currency, setCurrency] = useState((baseCurrency || 'GBP').toUpperCase())
   const [fxStatus, setFxStatus] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [togglingPro, setTogglingPro] = useState(false)
+
+  const [billingBusy, setBillingBusy] = useState(false)
+  const [billingMsg, setBillingMsg] = useState('')
+  const [subStatus, setSubStatus] = useState('')
+
+  const IS_DEV = !!import.meta?.env?.DEV
+  const subLabel = useMemo(() => billingLabel(subStatus), [subStatus])
+
+  const adminEmails = useMemo(() => {
+    const raw = (import.meta?.env?.VITE_ADMIN_EMAILS || '').trim()
+    if (!raw) return new Set()
+    return new Set(
+      raw
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  }, [])
+
+  const isAdmin = useMemo(() => {
+    if (!username) return false
+    return adminEmails.has(String(username).toLowerCase())
+  }, [adminEmails, username])
 
   const load = useCallback(async () => {
+    setLoading(true)
+
+    // Fast paint
     try {
-      const s = await api('/settings') // ✅ GET
-      setCurrency(s?.base_currency || 'GBP')
-      setBaseCurrency(s?.base_currency || 'GBP')
+      setCurrency((baseCurrency || 'GBP').toUpperCase())
+    } catch {}
+
+    try {
+      const s = await api('/settings')
+      const bc = (s?.base_currency || 'GBP').toUpperCase()
+      setCurrency(bc)
+      setBaseCurrency?.(bc)
+      // Keep local theme in sync if server returns it (optional)
+      if (s?.theme_preference) {
+        setThemePref?.(s.theme_preference || 'system')
+        try {
+          localStorage.setItem('theme_preference', s.theme_preference || 'system')
+        } catch {}
+      }
+      if (typeof s?.is_pro !== 'undefined') {
+        setIsPro?.(!!s.is_pro)
+      }
     } catch (e) {
       console.error(e)
     } finally {
       setLoading(false)
     }
-  }, [setBaseCurrency])
+  }, [api, baseCurrency, setBaseCurrency, setThemePref, setIsPro])
 
   useEffect(() => {
     load()
   }, [load])
 
+  // ✅ Theme change (instant + persisted)
+  const setThemePreference = useCallback(
+    async (nextPref) => {
+      const pref = nextPref || 'system'
+
+      // 1) instant UI
+      setThemePref?.(pref)
+      try {
+        localStorage.setItem('theme_preference', pref)
+      } catch {}
+
+      // 2) persist to backend (don’t block UI)
+      try {
+        await api('/settings', { method: 'PUT', body: { theme_preference: pref } })
+      } catch (e) {
+        console.warn('Theme save failed:', e)
+      }
+    },
+    [api, setThemePref]
+  )
+
   const save = async () => {
     setSaving(true)
     try {
       await api('/settings', {
-        method: 'PUT', // matches your FastAPI @router.put("")
-        body: {
-          base_currency: currency,
-          theme_preference: themePref,
-        },
+        method: 'PUT',
+        body: { base_currency: currency, theme_preference: themePref },
       })
-      setBaseCurrency(currency)
-      bumpData()
-      showToast('Settings saved')
+      setBaseCurrency?.(currency)
+      showToast?.('Settings saved', 'success')
+      await refreshSettings?.({ force: true })
     } catch (e) {
-      showToast(e?.message || 'Failed to save', 'error')
+      showToast?.(e?.message || 'Failed to save', 'error')
     } finally {
       setSaving(false)
     }
   }
 
-  const togglePro = async () => {
-    setTogglingPro(true)
-    const newValue = !isPro
-    try {
-      await api('/settings', {
-        method: 'PUT',
-        body: { is_pro: newValue },
-      })
-      setIsPro(newValue)
-      if (newValue) localStorage.setItem('force_pro', 'true')
-      else localStorage.removeItem('force_pro')
-      bumpData()
-      showToast(newValue ? 'Pro activated' : 'Pro deactivated')
-    } catch (e) {
-      showToast(e?.message || 'Failed to update', 'error')
-    } finally {
-      setTogglingPro(false)
-    }
-  }
-
   const refreshFx = async () => {
-    setFxStatus('Refreshing...')
+    setFxStatus('Refreshing…')
     try {
-      // Typically a GET endpoint; adjust to POST if your backend expects POST.
       const data = await api(`/fx/refresh?base=${currency}`)
       const rates = data?.rates || {}
       const sample = Object.entries(rates)
@@ -107,18 +183,98 @@ export default function Settings() {
         .map(([k, v]) => `${k}: ${Number(v).toFixed(4)}`)
         .join('  ·  ')
       setFxStatus(`Updated ${data?.date || ''} · ${sample}`)
-      showToast('FX rates refreshed')
+      showToast?.('FX rates refreshed', 'success')
     } catch (e) {
       setFxStatus(`Failed: ${e?.message || 'unknown error'}`)
-      showToast(e?.message || 'Failed to refresh FX', 'error')
+      showToast?.(e?.message || 'Failed to refresh FX', 'error')
     }
   }
 
+  const openPortal = async () => {
+    setBillingBusy(true)
+    setBillingMsg('Opening billing portal…')
+    try {
+      const res = await api('/billing/portal', { method: 'POST' })
+      if (res?.url) {
+        window.location.href = res.url
+        return
+      }
+      throw new Error('No portal URL returned')
+    } catch (e) {
+      console.error(e)
+      setBillingMsg('')
+      showToast?.('Could not open billing portal. Please try again.', 'error')
+      setBillingBusy(false)
+    }
+  }
+
+  const refreshProStatus = async () => {
+    setBillingBusy(true)
+    setBillingMsg('Refreshing subscription status…')
+    try {
+      const r = await api('/billing/sync', { method: 'POST' })
+      if (r && typeof r === 'object') {
+        setIsPro?.(!!r.is_pro)
+        setSubStatus(r.status || '')
+      } else if (typeof refreshSettings === 'function') {
+        const s = await refreshSettings({ force: true })
+        setIsPro?.(!!s?.is_pro)
+      }
+
+      if (r?.status === 'past_due') setBillingMsg('Payment issue — update card in billing portal.')
+      else setBillingMsg(r?.is_pro ? 'Pro active ✓' : 'Free plan')
+    } catch (e) {
+      console.error(e)
+      setBillingMsg('')
+      showToast?.('Could not refresh status. Try again.', 'error')
+    } finally {
+      setTimeout(() => setBillingMsg(''), 2200)
+      setBillingBusy(false)
+    }
+  }
+
+  const devTogglePro = async () => {
+    if (!IS_DEV) return
+    const newValue = !isPro
+    setBillingBusy(true)
+    setBillingMsg('Updating…')
+    try {
+      await api('/settings', { method: 'PUT', body: { is_pro: newValue } })
+      setIsPro?.(newValue)
+      if (newValue) localStorage.setItem('force_pro', 'true')
+      else localStorage.removeItem('force_pro')
+      showToast?.(newValue ? 'Pro activated (dev)' : 'Pro deactivated (dev)', 'success')
+    } catch (e) {
+      showToast?.(e?.message || 'Failed to update', 'error')
+    } finally {
+      setBillingMsg('')
+      setBillingBusy(false)
+    }
+  }
+
+  const reportProblemHref = useMemo(() => {
+    const subject = encodeURIComponent('Wealth beta — report a problem')
+    const body = encodeURIComponent(
+      [
+        `Describe what happened:`,
+        ``,
+        `---`,
+        `User: ${username || 'unknown'}`,
+        `Pro: ${isPro ? 'true' : 'false'}`,
+        `Currency: ${currency}`,
+        `Theme: ${themePref}`,
+        `Browser: ${navigator.userAgent}`,
+        ``,
+      ].join('\n')
+    )
+    return `mailto:support@yourdomain.com?subject=${subject}&body=${body}`
+  }, [username, isPro, currency, themePref])
+
   const inp =
-    'w-full px-4 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] bg-surface dark:bg-surface-dark text-base text-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all'
+    'w-full px-4 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] bg-white/70 dark:bg-white/5 text-base text-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all backdrop-blur'
   const lbl = 'block text-xs font-semibold text-ink-3 dark:text-white/50 mb-2'
 
-  if (loading) {
+  if (loading && !currency) {
     return (
       <div className="space-y-5">
         <div className="h-12 w-48 rounded-lg skeleton" />
@@ -129,69 +285,178 @@ export default function Settings() {
 
   return (
     <div className="space-y-7">
-      <div>
-        <h1 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">Settings</h1>
-        <p className="text-sm text-ink-muted dark:text-white/35 mt-1.5">Configure your wealth planner.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">
+            Settings
+          </h1>
+          <p className="text-sm text-ink-muted dark:text-white/35 mt-1.5">
+            Configure your wealth planner.
+          </p>
+          {!!username && (
+            <p className="text-xs text-ink-muted/60 dark:text-white/25 mt-1">
+              Signed in as {username}
+            </p>
+          )}
+        </div>
+
+        <button
+          onClick={logout}
+          className="text-sm font-semibold px-4 py-2 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.04] dark:hover:bg-white/[.06] transition-colors"
+          type="button"
+        >
+          Log out
+        </button>
       </div>
+
+      {/* Admin */}
+      {isAdmin && (
+        <Card className="p-7">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35 mb-1">
+                Admin
+              </div>
+              <div className="text-sm text-ink-muted dark:text-white/45">
+                Funnel + users + upgrades
+              </div>
+            </div>
+            <button
+              onClick={() => setPage('admin')}
+              className="inline-flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px]"
+              type="button"
+            >
+              Open <ChevronRight size={16} />
+            </button>
+          </div>
+        </Card>
+      )}
 
       {/* Subscription */}
       <Card className="p-7 overflow-hidden relative">
         {isPro && (
-          <div className="absolute top-0 right-0 w-32 h-32 opacity-[.04] pointer-events-none">
-            <Crown size={128} className="text-amber-500" />
+          <div className="absolute top-0 right-0 w-32 h-32 opacity-[.035] pointer-events-none">
+            <Crown size={128} className="text-accent" />
           </div>
         )}
 
-        <h3 className="text-xs font-semibold tracking-[.08em] uppercase text-ink-muted dark:text-white/35 mb-5 flex items-center gap-2">
-          <Crown size={14} className={isPro ? 'text-amber-500' : ''} /> Subscription
+        <h3 className="text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35 mb-5 flex items-center gap-2">
+          <Crown size={14} className={isPro ? 'text-accent' : ''} /> Subscription
         </h3>
 
         {isPro ? (
           <div className="space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500/10 to-amber-600/5 border border-amber-500/20">
-                <Crown size={14} className="text-amber-500" />
-                <span className="text-sm font-medium text-amber-700 dark:text-amber-300 tracking-wide">Wealth Pro</span>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/[.03] dark:bg-white/[.06] border border-black/[.06] dark:border-white/[.10]">
+                <Crown size={14} className="text-accent" />
+                <span className="text-sm font-semibold text-ink dark:text-white tracking-tightish">
+                  Pro
+                </span>
               </div>
-              <span className="text-xs text-ink-muted/60 dark:text-white/25">Active</span>
+
+              {!!subLabel && (
+                <span
+                  className={[
+                    'text-xs font-medium',
+                    subStatus === 'past_due'
+                      ? 'text-loss/80 dark:text-loss/70'
+                      : 'text-ink-muted/60 dark:text-white/25',
+                  ].join(' ')}
+                >
+                  {subLabel}
+                </span>
+              )}
+
+              {!!billingMsg && (
+                <span className="text-xs text-ink-muted/60 dark:text-white/25">
+                  · {billingMsg}
+                </span>
+              )}
             </div>
 
-            <p className="text-sm text-ink-muted dark:text-white/45 leading-relaxed">
-              You have full access to unlimited accounts, advanced projections, AI insights and priority features.
-            </p>
+            {subStatus === 'past_due' ? (
+              <p className="text-sm text-loss/80 dark:text-loss/70 leading-relaxed">
+                There’s a payment issue. Update your card in billing.
+              </p>
+            ) : (
+              <p className="text-sm text-ink-muted dark:text-white/45 leading-relaxed">
+                Unlimited accounts, advanced projections, and priority features.
+              </p>
+            )}
 
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <button
-                className="inline-flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-surface-2 dark:hover:bg-white/5 transition-colors min-h-[44px]"
-                onClick={() => showToast('Stripe billing portal coming soon')}
+                className="inline-flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px] disabled:opacity-50"
+                onClick={openPortal}
+                disabled={billingBusy}
                 type="button"
               >
-                <CreditCard size={15} /> Manage billing
+                <CreditCard size={15} /> {billingBusy ? 'Opening…' : 'Manage billing'}
               </button>
 
               <button
-                onClick={togglePro}
-                disabled={togglingPro}
-                className="inline-flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-2xl text-loss/80 hover:text-loss hover:bg-loss-light dark:hover:bg-loss/10 transition-colors min-h-[44px] disabled:opacity-50"
+                onClick={refreshProStatus}
+                disabled={billingBusy}
+                className="inline-flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px] disabled:opacity-50"
                 type="button"
               >
-                {togglingPro ? 'Updating…' : 'Cancel subscription'}
+                <RefreshCw size={15} /> Refresh status
               </button>
+
+              <a
+                href={reportProblemHref}
+                className="inline-flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px]"
+              >
+                <Mail size={15} /> Report a problem
+              </a>
             </div>
           </div>
         ) : (
           <div className="space-y-4">
             <p className="text-sm text-ink-muted dark:text-white/45 leading-relaxed">
-              Unlock unlimited accounts, advanced projections, AI insights and more.
+              Unlock unlimited accounts, advanced projections, inflation modelling, deeper insights and more.
             </p>
 
             <div className="flex flex-wrap items-center gap-3">
-              <UpgradeButton onClick={togglePro} disabled={togglingPro} size="lg" className="min-h-[48px]">
+              <UpgradeButton
+                onClick={() => {
+                  track?.('upgrade_clicked', { source: 'settings_cta' })
+                  try {
+                    localStorage.setItem('upgrade_reason', 'settings_cta')
+                  } catch {}
+                  setPage('upgrade')
+                }}
+                disabled={billingBusy}
+                className="min-h-[48px]"
+              >
                 <Crown size={15} />
-                {togglingPro ? 'Activating…' : 'Upgrade to Pro'}
+                Upgrade to Pro
               </UpgradeButton>
 
-              <span className="text-xs text-ink-muted/50 dark:text-white/25">From £6/month · Cancel anytime</span>
+              <button
+                onClick={() => {
+                  try {
+                    localStorage.setItem('upgrade_reason', 'settings_view_plans')
+                  } catch {}
+                  setPage('upgrade')
+                }}
+                className="text-sm font-semibold text-ink-muted dark:text-white/45 hover:text-ink dark:hover:text-white transition-colors"
+                type="button"
+              >
+                View plans
+              </button>
+
+              {!!billingMsg ? (
+                <span className="text-xs text-ink-muted/50 dark:text-white/25">{billingMsg}</span>
+              ) : (
+                <span className="text-xs text-ink-muted/50 dark:text-white/25">
+                  From £6/month · Cancel anytime
+                </span>
+              )}
+            </div>
+
+            <div className="mt-3 text-xs text-ink-muted/60 dark:text-white/30">
+              Encrypted checkout · Processed by Stripe · Cancel anytime
             </div>
           </div>
         )}
@@ -199,8 +464,8 @@ export default function Settings() {
 
       {/* Appearance */}
       <Card className="p-7">
-        <h3 className="text-xs font-semibold tracking-[.08em] uppercase text-ink-muted dark:text-white/35 mb-5 flex items-center gap-2">
-          {dark ? <Moon size={14} /> : <Sun size={14} />} Appearance
+        <h3 className="text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35 mb-5 flex items-center gap-2">
+          {isDark ? <Moon size={14} /> : <Sun size={14} />} Appearance
         </h3>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -210,12 +475,13 @@ export default function Settings() {
             return (
               <button
                 key={opt.id}
-                onClick={() => setThemePref(opt.id)}
-                className={`flex items-center gap-2.5 px-5 py-3.5 rounded-2xl border-2 transition-all text-sm font-medium min-h-[48px] ${
+                onClick={() => setThemePreference(opt.id)}
+                className={[
+                  'flex items-center gap-2.5 px-5 py-3.5 rounded-2xl border-2 transition-all text-sm font-medium min-h-[48px]',
                   active
                     ? 'border-accent bg-accent/5 dark:bg-accent/10 text-ink dark:text-white'
-                    : 'border-transparent bg-surface-2 dark:bg-white/5 text-ink-muted dark:text-white/35 hover:border-black/10 dark:hover:border-white/10'
-                }`}
+                    : 'border-transparent bg-black/[.03] dark:bg-white/[.05] text-ink-muted dark:text-white/35 hover:border-black/10 dark:hover:border-white/10',
+                ].join(' ')}
                 type="button"
               >
                 <Icon size={17} /> {opt.label}
@@ -223,11 +489,15 @@ export default function Settings() {
             )
           })}
         </div>
+
+        <div className="mt-3 text-xs text-ink-muted/55 dark:text-white/25">
+          Changes apply instantly.
+        </div>
       </Card>
 
       {/* Currency */}
       <Card className="p-7">
-        <h3 className="text-xs font-semibold tracking-[.08em] uppercase text-ink-muted dark:text-white/35 mb-5 flex items-center gap-2">
+        <h3 className="text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35 mb-5 flex items-center gap-2">
           <Globe size={14} /> Currency
         </h3>
 
@@ -253,13 +523,13 @@ export default function Settings() {
           className="flex items-center gap-2 text-sm font-semibold px-6 py-3 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-all disabled:opacity-50 min-h-[48px]"
           type="button"
         >
-          <Save size={15} /> {saving ? 'Saving...' : 'Save settings'}
+          <Save size={15} /> {saving ? 'Saving…' : 'Save settings'}
         </button>
       </Card>
 
       {/* FX */}
       <Card className="p-7">
-        <h3 className="text-xs font-semibold tracking-[.08em] uppercase text-ink-muted dark:text-white/35 mb-4">
+        <h3 className="text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35 mb-4">
           Exchange Rates
         </h3>
 
@@ -269,7 +539,7 @@ export default function Settings() {
 
         <button
           onClick={refreshFx}
-          className="flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-surface-2 dark:hover:bg-white/5 transition-colors min-h-[48px]"
+          className="flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[48px]"
           type="button"
         >
           <RefreshCw size={15} /> Refresh FX rates
@@ -278,34 +548,31 @@ export default function Settings() {
         {fxStatus && <div className="text-xs text-ink-muted dark:text-white/25 mt-4">{fxStatus}</div>}
       </Card>
 
-      {/* Developer */}
-      <Card className="p-7 border-dashed border-black/[.08] dark:border-white/[.08]">
-        <h3 className="text-xs font-semibold tracking-[.08em] uppercase text-ink-muted dark:text-white/35 mb-4">
-          Developer
-        </h3>
+      {IS_DEV && (
+        <Card className="p-7 border-dashed border-black/[.08] dark:border-white/[.08]">
+          <h3 className="text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35 mb-4">
+            Developer
+          </h3>
 
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <div className="text-sm font-medium text-ink dark:text-white">Pro Simulation</div>
-            <div className="text-xs text-ink-muted dark:text-white/35 mt-1">Toggle Pro access for testing.</div>
-          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-sm font-medium text-ink dark:text-white">Pro Simulation</div>
+              <div className="text-xs text-ink-muted dark:text-white/35 mt-1">
+                Toggle Pro access for testing (dev only).
+              </div>
+            </div>
 
-          {isPro ? (
             <button
-              onClick={togglePro}
-              disabled={togglingPro}
-              className="px-4 py-2 rounded-2xl text-sm font-semibold transition-all bg-amber-500/10 text-amber-600 dark:text-amber-300 border border-amber-500/20 hover:bg-amber-500/15 disabled:opacity-50"
+              onClick={devTogglePro}
+              disabled={billingBusy}
+              className="px-4 py-2 rounded-2xl text-sm font-semibold transition-all bg-black/[.03] dark:bg-white/[.06] text-ink dark:text-white border border-black/[.06] dark:border-white/[.10] hover:bg-black/[.05] dark:hover:bg-white/[.08] disabled:opacity-50"
               type="button"
             >
-              {togglingPro ? '...' : 'Disable Pro'}
+              {billingBusy ? '…' : isPro ? 'Disable Pro' : 'Enable Pro'}
             </button>
-          ) : (
-            <UpgradeButton onClick={togglePro} disabled={togglingPro} size="sm">
-              {togglingPro ? '...' : 'Enable Pro'}
-            </UpgradeButton>
-          )}
-        </div>
-      </Card>
+          </div>
+        </Card>
+      )}
     </div>
   )
 }

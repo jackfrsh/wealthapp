@@ -1,35 +1,39 @@
-import React, { useEffect, useState } from "react";
-import { api } from "../api";
-import { useAuth } from "../auth/AuthProvider";
+import React, { useEffect, useState } from 'react'
+import { api } from '../api'
+import { useAuth } from '../auth/AuthProvider'
 
 export default function DashboardPage() {
-  const { signOut } = useAuth();
-  const [data, setData] = useState(null);
-  const [err, setErr] = useState(null);
+  const { signOut } = useAuth()
+  const [data, setData] = useState(null)
+  const [err, setErr] = useState(null)
 
   useEffect(() => {
-    let alive = true;
+    let alive = true
 
-    console.log("DEBUG TOTALS", {
-  prev: prevTotal.current,
-  next: nextTotal,
-})
+    ;(async () => {
+      try {
+        const d = await api('/dashboard?range=1M')
+        if (!alive) return
+        setData(d)
+        setErr(null)
 
-    api("/dashboard?range=1M")
-      .then((d) => {
-        if (!alive) return;
-        setData(d);
-        setErr(null);
-      })
-      .catch((e) => {
-        if (!alive) return;
-        setErr(e?.message || String(e));
-      });
+        // Optional safe debug:
+        console.log('DEBUG /dashboard payload', {
+          base_currency: d?.base_currency,
+          current_total: d?.current_total,
+          accounts_count: d?.accounts_count,
+          excluded_accounts: d?.excluded_accounts,
+        })
+      } catch (e) {
+        if (!alive) return
+        setErr(e?.message || String(e))
+      }
+    })()
 
     return () => {
-      alive = false;
-    };
-  }, []);
+      alive = false
+    }
+  }, [])
 
   return (
     <div className="p-6">
@@ -41,6 +45,7 @@ export default function DashboardPage() {
         <button
           onClick={() => signOut()}
           className="px-4 py-2 rounded-2xl bg-surface-2 dark:bg-white/5 text-sm font-semibold text-ink dark:text-white hover:opacity-90"
+          type="button"
         >
           Sign out
         </button>
@@ -76,5 +81,5 @@ export default function DashboardPage() {
         </div>
       )}
     </div>
-  );
+  )
 }

@@ -1,43 +1,33 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { supabase } from '../supabaseClient' // <-- adjust to '../supabase' if that's your actual file
+import { supabase } from '../supabase'
 import UpgradeButton from '../components/UpgradeButton'
 import { useApp } from '../App'
-import {
-  TrendingUp,
-  Shield,
-  Globe,
-  BarChart2,
-  Sparkles,
-  ChevronDown,
-  Crown,
-} from 'lucide-react'
+import { Shield, Globe, BarChart2, ChevronDown, Crown, Lock } from 'lucide-react'
 
 const FEATURES = [
   {
-    icon: TrendingUp,
-    title: 'Net Worth Tracking',
-    desc: 'Aggregate every account — ISAs, pensions, crypto, property — into one clear number.',
+    icon: BarChart2,
+    title: 'Net worth dashboard',
+    desc: 'See accounts, assets, and liabilities in one calm, consistent view.',
   },
   {
     icon: BarChart2,
-    title: 'Growth Projections',
-    desc: 'Compound interest modelling per account. See where your money will be in 5, 10, or 30 years.',
+    title: 'Long-term projections',
+    desc: 'Model your outlook across 5, 10, and 30 years with clear assumptions.',
   },
   {
     icon: Globe,
-    title: 'Multi-Currency',
-    desc: 'Automatic FX conversion across GBP, USD, EUR, crypto and more. Live rates, daily cache.',
+    title: 'Multi-currency tracking',
+    desc: 'Track GBP, USD, EUR and more with automatic conversion.',
   },
   {
     icon: Shield,
-    title: 'Goal Planning',
-    desc: 'Set a retirement target, track milestones, and get strategic insights to stay on course.',
+    title: 'Private by design',
+    desc: 'No ads. No trackers. Built for calm financial planning.',
   },
 ]
 
 function parseRecoveryFromHash() {
-  // Supabase implicit recovery link format:
-  // #access_token=...&refresh_token=...&type=recovery
   const raw = window.location.hash || ''
   const h = raw.startsWith('#') ? raw.slice(1) : raw
   const hp = new URLSearchParams(h)
@@ -51,13 +41,12 @@ function parseRecoveryFromHash() {
 }
 
 export default function AuthPage({ onLogin }) {
-  const { showToast } = useApp()
+  const { showToast, setPage } = useApp()
 
-  const [mode, setMode] = useState('login')
+  const [mode, setMode] = useState('login') // 'login' | 'register'
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
 
-  // Recovery mode
   const [recovery, setRecovery] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -68,7 +57,6 @@ export default function AuthPage({ onLogin }) {
 
   const formRef = useRef(null)
 
-  // Stagger animation on mount
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true))
@@ -78,11 +66,6 @@ export default function AuthPage({ onLogin }) {
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
-  /**
-   * CRITICAL: If reset link is opened in a different browser (Safari) than the one
-   * where user requested it (Chrome), we must establish a Supabase session in THIS tab
-   * using the recovery token from the URL.
-   */
   useEffect(() => {
     if (!supabase) return
 
@@ -91,37 +74,32 @@ export default function AuthPage({ onLogin }) {
     const run = async () => {
       try {
         const url = new URL(window.location.href)
-        const code = url.searchParams.get('code') // PKCE flow
-        const implicit = parseRecoveryFromHash() // implicit flow
-        const modeParam = url.searchParams.get('mode') // persistence flag
+        const code = url.searchParams.get('code')
+        const implicit = parseRecoveryFromHash()
+        const modeParam = url.searchParams.get('mode')
 
         if (!code && !implicit && modeParam !== 'recovery') return
 
-        // Show recovery UI
         setRecovery(true)
         setMode('login')
         setError('')
         setNotice('')
 
-        // 1) PKCE: exchange code for session
         if (code) {
           const { error: exErr } = await supabase.auth.exchangeCodeForSession(
             window.location.href
           )
           if (exErr) throw exErr
 
-          // Clean URL, keep mode=recovery
           url.searchParams.delete('code')
           url.searchParams.set('mode', 'recovery')
           window.history.replaceState({}, '', url.pathname + '?' + url.searchParams.toString())
         }
 
-        // 2) Implicit: set session from hash tokens
         if (implicit) {
           const { error: sessErr } = await supabase.auth.setSession(implicit)
           if (sessErr) throw sessErr
 
-          // Clean URL (remove hash), keep mode=recovery
           url.searchParams.set('mode', 'recovery')
           window.history.replaceState({}, '', url.pathname + '?' + url.searchParams.toString())
         }
@@ -146,7 +124,7 @@ export default function AuthPage({ onLogin }) {
     setNotice('')
 
     if (!username.trim() || !password) {
-      setError('Please enter your email and password')
+      setError('Please enter your email and password.')
       return
     }
     if (!supabase) {
@@ -165,13 +143,11 @@ export default function AuthPage({ onLogin }) {
         })
         if (signUpError) throw signUpError
 
-        showToast?.('Account created!')
+        showToast?.('Account created.', 'success')
 
-        // Some setups return session immediately; others require email confirmation
+        // If confirmations are off, you might have a session immediately.
         if (data?.session) {
           const token = data.session.access_token
-
-          // Backwards compatible: if your App expects token+email
           if (typeof onLogin === 'function') {
             if (onLogin.length >= 2) onLogin(token, email)
             else onLogin(email)
@@ -191,13 +167,12 @@ export default function AuthPage({ onLogin }) {
       if (signInError) throw signInError
 
       const token = data?.session?.access_token
-
       if (typeof onLogin === 'function') {
         if (onLogin.length >= 2) onLogin(token, email)
         else onLogin(email)
       }
     } catch (e) {
-      setError(e?.message || 'Sign in failed')
+      setError(e?.message || 'Sign in failed.')
     } finally {
       setLoading(false)
     }
@@ -215,22 +190,17 @@ export default function AuthPage({ onLogin }) {
 
     try {
       setLoading(true)
+      if (!supabase) throw new Error('Supabase is not configured. Check your env vars.')
 
-      if (!supabase) {
-        throw new Error('Supabase is not configured. Check your env vars.')
-      }
-
-      // IMPORTANT: do NOT use a custom hash like /#recovery.
-      // Supabase uses the hash for tokens in the implicit flow.
-      // This assumes your Auth page is at the ROOT (/).
-      // If your Auth route is /auth, change to `${window.location.origin}/auth?mode=recovery`
-      const redirectTo = `${window.location.origin}/?mode=recovery`
-
-      const { error } = await supabase.auth.resetPasswordForEmail(emailToUse, { redirectTo })
+      // IMPORTANT: match your /auth route
+      const redirectTo = `${window.location.origin}/auth?mode=recovery`
+      const { error } = await supabase.auth.resetPasswordForEmail(emailToUse, {
+        redirectTo,
+      })
       if (error) throw error
 
       setNotice('Password reset email sent. Check your inbox (and spam).')
-      showToast?.('Password reset email sent.')
+      showToast?.('Password reset email sent.', 'success')
     } catch (e) {
       setError(e?.message || 'Could not send password reset email.')
     } finally {
@@ -246,7 +216,6 @@ export default function AuthPage({ onLogin }) {
       setError('Password must be at least 8 characters.')
       return
     }
-
     if (newPassword !== confirmPassword) {
       setError('Passwords do not match.')
       return
@@ -254,12 +223,8 @@ export default function AuthPage({ onLogin }) {
 
     try {
       setLoading(true)
+      if (!supabase) throw new Error('Supabase is not configured. Check your env vars.')
 
-      if (!supabase) {
-        throw new Error('Supabase is not configured. Check your env vars.')
-      }
-
-      // Friendly guard: ensure the session exists in this browser tab
       const { data: sess } = await supabase.auth.getSession()
       if (!sess?.session) {
         throw new Error('Auth session missing. Please reopen the reset link (or request a new one).')
@@ -274,7 +239,7 @@ export default function AuthPage({ onLogin }) {
       window.history.replaceState({}, '', window.location.pathname)
 
       setNotice('Password updated. Please sign in.')
-      showToast?.('Password updated.')
+      showToast?.('Password updated.', 'success')
     } catch (e) {
       setError(e?.message || 'Could not update password.')
     } finally {
@@ -283,90 +248,113 @@ export default function AuthPage({ onLogin }) {
   }
 
   const inp =
-    'w-full px-4 py-3.5 rounded-2xl border border-black/[.08] dark:border-white/[.08] bg-white dark:bg-surface-dark text-ink dark:text-white text-base focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all'
-  const lbl = 'block text-xs font-semibold text-ink-3 dark:text-white/50 mb-2 tracking-wide'
+    'w-full px-4 py-3.5 rounded-2xl border border-black/[.08] dark:border-white/[.08] ' +
+    'bg-white dark:bg-surface-dark-2 text-ink dark:text-white text-base ' +
+    'focus:outline-none focus:ring-4 focus:ring-accent/15 focus:border-accent/60 ' +
+    'transition-all duration-180 ease-smooth'
+
+  const lbl =
+    'block text-xs font-semibold text-ink-3 dark:text-white/50 mb-2 tracking-[0.02em]'
 
   return (
     <div className="min-h-screen bg-surface dark:bg-surface-dark overflow-x-hidden">
-      {/* ─── Ambient background ─── */}
+      {/* Ambient background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-15%] right-[-5%] w-[500px] h-[500px] bg-accent/[.04] dark:bg-accent/[.07] rounded-full blur-[140px]" />
-        <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] bg-amber-500/[.03] dark:bg-amber-500/[.05] rounded-full blur-[120px]" />
-        <div className="absolute top-[40%] left-[30%] w-[300px] h-[300px] bg-emerald-500/[.02] dark:bg-emerald-500/[.03] rounded-full blur-[100px]" />
+        <div className="absolute top-[-18%] right-[-10%] w-[560px] h-[560px] bg-accent/[.05] dark:bg-accent/[.08] rounded-full blur-[160px]" />
+        <div className="absolute bottom-[-16%] left-[-14%] w-[520px] h-[520px] bg-accent/[.025] dark:bg-accent/[.05] rounded-full blur-[180px]" />
       </div>
 
-      {/* ═══════════════════════════════════════════════════════ */}
-      {/* HERO — above the fold                                  */}
-      {/* ═══════════════════════════════════════════════════════ */}
       <div className="relative min-h-screen flex flex-col">
-        {/* Sticky nav bar */}
+        {/* Top bar */}
         <header className="relative z-10 flex items-center justify-between px-6 sm:px-10 py-5">
-          <div className="font-display text-2xl text-ink dark:text-white tracking-tight">
-            wealth<span className="text-accent">.</span>
-          </div>
           <button
-            onClick={scrollToForm}
-            className="text-sm font-semibold text-ink dark:text-white hover:text-accent dark:hover:text-accent transition-colors"
+            type="button"
+            onClick={() => setPage?.('landing')}
+            className="font-display text-2xl text-ink dark:text-white tracking-tighterish"
           >
-            Sign in
+            Paddock<span className="text-accent">.</span>
           </button>
+
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setPage?.('privacy')}
+              className="hidden sm:inline text-sm font-semibold text-ink-muted dark:text-white/40 hover:text-ink dark:hover:text-white/70 transition-colors"
+              type="button"
+            >
+              Privacy
+            </button>
+
+            <button
+              onClick={scrollToForm}
+              className="text-sm font-semibold text-ink dark:text-white hover:text-accent dark:hover:text-accent transition-colors"
+              type="button"
+            >
+              {recovery ? 'Reset' : 'Jump to form'}
+            </button>
+          </div>
         </header>
 
-        {/* Hero content */}
+        {/* Hero */}
         <div className="relative flex-1 flex items-center justify-center px-5 pb-16 sm:pb-20">
           <div className="w-full max-w-[1080px] grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-            {/* Left — headline */}
+            {/* Left */}
             <div
               className={`space-y-6 transition-all duration-700 ${
                 mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
               }`}
             >
-              <h1 className="font-display text-[2.75rem] sm:text-[3.5rem] lg:text-[4rem] leading-[1.05] text-ink dark:text-white tracking-tight">
-                Your wealth, <span className="text-accent">one clear view</span>
+              <h1 className="font-display text-[2.75rem] sm:text-[3.5rem] lg:text-[4rem] leading-[1.05] text-ink dark:text-white tracking-tighterish">
+                A private <span className="text-accent">net worth tracker</span>.
               </h1>
 
-              <p className="text-lg sm:text-xl text-ink-muted dark:text-white/45 leading-relaxed max-w-[480px]">
-                Track every account, project your growth, and plan your financial future — all in
-                one beautifully simple app.
+              <p className="text-lg sm:text-xl text-ink-muted dark:text-white/45 leading-relaxed max-w-[520px]">
+                Track net worth, understand monthly change, and plan with long-term projections —
+                without ads or noise.
               </p>
 
               <div className="flex flex-wrap items-center gap-4 pt-2">
-                <button
+                <UpgradeButton
                   onClick={scrollToForm}
-                  className="text-base font-semibold px-7 py-3.5 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-all active:scale-[.97] min-h-[52px]"
+                  className="min-h-[52px] px-7"
+                  size="md"
+                  variant="primary"
+                  disabled={loading}
                 >
-                  Get started free
-                </button>
+                  Create free account
+                </UpgradeButton>
+
                 <span className="text-sm text-ink-muted/60 dark:text-white/25">
-                  No credit card required
+                  No card required
                 </span>
               </div>
 
-              {/* Trust markers */}
               <div className="flex items-center gap-5 pt-4 text-xs text-ink-muted/50 dark:text-white/20">
                 <span className="flex items-center gap-1.5">
-                  <Shield size={13} /> Bank-level encryption
+                  <Lock size={13} /> Secure sign-in
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <Globe size={13} /> 15+ currencies
+                  <Globe size={13} /> Multi-currency
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Shield size={13} /> Private by design
                 </span>
               </div>
             </div>
 
-            {/* Right — auth form */}
+            {/* Right — form */}
             <div
               ref={formRef}
               className={`transition-all duration-700 delay-150 ${
                 mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
               }`}
             >
-              <div className="bg-white dark:bg-surface-dark-2 rounded-3xl shadow-card-lg border border-black/[.05] dark:border-white/[.06] p-7 sm:p-9 max-w-[440px] mx-auto lg:mx-0 lg:ml-auto">
-                {/* Tabs (disabled in recovery) */}
+              <div className="bg-white dark:bg-surface-dark-2 rounded-3xl shadow-card-lg border border-black/[.05] dark:border-white/[.07] p-7 sm:p-9 max-w-[440px] mx-auto lg:mx-0 lg:ml-auto">
                 {!recovery && (
-                  <div className="flex border-b border-black/[.06] dark:border-white/[.06] mb-7">
+                  <div className="flex border-b border-black/[.06] dark:border-white/[.07] mb-7">
                     {['login', 'register'].map((m) => (
                       <button
                         key={m}
+                        type="button"
                         onClick={() => {
                           setMode(m)
                           setError('')
@@ -407,7 +395,6 @@ export default function AuthPage({ onLogin }) {
                   </div>
                 )}
 
-                {/* Normal auth */}
                 {!recovery ? (
                   <>
                     <div className="space-y-5">
@@ -423,6 +410,7 @@ export default function AuthPage({ onLogin }) {
                           type="email"
                         />
                       </div>
+
                       <div>
                         <label className={lbl}>Password</label>
                         <input
@@ -436,15 +424,16 @@ export default function AuthPage({ onLogin }) {
                         />
                       </div>
 
-                      <button
+                      <UpgradeButton
                         onClick={submit}
                         disabled={loading}
-                        className="w-full py-3.5 rounded-2xl bg-accent text-white font-semibold text-base transition-all hover:bg-accent-dark active:scale-[.98] disabled:opacity-50 min-h-[52px]"
+                        className="w-full min-h-[52px]"
+                        size="md"
+                        variant="primary"
                       >
-                        {loading ? '...' : mode === 'login' ? 'Sign in' : 'Create account'}
-                      </button>
+                        {loading ? '…' : mode === 'login' ? 'Sign in' : 'Create account'}
+                      </UpgradeButton>
 
-                      {/* Forgot password link (login only) */}
                       {mode === 'login' && (
                         <button
                           type="button"
@@ -459,12 +448,11 @@ export default function AuthPage({ onLogin }) {
 
                     {mode === 'register' && (
                       <p className="text-xs text-ink-muted/50 dark:text-white/20 text-center mt-4 leading-relaxed">
-                        By signing up you agree to our Terms of Service.
+                        By creating an account, you agree to our Terms of Service.
                       </p>
                     )}
                   </>
                 ) : (
-                  /* Recovery UI */
                   <>
                     <div className="space-y-5">
                       <div>
@@ -479,6 +467,7 @@ export default function AuthPage({ onLogin }) {
                           autoComplete="new-password"
                         />
                       </div>
+
                       <div>
                         <label className={lbl}>Confirm password</label>
                         <input
@@ -492,13 +481,15 @@ export default function AuthPage({ onLogin }) {
                         />
                       </div>
 
-                      <button
+                      <UpgradeButton
                         onClick={handleSetNewPassword}
                         disabled={loading}
-                        className="w-full py-3.5 rounded-2xl bg-accent text-white font-semibold text-base transition-all hover:bg-accent-dark active:scale-[.98] disabled:opacity-50 min-h-[52px]"
+                        className="w-full min-h-[52px]"
+                        size="md"
+                        variant="primary"
                       >
-                        {loading ? '...' : 'Set new password'}
-                      </button>
+                        {loading ? '…' : 'Set new password'}
+                      </UpgradeButton>
 
                       <button
                         type="button"
@@ -523,23 +514,21 @@ export default function AuthPage({ onLogin }) {
           </div>
         </div>
 
-        {/* Scroll indicator */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 animate-pulse-soft">
+        {/* Scroll hint */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 opacity-70">
           <ChevronDown size={20} className="text-ink-muted/30 dark:text-white/15" />
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════ */}
-      {/* FEATURES — below the fold                              */}
-      {/* ═══════════════════════════════════════════════════════ */}
-      <section className="relative py-20 sm:py-28 px-5">
+      {/* Features */}
+      <section className="relative py-20 sm:py-28 px-5 border-t border-black/[.04] dark:border-white/[.04]">
         <div className="max-w-[1080px] mx-auto">
           <div className="text-center mb-14 sm:mb-20">
-            <h2 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">
-              Everything you need to <span className="text-accent">build wealth</span>
+            <h2 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tighterish">
+              Replace spreadsheets with clarity
             </h2>
-            <p className="text-base sm:text-lg text-ink-muted dark:text-white/40 mt-3 max-w-[520px] mx-auto">
-              One app that replaces spreadsheets, calculators, and guesswork.
+            <p className="text-base sm:text-lg text-ink-muted dark:text-white/40 mt-3 max-w-[560px] mx-auto">
+              A calm wealth dashboard for net worth tracking, monthly progress, and long-term planning.
             </p>
           </div>
 
@@ -549,12 +538,14 @@ export default function AuthPage({ onLogin }) {
               return (
                 <div
                   key={i}
-                  className="group relative bg-white dark:bg-surface-dark-2 rounded-3xl border border-black/[.05] dark:border-white/[.06] p-7 sm:p-8 shadow-card hover:shadow-card-hover transition-all duration-300"
+                  className="group relative bg-white dark:bg-surface-dark-2 rounded-3xl border border-black/[.05] dark:border-white/[.07] p-7 sm:p-8 shadow-card hover:shadow-card-hover transition-all duration-280 ease-smooth"
                 >
-                  <div className="w-11 h-11 rounded-2xl bg-accent/10 dark:bg-accent/10 flex items-center justify-center mb-5 group-hover:scale-105 transition-transform">
+                  <div className="w-11 h-11 rounded-2xl bg-accent/10 dark:bg-accent/10 flex items-center justify-center mb-5 transition-transform duration-220 ease-smooth group-hover:translate-y-[-1px]">
                     <Icon size={20} className="text-accent" />
                   </div>
-                  <h3 className="text-base font-bold text-ink dark:text-white mb-2">{f.title}</h3>
+                  <h3 className="text-base font-semibold tracking-tightish text-ink dark:text-white mb-2">
+                    {f.title}
+                  </h3>
                   <p className="text-sm text-ink-muted dark:text-white/40 leading-relaxed">
                     {f.desc}
                   </p>
@@ -565,78 +556,62 @@ export default function AuthPage({ onLogin }) {
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════════════ */}
-      {/* WHO IT'S FOR                                           */}
-      {/* ═══════════════════════════════════════════════════════ */}
-      <section className="relative py-16 sm:py-24 px-5 border-t border-black/[.04] dark:border-white/[.04]">
-        <div className="max-w-[720px] mx-auto text-center">
-          <h2 className="font-display text-2xl sm:text-3xl text-ink dark:text-white tracking-tight mb-6">
-            Built for people who take their future seriously
-          </h2>
-          <p className="text-base text-ink-muted dark:text-white/40 leading-relaxed mb-8">
-            Whether you're just starting to invest, managing multiple pensions and ISAs, or tracking
-            crypto alongside your savings — Wealth gives you the clarity to make confident decisions
-            about your money.
-          </p>
-
-          <div className="inline-flex flex-wrap justify-center gap-3 text-sm text-ink-muted/70 dark:text-white/30">
-            {['Young professionals', 'Multiple account holders', 'Global investors', 'Retirement planners'].map(
-              (tag) => (
-                <span
-                  key={tag}
-                  className="px-4 py-2 rounded-full border border-black/[.06] dark:border-white/[.06] bg-white/60 dark:bg-white/[.03]"
-                >
-                  {tag}
-                </span>
-              )
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════════════════════ */}
-      {/* PRO TEASER                                             */}
-      {/* ═══════════════════════════════════════════════════════ */}
+      {/* Pro teaser */}
       <section className="relative py-16 sm:py-24 px-5 border-t border-black/[.04] dark:border-white/[.04]">
         <div className="max-w-[640px] mx-auto">
-          <div className="bg-white dark:bg-surface-dark-2 rounded-3xl border border-amber-500/15 shadow-card p-8 sm:p-10 text-center relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-40 h-40 opacity-[.03] pointer-events-none">
-              <Crown size={160} className="text-amber-500" />
+          <div className="bg-white dark:bg-surface-dark-2 rounded-3xl border border-black/[.06] dark:border-white/[.08] shadow-card p-8 sm:p-10 text-center relative overflow-hidden">
+            <div className="absolute top-[-12px] right-[-10px] opacity-[.03] pointer-events-none">
+              <Crown size={160} className="text-ink dark:text-white" />
             </div>
 
             <div className="relative">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 mb-5">
-                <Sparkles size={14} className="text-amber-500" />
-                <span className="text-sm font-bold text-amber-700 dark:text-amber-300">
-                  Wealth Pro
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/[.03] dark:bg-white/[.06] border border-black/[.06] dark:border-white/[.10] mb-5">
+                <Crown size={14} className="opacity-80 text-ink dark:text-white" />
+                <span className="text-sm font-semibold tracking-tightish text-ink dark:text-white">
+                  Paddock Pro
                 </span>
               </div>
 
-              <h3 className="font-display text-2xl sm:text-3xl text-ink dark:text-white tracking-tight mb-3">
-                Unlock the full picture
+              <h3 className="font-display text-2xl sm:text-3xl text-ink dark:text-white tracking-tighterish mb-3">
+                Deeper modelling. Longer horizons.
               </h3>
-              <p className="text-sm text-ink-muted dark:text-white/40 leading-relaxed mb-6 max-w-[420px] mx-auto">
-                Unlimited accounts, full-timeline projections, AI-powered insights, and strategic
-                planning tools — from £6/month.
+              <p className="text-sm text-ink-muted dark:text-white/40 leading-relaxed mb-6 max-w-[460px] mx-auto">
+                Unlimited accounts, extended projections, and advanced planning tools — when you’re ready.
               </p>
 
-              <UpgradeButton onClick={() => { /* keep your existing handler */ }} size="sm">
-                Start free, upgrade anytime
+              <UpgradeButton
+                onClick={() => {
+                  try { localStorage.setItem('upgrade_reason', 'auth_pro_teaser') } catch {}
+                  setPage?.('upgrade')
+                }}
+                size="md"
+                variant="pro"
+              >
+                Explore Pro
               </UpgradeButton>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════════════ */}
-      {/* FOOTER                                                 */}
-      {/* ═══════════════════════════════════════════════════════ */}
       <footer className="relative py-10 px-5 border-t border-black/[.04] dark:border-white/[.04]">
         <div className="max-w-[1080px] mx-auto flex items-center justify-between">
-          <div className="font-display text-lg text-ink dark:text-white tracking-tight">
-            wealth<span className="text-accent">.</span>
+          <button
+            type="button"
+            onClick={() => setPage?.('landing')}
+            className="font-display text-lg text-ink dark:text-white tracking-tightish"
+          >
+            Paddock<span className="text-accent">.</span>
+          </button>
+
+          <div className="flex items-center gap-5 text-xs text-ink-muted/40 dark:text-white/15">
+            <button type="button" onClick={() => setPage?.('privacy')} className="hover:text-ink dark:hover:text-white/50 transition-colors">
+              Privacy
+            </button>
+            <button type="button" onClick={() => setPage?.('security')} className="hover:text-ink dark:hover:text-white/50 transition-colors">
+              Security
+            </button>
           </div>
-          <div className="text-xs text-ink-muted/40 dark:text-white/15">Built for clarity.</div>
         </div>
       </footer>
     </div>

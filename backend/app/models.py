@@ -10,12 +10,46 @@ Example: base GBP, USD=1.366 means 1 GBP = 1.366 USD.
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from sqlmodel import SQLModel, Field
 
+# ─── Stripe webhook idempotency ─────────────────────────────────────────────
 
+# ─── Stripe webhook idempotency ─────────────────────────────────────────────
+
+class StripeEvent(SQLModel, table=True):
+    __tablename__ = "stripe_events"
+
+    id: str = Field(primary_key=True)  # evt_...
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+# ─── Analytics Events (GDPR-friendly, no cookies) ────────────────────────────
+
+class AnalyticsEvent(SQLModel, table=True):
+    __tablename__ = "analytics_events"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    # Account-linked analytics (no cookies)
+    user_id: int = Field(foreign_key="users.id", index=True)
+
+    # Controlled event name (validated in API layer)
+    name: str = Field(index=True)
+
+    # Small JSON blob for non-sensitive metadata (page, etc.)
+    meta_json: str = Field(default="{}")
+
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def get_meta(self) -> dict[str, Any]:
+        try:
+            return json.loads(self.meta_json or "{}")
+        except Exception:
+            return {}
+            
 # ─── Users ───────────────────────────────────────────────────────────────────
 
 class User(SQLModel, table=True):

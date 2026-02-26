@@ -2,37 +2,18 @@ from __future__ import annotations
 
 import os
 import logging
-from urllib.parse import quote_plus
 
-from sqlmodel import Session, create_engine
+from sqlmodel import Session, SQLModel, create_engine
 
 logger = logging.getLogger("wealth.database")
 
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is required (Postgres only).")
 
-def build_db_url() -> str:
-    # 1️⃣ Prefer explicit DATABASE_URL if provided
-    url = (os.getenv("DATABASE_URL") or "").strip()
-    if url:
-        if url.startswith("postgres://"):
-            url = url.replace("postgres://", "postgresql://", 1)
-        return url
-
-    # 2️⃣ Otherwise build from PG* vars (Railway-safe)
-    host = (os.getenv("PGHOST") or "").strip()
-    port = (os.getenv("PGPORT") or "5432").strip()
-    db = (os.getenv("PGDATABASE") or "").strip()
-    user = (os.getenv("PGUSER") or "").strip()
-    pw = (os.getenv("PGPASSWORD") or "").strip()
-
-    if not all([host, db, user, pw]):
-        raise RuntimeError(
-            "DATABASE_URL or PGHOST/PGPORT/PGDATABASE/PGUSER/PGPASSWORD must be set."
-        )
-
-    return f"postgresql://{quote_plus(user)}:{quote_plus(pw)}@{host}:{port}/{db}"
-
-
-DATABASE_URL = build_db_url()
+# Railway sometimes provides postgres://; SQLAlchemy expects postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 engine = create_engine(
     DATABASE_URL,
@@ -40,7 +21,20 @@ engine = create_engine(
     pool_pre_ping=True,
 )
 
+def ensure_schema() -> None:
+    """
+    Lightweight schema ensure (no Alembic).
+    IMPORTANT: must import models so all tables are registered in SQLModel.metadata.
+    """
+    try:
+        from . import models  # noqa: F401
+        SQLModel.metadata.create_all(engine)
+        logger.info("Schema ensured (create_all)")
+    except Exception as e:
+        logger.exception("ensure_schema failed: %s", str(e))
+        raise
 
 def get_session():
+    """FastAPI dependency providing a DB session with proper cleanup."""
     with Session(engine) as session:
         yield session

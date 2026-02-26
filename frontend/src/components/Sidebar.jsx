@@ -1,191 +1,149 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { useApp } from '../App'
-import UpgradeButton from '../components/UpgradeButton'
+import UpgradeButton from './UpgradeButton'
 import {
   Home,
-  TrendingUp,
-  Compass,
+  BarChart3,
   Wallet,
-  Settings,
-  Crown,
+  Settings as SettingsIcon,
   LogOut,
-  Sparkles,
+  Crown,
+  LineChart,
 } from 'lucide-react'
 
-const NavItem = ({ icon: Icon, label, active, onClick, badge }) => {
+function NavItem({ active, icon: Icon, label, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-2xl text-sm font-medium transition-colors ${
+      type="button"
+      aria-current={active ? 'page' : undefined}
+      className={[
+        'group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl',
+        'transition-all duration-180 ease-smooth',
         active
-          ? 'bg-black/[.05] dark:bg-white/[.08] text-ink dark:text-white'
-          : 'text-ink-muted/80 dark:text-white/40 hover:text-ink dark:hover:text-white hover:bg-black/[.04] dark:hover:bg-white/[.06]'
-      }`}
+          ? 'bg-black/[.05] dark:bg-white/[.08] text-ink dark:text-white shadow-[0_1px_0_rgba(255,255,255,.06)_inset]'
+          : 'text-ink-muted dark:text-white/45 hover:bg-black/[.035] dark:hover:bg-white/[.05] hover:text-ink dark:hover:text-white',
+      ].join(' ')}
     >
-      <span className="flex items-center gap-3">
-        <span
-          className={`w-9 h-9 rounded-2xl flex items-center justify-center ${
-            active
-              ? 'bg-white/70 dark:bg-white/10'
-              : 'bg-black/[.03] dark:bg-white/[.05]'
-          }`}
-        >
-          <Icon size={18} />
-        </span>
+      <span
+        className={[
+          'absolute left-1 top-1.5 bottom-1.5 w-[2px] rounded-full',
+          'transition-all duration-180 ease-smooth',
+          active ? 'bg-accent/90' : 'bg-transparent group-hover:bg-accent/35',
+        ].join(' ')}
+        aria-hidden="true"
+      />
+      <Icon
+        size={18}
+        className={[
+          'transition-opacity duration-180 ease-smooth',
+          active ? 'opacity-100' : 'opacity-85 group-hover:opacity-95',
+        ].join(' ')}
+      />
+      <span className="flex-1 text-left text-[13px] font-semibold tracking-tightish">
         {label}
       </span>
-
-      {badge && (
-        <span className="text-[10px] font-medium tracking-wider uppercase px-2 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
-          {badge}
-        </span>
-      )}
     </button>
   )
 }
 
-const SectionLabel = ({ children }) => (
-  <div className="px-3 pt-6 pb-2 text-[11px] font-semibold tracking-[.14em] uppercase text-ink-muted/50 dark:text-white/25">
-    {children}
-  </div>
-)
-
 export default function Sidebar() {
-  const { page, setPage, isPro, handleLogout } = useApp()
+  const { page, setPage, isPro, logout } = useApp()
+
+  const items = useMemo(
+    () => [
+      { id: 'home', label: 'Dashboard', icon: Home },
+      { id: 'outlook', label: 'Outlook', icon: LineChart },
+      { id: 'insights', label: 'Insights', icon: BarChart3 },
+      { id: 'accounts', label: 'Accounts', icon: Wallet },
+      { id: 'settings', label: 'Settings', icon: SettingsIcon },
+    ],
+    []
+  )
 
   return (
-    <aside className="hidden lg:flex w-[260px] shrink-0 flex-col border-r border-black/[.06] dark:border-white/[.06] bg-white/70 dark:bg-[#141821]/60 glass">
-      {/* Brand */}
-      <div className="px-5 pt-6 pb-4">
-        <div className="flex items-center justify-between">
-          <div className="font-display text-2xl text-ink dark:text-white tracking-tight">
-            wealth<span className="text-accent">.</span>
+    <aside className="hidden lg:flex lg:flex-col lg:w-[288px] lg:shrink-0 border-r border-black/[.06] dark:border-white/[.07] bg-white/55 dark:bg-surface-dark/55 backdrop-blur-xl">
+      <div className="px-5 pt-5 pb-4">
+        <button
+          onClick={() => setPage('home')}
+          className="w-full flex items-start justify-between"
+          type="button"
+        >
+          <div className="flex flex-col">
+            <span className="font-display text-2xl text-ink dark:text-white tracking-tighterish leading-none">
+              Paddock<span className="text-accent">.</span>
+            </span>
+            <span className="mt-1 text-[11px] text-ink-muted dark:text-white/35 tracking-tightish">
+              Private net worth tracking & wealth planning
+            </span>
           </div>
 
           {isPro && (
-  <span className="text-[10px] font-medium tracking-wider uppercase px-2 py-1 rounded-full border border-amber-500/20 dark:border-amber-400/20 bg-amber-500/12 dark:bg-amber-400/10 text-amber-700 dark:text-amber-300">
-    Pro
-  </span>
-)}
-        </div>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-tightish border border-black/[.08] dark:border-white/[.10] bg-black/[.04] dark:bg-white/[.06] text-ink dark:text-white">
+              <Crown size={12} className="opacity-80" />
+              Pro
+            </span>
+          )}
+        </button>
 
-        <div className="mt-2 text-xs text-ink-muted/60 dark:text-white/25">
-          Premium Wealth Tracker
-        </div>
+        <div className="mt-4 h-px bg-black/[.06] dark:bg-white/[.07]" />
       </div>
 
-      {/* Nav */}
-      <nav className="px-3 flex-1 overflow-y-auto">
-        <SectionLabel>App</SectionLabel>
-
+      <div className="px-4 pb-4 flex-1 overflow-y-auto">
         <div className="space-y-1">
-          <NavItem
-            icon={Home}
-            label="Home"
-            active={page === 'home'}
-            onClick={() => setPage('home')}
-          />
-          <NavItem
-            icon={Compass}
-            label="Outlook"
-            active={page === 'outlook'}
-            onClick={() => setPage('outlook')}
-          />
-          <NavItem
-            icon={TrendingUp}
-            label="Insights"
-            active={page === 'insights'}
-            onClick={() => setPage('insights')}
-          />
-          <NavItem
-            icon={Wallet}
-            label="Accounts"
-            active={page === 'accounts'}
-            onClick={() => setPage('accounts')}
-          />
+          {items.map((it) => (
+            <NavItem
+              key={it.id}
+              active={page === it.id}
+              icon={it.icon}
+              label={it.label}
+              onClick={() => setPage(it.id)}
+            />
+          ))}
         </div>
 
-        {/* Pro section */}
-        <SectionLabel>Pro</SectionLabel>
+        {!isPro && (
+          <div className="mt-5 rounded-3xl border border-black/[.06] dark:border-white/[.08] bg-surface-2 dark:bg-white/[.05] p-4 relative overflow-hidden">
+            <div className="absolute inset-0 pointer-events-none opacity-[.08] bg-gradient-to-br from-accent/40 via-transparent to-amber-500/30" />
 
-        <div className="space-y-2">
-          {isPro ? (
-            /* Active Pro badge */
-            <div className="rounded-3xl border border-amber-500/15 bg-gradient-to-br from-amber-50/80 to-amber-100/40 dark:from-amber-500/[.06] dark:to-amber-600/[.03] p-4">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-sm">
-                  <Sparkles size={15} className="text-white" />
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-ink dark:text-white tracking-tight">
-                    Wealth Pro
-                  </div>
-                  <div className="text-[11px] font-medium text-amber-700/70 dark:text-amber-300/60">
-                    Premium Member
-                  </div>
-                </div>
+            <div className="relative">
+              <div className="flex items-center gap-2 text-sm font-semibold text-ink dark:text-white">
+                <Crown size={16} className="opacity-80" />
+                <span>Paddock Pro</span>
               </div>
 
-              <button
-                onClick={() => setPage('settings')}
-                className="mt-3 w-full px-4 py-2 rounded-2xl text-xs font-medium text-ink-muted/70 dark:text-white/30 hover:text-ink dark:hover:text-white/60 border border-black/[.06] dark:border-white/[.06] hover:bg-white/60 dark:hover:bg-white/5 transition-colors"
+              <div className="mt-1.5 text-xs text-ink-muted dark:text-white/40 leading-relaxed">
+                Unlimited accounts, longer projections, and advanced planning tools.
+              </div>
+
+              <UpgradeButton
+                onClick={() => {
+                  try {
+                    localStorage.setItem('upgrade_reason', 'sidebar_cta')
+                  } catch {}
+                  setPage('upgrade')
+                }}
+                className="w-full mt-3"
+                size="md"
+                variant="pro"
               >
-                Manage subscription
-              </button>
+                Upgrade
+              </UpgradeButton>
             </div>
-          ) : (
-            /* Upgrade card */
-            <div className="rounded-3xl border border-black/[.06] dark:border-white/[.06] bg-white dark:bg-white/5 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Crown size={16} className="text-amber-500" />
-                    <div className="text-sm font-semibold text-ink dark:text-white">
-                      Wealth Pro
-                    </div>
-                  </div>
+          </div>
+        )}
+      </div>
 
-                  <div className="mt-1 text-xs text-ink-muted/60 dark:text-white/25 leading-relaxed">
-                    Advanced modelling and strategic planning tools.
-                  </div>
-                </div>
-
-                <span className="text-[10px] font-medium tracking-wider uppercase px-2 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
-                  New
-                </span>
-              </div>
-
-              <UpgradeButton size="sm" icon={Crown} onClick={() => setPage('upgrade')}>
-  Upgrade to Pro
-</UpgradeButton>
-
-              <div className="mt-2 text-[11px] text-ink-muted/60 dark:text-white/25">
-                From £6/month · Cancel anytime
-              </div>
-            </div>
-          )}
-
-          <NavItem
-            icon={Settings}
-            label="Settings"
-            active={page === 'settings'}
-            onClick={() => setPage('settings')}
-          />
-
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm font-medium text-loss/80 hover:text-loss hover:bg-loss-light dark:hover:bg-loss/10 transition-colors"
-          >
-            <span className="w-9 h-9 rounded-2xl flex items-center justify-center bg-loss-light dark:bg-loss/10">
-              <LogOut size={18} />
-            </span>
-            Logout
-          </button>
-        </div>
-      </nav>
-
-      <div className="px-5 py-4 text-[10px] text-ink-muted/35 dark:text-white/15">
-        Built for clarity.
+      <div className="px-4 pb-5">
+        <div className="h-px bg-black/[.06] dark:bg-white/[.07] mb-3" />
+        <button
+          onClick={logout}
+          type="button"
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-[13px] font-semibold tracking-tightish border border-black/[.08] dark:border-white/[.10] text-ink dark:text-white hover:bg-black/[.035] dark:hover:bg-white/[.05] transition-all duration-180 ease-smooth"
+        >
+          <LogOut size={16} className="opacity-85" />
+          Log out
+        </button>
       </div>
     </aside>
   )

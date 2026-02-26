@@ -1,6 +1,8 @@
+// frontend/src/pages/GoalSetup.jsx
 import React, { useState } from 'react'
 import { api } from '../api'
 import { useApp } from '../App'
+import { track } from '../track'
 import { Target } from 'lucide-react'
 
 function toNumber(input, fallback = null) {
@@ -11,7 +13,8 @@ function toNumber(input, fallback = null) {
 }
 
 export default function GoalSetup({ onComplete }) {
-  const { baseCurrency, showToast } = useApp()
+  const { baseCurrency, showToast, setPage } = useApp()
+
   const [form, setForm] = useState({
     name: 'Retirement',
     current_age: '',
@@ -52,16 +55,23 @@ export default function GoalSetup({ onComplete }) {
         is_primary: true,
       }
 
-      // IMPORTANT: stringify body to avoid sending "[object Object]" to fetch
+      // Create goal (no premature navigation)
       const goal = await api('/goals', {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: payload,
       })
 
+      // Track only after success (fire-and-forget)
+      track('goal_created', { source: 'goal_setup' })
+
       showToast('Goal created')
+
+      // Next step: add first account
+      setPage('accounts')
+
+      // Let parent lock state immediately for routing
       onComplete?.(goal)
     } catch (e) {
-      // Try to surface more useful backend detail if your api() attaches it
       const msg =
         e?.detail ||
         e?.message ||
@@ -89,8 +99,8 @@ export default function GoalSetup({ onComplete }) {
           Set your primary goal
         </h1>
         <p className="text-sm text-ink-muted dark:text-white/40 mt-3 leading-relaxed max-w-sm mx-auto">
-          Your wealth plan starts with a clear destination. Everything else — tracking, projections, insights — flows from
-          this.
+          Your wealth plan starts with a clear destination. Everything else — tracking, projections,
+          insights — flows from this.
         </p>
       </div>
 

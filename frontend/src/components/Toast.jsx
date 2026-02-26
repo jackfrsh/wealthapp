@@ -2,24 +2,25 @@ import React, { useEffect } from 'react'
 import { X, CheckCircle, AlertTriangle, Info } from 'lucide-react'
 
 export default function Toast({ toast, onClose }) {
-  // Hard guard: never render empty toasts
-  if (!toast?.message) return null
-
+  // Always run hooks unconditionally (Rules of Hooks).
   useEffect(() => {
+    if (!toast?.message) return
     const t = window.setTimeout(() => onClose?.(), 2600)
     return () => window.clearTimeout(t)
-  }, [toast?.id, onClose])
+  }, [toast?.id, toast?.message, onClose])
 
-  const type = toast?.type || 'success'
+  // Render nothing if there's no message (after hooks!)
+  if (!toast?.message) return null
+
+  const kind = toast?.kind || 'success'
 
   const Icon =
-    type === 'error' ? AlertTriangle : type === 'info' ? Info : CheckCircle
+    kind === 'error' ? AlertTriangle : kind === 'info' ? Info : CheckCircle
 
-  // Keep your existing accent style but allow error/info to feel correct
   const cls =
-    type === 'error'
+    kind === 'error'
       ? 'bg-loss text-white'
-      : type === 'info'
+      : kind === 'info'
       ? 'bg-black/80 text-white dark:bg-white/10'
       : 'bg-accent text-white'
 
@@ -31,7 +32,8 @@ export default function Toast({ toast, onClose }) {
         aria-live="polite"
       >
         <Icon size={18} />
-        <span className="min-w-0">{toast.message}</span>
+
+        <span className="min-w-0 truncate">{toast.message}</span>
 
         <button
           onClick={onClose}
