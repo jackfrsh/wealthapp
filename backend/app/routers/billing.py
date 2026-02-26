@@ -23,9 +23,13 @@ def _require_env(name: str) -> str:
         raise HTTPException(status_code=500, detail=f"Missing server env var: {name}")
     return val
 
-
 def _frontend_base() -> str:
-    return _require_env("FRONTEND_URL").rstrip("/")
+    # Railway / prod should set this explicitly
+    v = (os.getenv("FRONTEND_URL") or "").strip().rstrip("/")
+    if v:
+        return v
+    # local fallback
+    return "http://localhost:5173"
 
 
 def _stripe_init() -> None:
