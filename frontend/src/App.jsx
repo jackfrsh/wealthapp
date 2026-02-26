@@ -28,7 +28,7 @@ import Admin from './pages/Admin'
 import Toast from './components/Toast'
 import Sidebar from './components/Sidebar'
 import MobileNav from './components/MobileNav'
-import BottomNav from './components/Bottomnav'
+import BottomNav from './components/BottomNav'
 
 export const AppContext = createContext()
 export const useApp = () => useContext(AppContext)
