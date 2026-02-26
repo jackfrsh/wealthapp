@@ -453,13 +453,31 @@ export default function Outlook() {
     adjust: 'Adjust to stay on track',
   }
   const statusColors = {
-    ahead: 'text-gain dark:text-emerald-400 bg-gain/10',
-    on_track: 'text-accent dark:text-blue-400 bg-accent/10',
-    adjust: 'text-amber-600 dark:text-amber-400 bg-amber-500/10',
+    ahead:
+      'text-emerald-600 dark:text-emerald-300/[0.8] bg-emerald-300/[.08] border border-emerald-300/[.12]',
+    on_track:
+      'text-ink dark:text-white bg-black/[.04] dark:bg-white/[.06] border border-black/[.06] dark:border-white/[.08]',
+    adjust:
+      'text-amber-600 dark:text-amber-300/[0.6] bg-amber-300/[.06] border border-amber-300/[.12]',
   }
 
   const displayProjEnd = deflate(projEnd, yearsRemaining)
   const displayTarget = deflate(targetAmt, yearsRemaining)
+
+  const gap = displayTarget - displayProjEnd
+const absGap = Math.abs(gap)
+
+let insightLine = null
+
+if (targetAmt > 0) {
+  if (status === 'ahead') {
+    insightLine = `You're projected to exceed your target by ${fmtCurrencyCompact(absGap, ccy)}.`
+  } else if (status === 'on_track') {
+    insightLine = `You're within range of your target.`
+  } else if (status === 'adjust') {
+    insightLine = `Projected gap: ${fmtCurrencyCompact(absGap, ccy)}.`
+  }
+}
 
   const projPoints = forecast?.projected_points || []
   const reqPoints = forecast?.required_points || []
@@ -551,6 +569,10 @@ export default function Outlook() {
               {statusLabels[status]}
             </span>
 
+            <div className="text-xs text-ink-muted dark:text-white/35">
+  Based on your current net worth and contribution rate.
+</div>
+
             {settingsReady &&
               (isPro ? (
                 <button
@@ -581,36 +603,81 @@ export default function Outlook() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 pt-4">
-            <div>
-              <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">
-                Projected Outcome{inflationAdj ? ' (real)' : ''}
-              </div>
-              <div className="font-display text-2xl text-ink dark:text-white tabular-nums">
-                {fmtCurrencyCompact(displayProjEnd, ccy)}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">
-                Target{inflationAdj ? ' (real)' : ''}
-              </div>
-              <div className="font-display text-2xl text-ink dark:text-white tabular-nums">
-                {fmtCurrencyCompact(displayTarget, ccy)}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">Current Net Worth</div>
-              <div className="font-display text-2xl text-ink dark:text-white tabular-nums">
-                {fmtCurrencyCompact(currentNW, ccy)}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">Years Remaining</div>
-              <div className="font-display text-xl text-ink dark:text-white tabular-nums">{yearsRemaining}</div>
-            </div>
+          {/* Executive Stats */}
+<div className="pt-6 space-y-4">
+
+{/* Main values row */}
+<div className="grid grid-cols-2 sm:grid-cols-4 gap-6 items-end">
+
+  <div>
+    <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">
+      Projected at age {goal?.target_age}
+      {inflationAdj ? ' (real)' : ''}
+    </div>
+    <div className="font-display text-2xl text-ink dark:text-white tabular-nums">
+      {fmtCurrencyCompact(displayProjEnd, ccy)}
+    </div>
+  </div>
+
+  <div>
+    <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">
+      Your target{inflationAdj ? ' (real)' : ''}
+    </div>
+    <div className="font-display text-2xl text-ink dark:text-white tabular-nums">
+      {fmtCurrencyCompact(displayTarget, ccy)}
+    </div>
+  </div>
+
+  <div>
+    <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">
+      Current Net Worth
+    </div>
+    <div className="font-display text-2xl text-ink dark:text-white tabular-nums">
+      {fmtCurrencyCompact(currentNW, ccy)}
+    </div>
+  </div>
+
+  <div>
+    <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">
+      Years Remaining
+    </div>
+    <div className="font-display text-2xl text-ink dark:text-white tabular-nums">
+      {yearsRemaining}
+    </div>
+  </div>
+
+</div>
+
+{/* Gap line underneath */}
+{targetAmt > 0 && (
+  <div className="text-[13px] text-ink-muted dark:text-white/40">
+    {status === 'adjust' && (
+      <>
+        Projected gap:{' '}
+        <span className="font-medium text-ink dark:text-white">
+          {fmtCurrencyCompact(absGap, ccy)}
+        </span>
+      </>
+    )}
+
+    {status === 'ahead' && (
+      <>
+        Ahead by{' '}
+        <span className="font-medium text-ink dark:text-white">
+          {fmtCurrencyCompact(absGap, ccy)}
+        </span>
+      </>
+    )}
+
+    {status === 'on_track' && (
+      <>Within range of your target</>
+    )}
+  </div>
+)}
+
+</div>
           </div>
         </div>
-      </div>
 
       {/* Trajectory */}
       <Card className="p-0 overflow-hidden sm:rounded-3xl rounded-2xl">
@@ -707,48 +774,79 @@ export default function Outlook() {
               <div className="text-xs font-semibold text-ink-muted dark:text-white/50 mb-3">Assumptions</div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                <div>
-                  <label className={lbl}>Monthly contribution ({ccy})</label>
-                  <input
-                    value={localContrib}
-                    onChange={(e) => {
-                      setLocalContrib(e.target.value)
-                      setDirty(true)
-                    }}
-                    className={inp}
-                    inputMode="decimal"
-                  />
-                </div>
 
-                <div>
-                  <label className={lbl}>Expected annual return (%)</label>
-                  <input
-                    value={localReturn}
-                    onChange={(e) => {
-                      setLocalReturn(e.target.value)
-                      setDirty(true)
-                    }}
-                    className={inp}
-                    inputMode="decimal"
-                  />
-                </div>
+  {/* Monthly contribution */}
+  <div>
+    <label className={lbl}>Monthly contribution ({ccy})</label>
+    <input
+      value={localContrib}
+      onChange={(e) => {
+        setLocalContrib(e.target.value)
+        setDirty(true)
+      }}
+      className={inp}
+      inputMode="decimal"
+    />
+  </div>
 
-                {dirty && (
-                  <div className="sm:col-span-2">
-                    <button
-                      onClick={applyAssumptions}
-                      className="text-sm font-semibold px-5 py-3 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-all min-h-[44px] w-full sm:w-auto"
-                      type="button"
-                    >
-                      Update projection
-                    </button>
-                  </div>
-                )}
-              </div>
+  {/* Expected return */}
+  <div>
+    <label className={lbl}>Expected annual return (%)</label>
 
-              <p className="mt-3 text-xs text-ink-muted/40 dark:text-white/20 leading-relaxed">
-                Returns are compounded monthly. Adjust anytime to see how changes affect your plan.
-              </p>
+    <input
+      value={localReturn}
+      onChange={(e) => {
+        setLocalReturn(e.target.value)
+        setDirty(true)
+      }}
+      className={inp}
+      inputMode="decimal"
+    />
+
+    <div className="flex gap-2 mt-3">
+      {[
+        { label: 'Conservative', value: 3 },
+        { label: 'Balanced', value: 5 },
+        { label: 'Growth', value: 7 },
+      ].map((s) => (
+        <button
+          key={s.value}
+          type="button"
+          onClick={() => {
+            setLocalReturn(String(s.value))
+            setDirty(true)
+          }}
+          className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition
+            ${
+              Number(localReturn) === s.value
+                ? 'bg-accent text-white border-accent'
+                : 'border-black/[.08] dark:border-white/[.08] text-ink-muted dark:text-white/40 hover:text-ink dark:hover:text-white'
+            }`}
+        >
+          {s.label}
+        </button>
+      ))}
+    </div>
+  </div>
+
+  {dirty && (
+    <div className="sm:col-span-2">
+      <button
+        onClick={applyAssumptions}
+        className="text-sm font-semibold px-5 py-3 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-all min-h-[44px] w-full sm:w-auto"
+        type="button"
+      >
+        Update projection
+      </button>
+    </div>
+  )}
+
+</div>
+
+              <p className="mt-3 text-xs text-ink-muted/50 dark:text-white/25 leading-relaxed">
+  Assumes £{Number(localContrib || 0).toLocaleString()}/month at{' '}
+  {Number(localReturn || 0)}% annual growth. Returns are compounded monthly.
+</p>
             </div>
           </div>
         </details>
