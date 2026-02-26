@@ -1,5 +1,5 @@
 // frontend/src/pages/Insights.jsx
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { api } from '../api'
 import { useApp } from '../App'
 import Card from '../components/Card'
@@ -19,10 +19,11 @@ const CATEGORY_LABELS = {
   opportunity: 'Opportunity',
 }
 
+// Token-only tones (no emerald/blue/amber hardcoding)
 const TONE_STYLES = {
-  positive: 'border-l-gain/40 dark:border-l-emerald-500/30',
-  neutral: 'border-l-accent/30 dark:border-l-blue-400/20',
-  warning: 'border-l-amber-500/40 dark:border-l-amber-400/30',
+  positive: 'border-l-gain/35 dark:border-l-gain/30',
+  neutral: 'border-l-accent/25 dark:border-l-accent/22',
+  warning: 'border-l-loss/28 dark:border-l-loss/24',
 }
 
 /* ──────────────────────────────────────────── */
@@ -42,21 +43,25 @@ function getNextMilestone(total) {
   return next || MILESTONE_LADDER[MILESTONE_LADDER.length - 1]
 }
 
+function fmtGBP(n) {
+  const v = Number(n)
+  if (!Number.isFinite(v)) return '—'
+  return `£${Math.round(v).toLocaleString()}`
+}
+
 export default function Insights() {
   const { setPage, isPro, primaryGoal } = useApp()
 
-  const [data, setData] = useState(null) // insights payload + settings
+  const [data, setData] = useState(null)
   const [accounts, setAccounts] = useState([])
   const [dashboard, setDashboard] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  // Simulation state pushed up from WhatIfCard
   const [simulation, setSimulation] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      // ✅ Add /dashboard so Insights knows: current_total + goal (milestone)
       const [insightsRes, accountsRes, settingsRes, dashboardRes] = await Promise.all([
         api('/insights'),
         api('/accounts'),
@@ -69,7 +74,6 @@ export default function Insights() {
       setDashboard(dashboardRes || null)
     } catch (e) {
       console.error(e)
-      // keep old UI behaviour: just stop loading; card will show empty state
     } finally {
       setLoading(false)
     }
@@ -100,12 +104,11 @@ export default function Insights() {
     null
 
   /* ──────────────────────────────────────────── */
-  /* Milestone wiring (stable + premium)           */
+  /* Milestone wiring                              */
   /* ──────────────────────────────────────────── */
 
   const total = Number(dashboard?.current_total || 0)
 
-  // Prefer dashboard.goal (it’s the same setting, but always in one payload)
   const savedMilestoneTarget =
     Number(dashboard?.goal || 0) > 0
       ? Number(dashboard.goal)
@@ -113,17 +116,13 @@ export default function Insights() {
 
   const hasSavedMilestone = savedMilestoneTarget > 0
   const milestoneAchieved = hasSavedMilestone && total > 0 && total >= savedMilestoneTarget
-
   const suggestedNext = getNextMilestone(total)
 
-  // Active target used for modelling:
-  // - if saved milestone exists and is not achieved -> use it
-  // - otherwise use suggested next (so modelling always works)
   const activeMilestoneTarget =
     hasSavedMilestone && !milestoneAchieved ? savedMilestoneTarget : suggestedNext
 
-  // This is what feeds WhatIf
-  const milestoneTarget = Number(activeMilestoneTarget || 0) > 0 ? Number(activeMilestoneTarget) : null
+  const milestoneTarget =
+    Number(activeMilestoneTarget || 0) > 0 ? Number(activeMilestoneTarget) : null
 
   if (loading) {
     return (
@@ -147,21 +146,19 @@ export default function Insights() {
         </p>
       </div>
 
-      {/* Optional: subtle context line (premium, not gamified) */}
       <div className="text-xs text-ink-muted/60 dark:text-white/30">
-        Modelling against your next milestone: <span className="text-ink dark:text-white font-semibold tabular-nums">
-          {milestoneTarget ? `£${Math.round(milestoneTarget).toLocaleString()}` : '—'}
+        Modelling against your next milestone:{' '}
+        <span className="text-ink dark:text-white font-semibold tabular-nums">
+          {milestoneTarget ? fmtGBP(milestoneTarget) : '—'}
         </span>
       </div>
 
-      {/* What-if accelerator */}
       <WhatIfCard
         goalTarget={milestoneTarget}
         accounts={accounts}
         onSimulationChange={setSimulation}
       />
 
-      {/* Pro projection: dual line baseline vs simulated (locked preview if free) */}
       <ProProjectionCard
         accounts={accounts}
         goalTarget={retirementTarget}
@@ -170,11 +167,10 @@ export default function Insights() {
         simulation={simulation}
       />
 
-      {/* Insights list */}
       {visibleInsights.length === 0 ? (
         <Card className="p-10 text-center">
-          <div className="text-5xl mb-5 opacity-25">💡</div>
-          <p className="text-ink-muted dark:text-white/40 mb-2">No insights yet</p>
+          <div className="text-5xl mb-5 opacity-20">💡</div>
+          <p className="text-ink-muted dark:text-white/45 mb-2">No insights yet</p>
           <p className="text-sm text-ink-muted/50 dark:text-white/25">
             Add accounts and record your net worth to start seeing insights.
           </p>
@@ -187,18 +183,21 @@ export default function Insights() {
 
           return (
             <div key={cat} className="space-y-3">
-              <div className="flex items-center gap-2 text-xs font-semibold tracking-[.08em] uppercase text-ink-muted dark:text-white/35">
-                <Icon size={14} />
+              <div className="flex items-center gap-2 text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35">
+                <Icon size={14} className="opacity-85" />
                 {CATEGORY_LABELS[cat] || cat}
               </div>
 
               {items.map((ins, i) => (
                 <Card
                   key={`${cat}-${i}`}
-                  className={`p-6 border-l-4 ${TONE_STYLES[ins.tone] || TONE_STYLES.neutral}`}
+                  className={[
+                    'p-6 border-l-[3px]',
+                    TONE_STYLES[ins?.tone] || TONE_STYLES.neutral,
+                  ].join(' ')}
                 >
                   <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <h3 className="text-sm font-semibold text-ink dark:text-white mb-1.5">
                         {ins.title}
                       </h3>
@@ -213,7 +212,7 @@ export default function Insights() {
                         className="flex items-center gap-1 text-xs font-semibold text-accent hover:text-accent-dark transition-colors whitespace-nowrap mt-1"
                         type="button"
                       >
-                        View in Outlook <ArrowRight size={13} />
+                        View in Outlook <ArrowRight size={13} className="opacity-85" />
                       </button>
                     )}
 
@@ -223,14 +222,12 @@ export default function Insights() {
                           try {
                             await api('/snapshots')
                             load()
-                          } catch {
-                            // ignore
-                          }
+                          } catch {}
                         }}
                         className="flex items-center gap-1 text-xs font-semibold text-accent hover:text-accent-dark transition-colors whitespace-nowrap mt-1"
                         type="button"
                       >
-                        Record now <ArrowRight size={13} />
+                        Record now <ArrowRight size={13} className="opacity-85" />
                       </button>
                     )}
                   </div>
@@ -241,26 +238,22 @@ export default function Insights() {
         })
       )}
 
-      {/* Subtle lock row */}
       {!isPro && lockedCount > 0 && (
         <div className="flex items-center justify-between px-1">
           <div className="flex items-center gap-2 text-xs text-ink-muted/60 dark:text-white/30">
-            <Lock
-              size={14}
-              className="text-amber-600/90 dark:text-amber-300 drop-shadow-[0_0_6px_rgba(245,158,11,0.25)]"
-            />
+            <Lock size={14} className="opacity-80 text-ink-muted dark:text-white/35" />
             <span className="tabular-nums">
-              Showing {visibleInsights.length} of {insights.length} insights
+              Showing {visibleInsights.length} of {insights.length}
             </span>
-            <span className="text-ink-muted/40 dark:text-white/20">· {lockedCount} locked for Pro</span>
+            <span className="text-ink-muted/40 dark:text-white/20">· {lockedCount} more in Pro</span>
           </div>
 
           <button
             onClick={() => setPage('upgrade')}
-            className="text-xs font-semibold text-amber-700 dark:text-amber-300 hover:opacity-80 transition-opacity"
+            className="text-xs font-semibold text-accent hover:text-accent-dark transition-colors"
             type="button"
           >
-            Upgrade
+            Explore Pro
           </button>
         </div>
       )}

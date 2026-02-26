@@ -1,4 +1,4 @@
-// App.jsx
+// frontend/src/App.jsx
 import React, {
   useState,
   useEffect,
@@ -8,18 +8,14 @@ import React, {
   useContext,
 } from 'react'
 
-import {
-  api,
-  setAccessTokenProvider,
-  SESSION_EXPIRED_EVENT,
-} from './api'
+import { supabase } from './supabase'
+import { api, setAccessTokenProvider, SESSION_EXPIRED_EVENT } from './api'
 
-import { supabase } from './supabaseClient'
-
-import AuthPage from './pages/Auth'
 import Landing from './pages/Landing'
+import AuthPage from './pages/Auth'
 import Privacy from './pages/Privacy'
 import Security from './pages/Security'
+
 import Home from './pages/Home'
 import Outlook from './pages/Outlook'
 import Insights from './pages/Insights'
@@ -27,414 +23,518 @@ import Accounts from './pages/Accounts'
 import Settings from './pages/Settings'
 import GoalSetup from './pages/GoalSetup'
 import Upgrade from './pages/Upgrade'
-import Snapshots from './pages/Snapshots'
+import Admin from './pages/Admin'
 
 import Toast from './components/Toast'
 import Sidebar from './components/Sidebar'
 import MobileNav from './components/MobileNav'
+import BottomNav from './components/BottomNav'
 
-// If you have this util already, keep using yours. Otherwise this is safe.
+export const AppContext = createContext()
+export const useApp = () => useContext(AppContext)
+
+/* ────────────────────────────────────────────
+   Routing helpers
+──────────────────────────────────────────── */
+const PAGE_TO_PATH = {
+  landing: '/',
+  auth: '/auth',
+  privacy: '/privacy',
+  security: '/security',
+  upgrade: '/upgrade',
+  settings: '/settings',
+  accounts: '/accounts',
+  outlook: '/outlook',
+  insights: '/insights',
+  goal_setup: '/goal_setup',
+  admin: '/admin',
+  home: '/home',
+}
+
+function pageFromPath(pathname) {
+  const p = (pathname || '').toLowerCase()
+  if (p === '/' || p === '') return 'landing'
+  if (p.startsWith('/auth')) return 'auth'
+  if (p.startsWith('/privacy')) return 'privacy'
+  if (p.startsWith('/security')) return 'security'
+  if (p.startsWith('/upgrade')) return 'upgrade'
+  if (p.startsWith('/settings')) return 'settings'
+  if (p.startsWith('/accounts')) return 'accounts'
+  if (p.startsWith('/outlook')) return 'outlook'
+  if (p.startsWith('/insights')) return 'insights'
+  if (p.startsWith('/goal_setup')) return 'goal_setup'
+  if (p.startsWith('/admin')) return 'admin'
+  if (p.startsWith('/home')) return 'home'
+  return 'landing'
+}
+
 function resolveTheme(pref) {
   if (pref === 'dark') return true
   if (pref === 'light') return false
   return window.matchMedia('(prefers-color-scheme: dark)').matches
 }
-
-// If you already have this, keep yours. This is a safe no-op fallback.
-function clearCelebrationStorage() {
-  try {
-    // Legacy keys (older builds)
-    localStorage.removeItem('milestone_celebration_seen')
-    localStorage.removeItem('milestone_celebration_last_shown')
-
-    // Current keys (v1)
-    localStorage.removeItem('wealthapp:last-celebrated-milestone-v1')
-    localStorage.removeItem('wealthapp:pending-celebration-v1')
-  } catch {}
+function applyThemeToDom(pref) {
+  document.documentElement.classList.toggle('dark', resolveTheme(pref))
 }
 
-export const AppContext = createContext()
-export const useApp = () => useContext(AppContext)
-
+/* ────────────────────────────────────────────
+   App
+──────────────────────────────────────────── */
 export default function App() {
-  const [checking, setChecking] = useState(true)
+  const [page, _setPage] = useState('landing')
 
   const [authed, setAuthed] = useState(false)
+  const [checking, setChecking] = useState(true)
+  const [settingsReady, setSettingsReady] = useState(true)
+
   const [username, setUsername] = useState('')
 
-  const [page, setPage] = useState('auth') // auth | home | outlook | insights | accounts | settings | ...
-  const [toast, setToast] = useState(null)
-
   const [themePref, setThemePref] = useState('system')
-  const [isDark, setIsDark] = useState(resolveTheme('system'))
-
   const [baseCurrency, setBaseCurrency] = useState('GBP')
   const [isPro, setIsPro] = useState(false)
 
-  // Primary goal state machine:
-  //   undefined = not loaded yet
-  //   null      = loaded, no goal (new user)
-  //   object    = loaded, has goal
+  const [toast, setToast] = useState(null)
+  const showToast = useCallback((message, kind = 'success') => {
+    setToast({ id: Date.now() + Math.random(), kind, message })
+  }, [])
+
+  // undefined = loading/not fetched yet, null = fetched and missing, object = exists
   const [primaryGoal, setPrimaryGoal] = useState(undefined)
   const [goalLoading, setGoalLoading] = useState(false)
 
-  const [settingsReady, setSettingsReady] = useState(false)
+  const [accountsCount, setAccountsCount] = useState(undefined) // undefined loading, number once known
+
   const [dataVersion, setDataVersion] = useState(0)
   const bumpData = useCallback(() => setDataVersion((v) => v + 1), [])
 
-  // One-time per authed session bootstrap guard (prevents reloading on token refresh)
-  const bootstrappedRef = useRef(false)
+  const dark = resolveTheme(themePref)
 
-  async function healSupabaseSessionIfBroken() {
-  try {
-    const { data, error } = await supabase.auth.getSession()
-    if (error && /refresh token/i.test(error.message)) {
-      // local-only sign out clears persisted session without touching server
-      await supabase.auth.signOut({ scope: 'local' })
-      return null
-    }
-    return data?.session ?? null
-  } catch {
-    // if anything weird happens, clear local session to recover
+  // Stable history-aware setPage
+  const setPage = useCallback((next, { replace = false } = {}) => {
+    const n = next || 'landing'
+    _setPage(n)
     try {
-      await supabase.auth.signOut({ scope: 'local' })
+      const path = PAGE_TO_PATH[n] || '/'
+      const current = window.location.pathname || '/'
+      if (current !== path) {
+        if (replace) window.history.replaceState({}, '', path)
+        else window.history.pushState({}, '', path)
+      }
     } catch {}
-    return null
-  }
-}
-
-  /* ──────────────────────────────────────────── */
-  /* Toast                                       */
-  /* ──────────────────────────────────────────── */
-
-  const showToast = useCallback((message, type = 'success') => {
-    setToast({ message, type, id: Date.now() })
   }, [])
 
-  /* ──────────────────────────────────────────── */
-  /* Theme                                       */
-  /* ──────────────────────────────────────────── */
-
+  // Initial route + back button
   useEffect(() => {
-    const dark = resolveTheme(themePref)
-    setIsDark(dark)
-    document.documentElement.classList.toggle('dark', dark)
+    const initial = pageFromPath(window.location.pathname)
+    _setPage(initial)
+    try {
+      window.history.replaceState({}, '', PAGE_TO_PATH[initial] || '/')
+    } catch {}
+
+    const onPop = () => {
+      const p = pageFromPath(window.location.pathname)
+      _setPage(p)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  // Theme
+  useEffect(() => {
+    applyThemeToDom(themePref)
   }, [themePref])
 
-  /* ──────────────────────────────────────────── */
-/* Data Loaders                                */
-/* ──────────────────────────────────────────── */
+  useEffect(() => {
+    console.log('BOOT STATE', { checking, authed, settingsReady, primaryGoal, accountsCount })
+  }, [checking, authed, settingsReady, primaryGoal, accountsCount])
 
-const loadPrimaryGoal = useCallback(async () => {
-  setGoalLoading(true)
-  try {
-    const g = await api('/goals/primary')
-    setPrimaryGoal(g)
-  } catch (e) {
-    if (e?.status === 404) {
-      setPrimaryGoal(null)
-    } else {
+  useEffect(() => {
+    if (themePref !== 'system') return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const handler = () => applyThemeToDom('system')
+    handler()
+    mq.addEventListener?.('change', handler)
+    return () => mq.removeEventListener?.('change', handler)
+  }, [themePref])
+
+  // Entitlements refresh (rate-limited with a ref to avoid loops)
+  const entitlementsCheckedAtRef = useRef(0)
+  const refreshSettings = useCallback(async ({ force = false } = {}) => {
+    const now = Date.now()
+    const STALE_MS = 60_000
+    if (
+      !force &&
+      entitlementsCheckedAtRef.current &&
+      now - entitlementsCheckedAtRef.current < STALE_MS
+    ) {
+      return null
+    }
+
+    entitlementsCheckedAtRef.current = now
+
+    try {
+      const s = await api('/settings')
+      setThemePref(s.theme_preference || 'system')
+      setBaseCurrency(s.base_currency || 'GBP')
+      setIsPro(!!s.is_pro)
+      return s
+    } catch {
+      return null
+    }
+  }, [])
+
+  // ✅ FIXED: goal fetch always resolves to null or a valid-looking goal object
+  const fetchPrimaryGoal = useCallback(async () => {
+    setGoalLoading(true)
+    try {
+      const g = await api('/goals/primary')
+
+      // Basic sanity check: if backend ever returns {} / [] / empty, treat as missing
+      const looksLikeGoal =
+        g &&
+        typeof g === 'object' &&
+        !Array.isArray(g) &&
+        (g.id != null || g.goal_id != null)
+
+      if (!looksLikeGoal) {
+        setPrimaryGoal(null)
+        return null
+      }
+
+      setPrimaryGoal(g)
+      return g
+    } catch (e) {
+      if (e?.status === 404) {
+        setPrimaryGoal(null)
+        return null
+      }
+
+      // ✅ Never preserve previous goal here — it causes stale “goal set” state.
       console.error('Primary goal load failed:', e)
       setPrimaryGoal(null)
+      return null
+    } finally {
+      setGoalLoading(false)
     }
-  } finally {
-    setGoalLoading(false)
-  }
-}, [api])
+  }, [])
 
-const loadUserTheme = useCallback(async () => {
-  try {
-    const s = await api('/settings')
-    setThemePref(s?.theme_preference || 'system')
-    setBaseCurrency(s?.base_currency || 'GBP')
+  const fetchAccountsCount = useCallback(async () => {
+    try {
+      const rows = await api('/accounts')
+      const n = Array.isArray(rows) ? rows.length : 0
+      setAccountsCount(n)
+      return n
+    } catch {
+      setAccountsCount(0)
+      return 0
+    }
+  }, [])
 
-    const devForcePro =
-      import.meta.env.DEV && localStorage.getItem('force_pro') === 'true'
+  const syncBilling = useCallback(async () => {
+    try {
+      await api('/billing/sync', { method: 'POST' })
+      await refreshSettings({ force: true })
+      return true
+    } catch {
+      return false
+    }
+  }, [refreshSettings])
 
-    setIsPro(!!s?.is_pro || !!devForcePro)
-
-    return s
-  } catch (e) {
-    console.error('Settings load failed:', e)
-    return null
-  }
-}, [api])
-
-const refreshSettings = useCallback(async () => {
-  return await loadUserTheme()
-}, [loadUserTheme])
-
-  /* ──────────────────────────────────────────── */
-  /* Session Reset                               */
-  /* ──────────────────────────────────────────── */
-
-  const resetSession = useCallback(() => {
-    bootstrappedRef.current = false
+  const logout = useCallback(async () => {
+    try {
+      await supabase?.auth?.signOut?.()
+    } catch {}
 
     setAuthed(false)
     setUsername('')
-
-    setPrimaryGoal(undefined)
-    setGoalLoading(false)
-
-    setBaseCurrency('GBP')
-    // Keep theme pref sticky by design
     setIsPro(false)
 
+    setPrimaryGoal(undefined)
+    setAccountsCount(undefined)
+
     setSettingsReady(true)
-    setPage('auth')
+    setChecking(false)
 
-    setDataVersion(0)
-
-    // Legacy keys only; Supabase handles session storage itself.
     try {
-      localStorage.removeItem('wealthapp-access-token')
-      localStorage.removeItem('access_token')
       localStorage.removeItem('force_pro')
+      localStorage.removeItem('upgrade_reason')
     } catch {}
-  }, [])
 
-  const resetSessionRef = useRef(null)
-  resetSessionRef.current = resetSession
+    setPage('landing', { replace: true })
+  }, [setPage])
 
-  /* ──────────────────────────────────────────── */
-  /* Session Expiry                              */
-  /* ──────────────────────────────────────────── */
-
+  // Session expired handling
   useEffect(() => {
-    const onExpired = async () => {
-      clearCelebrationStorage()
-      try {
-        await supabase.auth.signOut()
-      } catch {}
-      resetSessionRef.current?.()
+    const onExpired = () => {
+      showToast('Session expired — please sign in again.', 'error')
+      logout()
     }
-
     window.addEventListener(SESSION_EXPIRED_EVENT, onExpired)
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired)
-  }, [])
+  }, [logout, showToast])
 
-  /* ──────────────────────────────────────────── */
-  /* Auth Actions                                */
-  /* ──────────────────────────────────────────── */
+  // Auth bootstrap (storm-proof + cached token)
+  const bootIdRef = useRef(0)
+  const inFlightRef = useRef(false)
+  const tokenRef = useRef(null)
 
-  const handleLogin = useCallback((email) => {
-    setUsername(email || '')
-    setAuthed(true)
-    // Do NOT load data here — onAuthStateChange owns that flow.
-    setPage('home')
-  }, [])
-
-  const handleLogout = useCallback(
-    async () => {
-      clearCelebrationStorage()
-      resetSession()
-      try {
-        await supabase.auth.signOut()
-      } catch (e) {
-        console.warn('signOut failed:', e?.message || e)
-      }
-    },
-    [resetSession]
-  )
-
-  const handleGoalCreated = useCallback(
-    (goal) => {
-      setPrimaryGoal(goal)
-      bumpData()
-      setPage('home')
-    },
-    [bumpData]
-  )
-
-  /* ──────────────────────────────────────────── */
-/* Bootstrap + Auth Sync                        */
-/* ──────────────────────────────────────────── */
-
-useEffect(() => {
-  // Wire API to Supabase access tokens once (safe to call more than once)
-  setAccessTokenProvider(async () => {
-    const { data } = await supabase.auth.getSession()
-    return data?.session?.access_token || null
-  })
-
-  let cancelled = false
-
-  const handleSession = async (session) => {
-    try {
-      const isAuthedNow = !!session?.access_token
-      if (cancelled) return
-
-      setAuthed(isAuthedNow)
-      setUsername(session?.user?.email || '')
-
-      if (!isAuthedNow) {
-        bootstrappedRef.current = false
-        setPrimaryGoal(undefined)
-        setGoalLoading(false)
-        setSettingsReady(true)
-        setPage('auth')
-        return
-      }
-
-      if (!bootstrappedRef.current) {
-        bootstrappedRef.current = true
-        setSettingsReady(false)
-        await Promise.allSettled([loadUserTheme(), loadPrimaryGoal()])
-        if (cancelled) return
-        setSettingsReady(true)
-      }
-
-      setPage((p) => (p === 'privacy' || p === 'security' || p === 'auth' ? 'home' : p))
-    } catch (e) {
-      console.error('Bootstrap failed:', e)
-      setSettingsReady(true)
-    } finally {
+  useEffect(() => {
+    if (!supabase) {
       setChecking(false)
+      setAuthed(false)
+      setSettingsReady(true)
+      setPage('landing', { replace: true })
+      return
     }
+
+    // Cached token provider: fast path uses tokenRef, fallback pulls session once on refresh races
+  setAccessTokenProvider(async () => {
+  if (tokenRef.current) return tokenRef.current
+
+  try {
+    const { data } = await supabase.auth.getSession()
+    const t = data?.session?.access_token || null
+    tokenRef.current = t
+    return t
+  } catch {
+    return null
   }
+})
 
-  ;(async () => {
-    setChecking(true)
+    // ✅ PRIME THE TOKEN immediately (so coming back from Stripe doesn't “stall”)
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        tokenRef.current = data?.session?.access_token || null
+      })
+      .catch(() => {
+        tokenRef.current = null
+      })
 
-    // heal broken refresh token sessions once
-    const healed = await healSupabaseSessionIfBroken()
-    if (cancelled) return
+    let cancelled = false
 
-    await handleSession(healed)
-  })()
+    const bootstrap = async (session) => {
+      const myId = ++bootIdRef.current
+      if (inFlightRef.current) return // but DON'T leave gates closed
+      inFlightRef.current = true
 
-  // Subscribe for ongoing auth changes
-  const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-    handleSession(session)
-  })
+      try {
+        setChecking(true)
+        setSettingsReady(false)
 
-  return () => {
-    cancelled = true
-    sub?.subscription?.unsubscribe?.()
-  }
-}, [loadUserTheme, loadPrimaryGoal])
+        const token = session?.access_token || null
+        tokenRef.current = token
 
-  /* ──────────────────────────────────────────── */
-  /* Routing                                     */
-  /* ──────────────────────────────────────────── */
+        if (!token) {
+          setAuthed(false)
+          setPrimaryGoal(undefined)
+          setAccountsCount(undefined)
+          setSettingsReady(true)
+          setPage('landing', { replace: true })
+          return
+        }
 
-  const effectivePage =
-    authed && (page === 'auth' || page === 'privacy' || page === 'security')
-      ? 'home'
-      : page
+        setAuthed(true)
 
-  // Gate: show GoalSetup if authed + primary goal explicitly missing
-  const needsGoal = authed && primaryGoal === null
+        setPrimaryGoal(undefined)
+        setAccountsCount(undefined)
 
-  const ctx = {
-    authed,
-    username,
-    page: effectivePage,
-    setPage,
-    themePref,
-    setThemePref,
-    isDark,
-    baseCurrency,
-    setBaseCurrency,
-    isPro,
-    setIsPro,
-    primaryGoal,
-    setPrimaryGoal,
-    loadPrimaryGoal,
-    goalLoading,
-    settingsReady,
-    dataVersion,
-    bumpData,
-    showToast,
-    handleLogout,
-    refreshSettings,
-  }
+        // Settings once (theme, currency, pro)
+        await refreshSettings({ force: true })
+        if (cancelled || myId !== bootIdRef.current) return
 
-  /* ──────────────────────────────────────────── */
-  /* Render                                      */
-  /* ──────────────────────────────────────────── */
+        // Preload onboarding facts (goal + accounts count)
+        await Promise.allSettled([fetchPrimaryGoal(), fetchAccountsCount()])
+        if (cancelled || myId !== bootIdRef.current) return
 
-  // Initial boot gate
+        // Deep links (authed pages) still respected
+        const fromPath = pageFromPath(window.location.pathname)
+        const isPublic =
+          fromPath === 'landing' ||
+          fromPath === 'auth' ||
+          fromPath === 'privacy' ||
+          fromPath === 'security'
+
+        if (fromPath && !isPublic) {
+          setPage(fromPath, { replace: true })
+          setSettingsReady(true)
+          return
+        }
+
+        // DEFAULT: always send authed users to Home
+        setPage('home', { replace: true })
+        setSettingsReady(true)
+      } catch (e) {
+        console.error('Bootstrap failed:', e)
+        setSettingsReady(true)
+      } finally {
+        inFlightRef.current = false
+        if (!cancelled) setSettingsReady(true)
+        if (!cancelled) setChecking(false)
+      }
+    }
+
+    // Initial session check
+    supabase.auth
+      .getSession()
+      .then(({ data }) => bootstrap(data?.session || null))
+      .catch(() => {
+        if (cancelled) return
+        tokenRef.current = null
+        setAuthed(false)
+        setSettingsReady(true)
+        setChecking(false)
+        setPage('landing', { replace: true })
+      })
+
+    // Auth change listener (also keeps tokenRef hot)
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) return
+      tokenRef.current = session?.access_token || null
+      bootstrap(session || null)
+    })
+
+    return () => {
+      cancelled = true
+      data?.subscription?.unsubscribe?.()
+    }
+  }, [fetchAccountsCount, fetchPrimaryGoal, refreshSettings, setPage])
+
+  // Loading gate
   if (checking || (authed && !settingsReady)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface dark:bg-surface-dark">
-        <div className="animate-pulse-soft">
-          <span className="font-display text-4xl text-ink dark:text-white">
-            wealth<span className="text-accent">.</span>
-          </span>
-          <div className="mt-3 text-center text-xs text-ink-muted/50 dark:text-white/20">
-            Loading…
+        <div className="flex flex-col items-center gap-6 animate-fade-in">
+          <div className="font-display text-5xl sm:text-6xl tracking-[-0.04em] text-ink dark:text-white">
+            Paddock<span className="text-accent">.</span>
+          </div>
+          <div className="paddock-loader-bar" />
+          <div className="text-[11px] tracking-[0.14em] uppercase text-ink-muted/60 dark:text-white/30">
+            Preparing your dashboard
           </div>
         </div>
       </div>
     )
   }
 
-  // Auth gate
-  if (!authed) {
-    return (
-      <AppContext.Provider value={ctx}>
-        {effectivePage === 'privacy' ? (
-          <Privacy onBack={() => setPage('auth')} />
-        ) : effectivePage === 'security' ? (
-          <Security onBack={() => setPage('auth')} />
-        ) : effectivePage === 'landing' ? (
-          <Landing onStart={() => setPage('auth')} />
-        ) : (
-          <AuthPage
-            onLogin={handleLogin}
-            onGoPrivacy={() => setPage('privacy')}
-            onGoSecurity={() => setPage('security')}
+  // Onboarding signals for Home to render a “Next steps” card under the hero number
+  const onboarding = {
+    goalStatus:
+      primaryGoal === undefined ? 'loading' : primaryGoal === null ? 'missing' : 'set',
+    accountsStatus:
+      accountsCount === undefined ? 'loading' : accountsCount === 0 ? 'missing' : 'set',
+    accountsCount: typeof accountsCount === 'number' ? accountsCount : 0,
+    needsGoal: primaryGoal === null,
+    needsAccounts: typeof accountsCount === 'number' ? accountsCount === 0 : false,
+  }
+
+  const ctx = {
+    api,
+    page,
+    setPage,
+    authed,
+    username,
+
+    settingsReady,
+    setSettingsReady,
+
+    themePref,
+    setThemePref,
+    dark,
+
+    baseCurrency,
+    setBaseCurrency,
+
+    isPro,
+    setIsPro,
+
+    primaryGoal,
+    goalLoading,
+    setPrimaryGoal,
+    loadPrimaryGoal: fetchPrimaryGoal,
+
+    accountsCount,
+    setAccountsCount,
+    loadAccountsCount: fetchAccountsCount,
+
+    onboarding,
+
+    dataVersion,
+    bumpData,
+
+    toast,
+    setToast,
+    showToast,
+
+    refreshSettings,
+    syncBilling,
+
+    logout,
+  }
+
+  const renderPage = () => {
+    // Public pages
+    if (!authed) {
+      if (page === 'privacy') return <Privacy />
+      if (page === 'security') return <Security />
+      if (page === 'auth') return <AuthPage />
+      return <Landing />
+    }
+
+    // Authed pages
+    switch (page) {
+      case 'privacy':
+        return <Privacy />
+      case 'security':
+        return <Security />
+      case 'home':
+        return <Home />
+      case 'outlook':
+        return <Outlook />
+      case 'insights':
+        return <Insights />
+      case 'accounts':
+        return <Accounts />
+      case 'settings':
+        return <Settings />
+      case 'goal_setup':
+        return (
+          <GoalSetup
+            onComplete={(goal) => {
+              setPrimaryGoal(goal || null)
+              setPage('accounts')
+            }}
           />
+        )
+      case 'upgrade':
+        return <Upgrade />
+      case 'admin':
+        return <Admin />
+      default:
+        return <Home />
+    }
+  }
+
+  return (
+    <AppContext.Provider value={ctx}>
+      <div className="min-h-screen bg-surface dark:bg-surface-dark text-ink dark:text-white">
+        {authed ? (
+          <div className="flex min-h-screen">
+            <Sidebar />
+            <div className="flex-1 min-w-0">
+              <MobileNav />
+              <main className="px-4 sm:px-6 lg:px-8 py-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-6">
+                <div className="mx-auto w-full max-w-6xl">{renderPage()}</div>
+              </main>
+              <BottomNav />
+            </div>
+          </div>
+        ) : (
+          <main className="px-0">{renderPage()}</main>
         )}
 
         <Toast toast={toast} onClose={() => setToast(null)} />
-      </AppContext.Provider>
-    )
-  }
-
-  // New-user goal gate
-  if (needsGoal) {
-    return (
-      <AppContext.Provider value={ctx}>
-        <div className="min-h-screen bg-surface dark:bg-surface-dark px-4 py-10">
-          <GoalSetup onComplete={handleGoalCreated} />
-        </div>
-        <Toast toast={toast} onClose={() => setToast(null)} />
-      </AppContext.Provider>
-    )
-  }
-
-  // Main app shell
-  return (
-    <AppContext.Provider value={ctx}>
-      <div className="min-h-screen bg-surface dark:bg-surface-dark lg:flex">
-  <Sidebar page={effectivePage} setPage={setPage} isPro={isPro} />
-  <MobileNav page={effectivePage} setPage={setPage} isPro={isPro} />
-
-  <main className="flex-1 px-4 sm:px-6 py-6 pb-28 lg:pb-6">
-    {effectivePage === 'home' ? (
-      <Home />
-    ) : effectivePage === 'outlook' ? (
-      <Outlook />
-    ) : effectivePage === 'insights' ? (
-      <Insights />
-    ) : effectivePage === 'accounts' ? (
-      <Accounts />
-    ) : effectivePage === 'snapshots' ? (
-      <Snapshots />
-    ) : effectivePage === 'upgrade' ? (
-      <Upgrade />
-    ) : effectivePage === 'settings' ? (
-      <Settings />
-    ) : (
-      <Home />
-    )}
-  </main>
-
-  <Toast toast={toast} onClose={() => setToast(null)} />
-</div>
+      </div>
     </AppContext.Provider>
   )
 }

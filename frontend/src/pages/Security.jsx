@@ -1,49 +1,51 @@
+// frontend/src/pages/Security.jsx
 import React from 'react'
+import { useApp } from '../App'
 import Card from '../components/Card'
-import Button from '../components/Button'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Shield } from 'lucide-react'
 
-export default function Security({ onBack }) {
+export default function Security() {
+  const { setPage } = useApp()
+
+  const goBack = () => {
+    try {
+      if (window.history.length > 1) window.history.back()
+      else setPage('landing', { replace: true })
+    } catch {
+      setPage('landing', { replace: true })
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-surface dark:bg-surface-dark">
-      <div className="max-w-[640px] mx-auto px-6 sm:px-10 py-12 sm:py-20">
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={ArrowLeft}
-          onClick={onBack}
-          className="mb-8"
+    <div className="min-h-screen px-4 sm:px-6 lg:px-8 py-10">
+      <div className="mx-auto max-w-3xl space-y-6">
+        <button
+          type="button"
+          onClick={goBack}
+          className="inline-flex items-center gap-2 text-sm font-semibold text-ink-muted dark:text-white/40 hover:text-ink dark:hover:text-white transition-colors"
         >
-          Back
-        </Button>
+          <ArrowLeft size={16} /> Back
+        </button>
 
-        <h1 className="text-3xl sm:text-4xl font-semibold text-ink dark:text-white tracking-tight">
-          Security
-        </h1>
-        <p className="mt-3 text-base text-ink-muted dark:text-white/40 leading-relaxed">
-          How we keep your account and data safe.
-        </p>
+        <Card className="p-8">
+          <div className="flex items-center gap-2">
+            <Shield size={18} className="opacity-80" />
+            <h1 className="font-display text-3xl text-ink dark:text-white tracking-tight">
+              Security
+            </h1>
+          </div>
 
-        <Card className="mt-8">
-          <div className="space-y-4">
-            {[
-              'Authentication is handled by Supabase Auth with secure session management.',
-              'All connections are encrypted with TLS in transit.',
-              'Passwords are hashed — we never store them in plain text.',
-              'Sessions expire automatically after inactivity.',
-              'You can reset your password at any time via email.',
-              'Account deletion is permanent and irreversible.',
-              'We regularly review dependencies for known vulnerabilities.',
-              'Infrastructure is hosted on Railway with managed security.',
-            ].map((item) => (
-              <div
-                key={item}
-                className="flex items-start gap-3 text-sm text-ink dark:text-white/70"
-              >
-                <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-accent shrink-0" />
-                {item}
-              </div>
-            ))}
+          <p className="mt-3 text-sm text-ink-muted dark:text-white/40 leading-relaxed">
+            Secure authentication, encrypted transport, and disciplined product design.
+          </p>
+
+          <div className="mt-6 space-y-3 text-sm text-ink-muted dark:text-white/40 leading-relaxed">
+            <p>
+              Authentication is handled by Supabase. Sessions expire and are revalidated automatically.
+            </p>
+            <p>
+              This page is a placeholder — replace with your formal security statements before launch.
+            </p>
           </div>
         </Card>
       </div>

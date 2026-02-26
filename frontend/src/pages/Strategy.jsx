@@ -18,7 +18,18 @@ import {
   Save,
 } from 'lucide-react'
 import WealthTooltip from '../components/charts/WealthTooltip'
-import { xAxisProps, yAxisProps, gridProps, tooltipProps, compactTickFormatter, chartMargin, ACCENT_STROKE, activeDotStyle } from '../components/charts/chartTheme'
+import {
+  xAxisProps,
+  yAxisProps,
+  gridProps,
+  tooltipProps,
+  compactTickFormatter,
+  chartMargin,
+  ACCENT_STROKE,
+  activeDotStyle,
+  primaryLineProps,
+  secondaryLineProps,
+} from '../components/charts/chartTheme'
 
 export default function Strategy() {
   const { baseCurrency, setPage, primaryGoal, showToast, loadPrimaryGoal, bumpData } = useApp()
@@ -410,7 +421,7 @@ export default function Strategy() {
   }
 />
                 <YAxis {...yAxisProps} tickFormatter={compactTickFormatter} />
-                <Tooltip content={<WealthTooltip currency={ccy} />} {...tooltipProps} />
+                <Tooltip {...tooltipProps} content={(p) => <WealthTooltip {...p} currency={ccy} />} />
                 <ReferenceLine y={targetAmt} stroke="#d97706" strokeDasharray="4 4" strokeOpacity={0.42} />
 
 <Area
@@ -600,27 +611,6 @@ export default function Strategy() {
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function StratTooltip({ active, payload, ccy }) {
-  if (!active || !payload?.length) return null
-  const d = payload[0]?.payload
-  if (!d) return null
-  return (
-    <div className="bg-ink dark:bg-surface-dark-3 text-white px-4 py-3 rounded-2xl shadow-lg text-sm border border-white/5">
-      {d.projected != null && (
-        <div className="font-medium tabular-nums" style={{ fontVariantNumeric: "tabular-nums" }}>
-          {fmtCurrency(d.projected, ccy)} <span className="font-normal text-white/50">projected</span>
-        </div>
-      )}
-      {d.required != null && (
-        <div className="font-medium tabular-nums mt-0.5">
-          {fmtCurrency(d.required, ccy)} <span className="font-normal text-white/50">required</span>
-        </div>
-      )}
-      <div className="text-white/40 mt-1 text-xs">{d.date}</div>
     </div>
   )
 }

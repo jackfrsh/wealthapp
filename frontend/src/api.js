@@ -1,4 +1,4 @@
-// api.js
+// frontend/src/api.js
 export const SESSION_EXPIRED_EVENT = 'session-expired'
 
 // ---- Config ----
@@ -17,18 +17,19 @@ const isLocalHost = (() => {
   }
 })()
 
-const API_BASE =
-  envBase || (isLocalHost ? 'http://127.0.0.1:8000/api' : '/api')
+const API_BASE = envBase || (isLocalHost ? 'http://127.0.0.1:8000/api' : '/api')
 
 // Token provider is injectable (Supabase-ready).
-// In App.jsx (or bootstrap), call setAccessTokenProvider(async () => session?.access_token || null).
 let accessTokenProvider = async () => null
 
 export function setAccessTokenProvider(fn) {
   accessTokenProvider = typeof fn === 'function' ? fn : async () => null
+  cachedToken = null
+  cachedAt = 0
+  tokenInFlight = null
 }
 
-// Optional legacy helpers (safe to keep; can delete once you're fully Supabase-only)
+// Optional legacy helpers
 export function getToken() {
   try {
     return localStorage.getItem('access_token')
@@ -72,14 +73,12 @@ function makeError(res, data) {
   const err = new Error()
   err.status = res.status
 
-  // FastAPI often returns: { detail: ... }
   const detail =
     (data && typeof data === 'object' && (data.detail ?? data.message)) || null
 
   err.detail = detail
   err.data = data
 
-  // Human message
   if (typeof detail === 'string') err.message = detail
   else if (Array.isArray(detail))
     err.message = detail.map((d) => d?.msg || String(d)).join(', ')
@@ -89,11 +88,65 @@ function makeError(res, data) {
   return err
 }
 
+/* ─────────────────────────────────────────────
+   Access token caching + de-dupe
+   Prevents “token storms” (many api calls each triggering getSession()).
+───────────────────────────────────────────── */
+
+let cachedToken = null
+let cachedAt = 0
+let tokenInFlight = null
+
+// Keep short so we don’t hold stale auth, but long enough to collapse bursts
+const TOKEN_TTL_MS = 15_000
+
+async function getAccessTokenCached() {
+  const now = Date.now()
+
+  // If we recently resolved a token, reuse it for a short window
+  if (cachedToken && now - cachedAt < TOKEN_TTL_MS) return cachedToken
+
+  // If there’s already a token fetch happening, await it
+  if (tokenInFlight) return tokenInFlight
+
+  tokenInFlight = (async () => {
+    let t = null
+    try {
+      t = await accessTokenProvider()
+    } catch {
+      t = null
+    }
+
+    // Fallback to legacy storage token if provider yields nothing
+    if (!t) t = getToken()
+
+    cachedToken = t || null
+    cachedAt = Date.now()
+
+    return cachedToken
+  })()
+
+  try {
+    return await tokenInFlight
+  } finally {
+    tokenInFlight = null
+  }
+}
+
+/* ─────────────────────────────────────────────
+   401 debounce (avoid multiple logout cascades)
+───────────────────────────────────────────── */
+
+let last401At = 0
+function dispatchSessionExpiredOnce() {
+  const now = Date.now()
+  if (now - last401At < 1500) return
+  last401At = now
+  window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT))
+}
+
 /**
  * The ONLY fetch function you should use.
- * Usage:
- *   api('/goals/primary')
- *   api('/goals', { method: 'POST', body: { ... } })  // body can be object (auto JSON)
  */
 export async function api(path, options = {}) {
   const { method = 'GET', headers = {}, body = undefined, signal } = options
@@ -103,19 +156,10 @@ export async function api(path, options = {}) {
       ? path
       : `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`
 
-  // Resolve access token (Supabase or injected provider)
-  let token = null
-  try {
-    token = await accessTokenProvider()
-  } catch {
-    token = null
-  }
-  // Legacy fallback (optional)
-  if (!token) token = getToken()
+  const token = await getAccessTokenCached()
 
   const finalHeaders = new Headers(headers)
 
-  // Prepare body
   let finalBody = body
 
   const isFormData =
@@ -124,15 +168,12 @@ export async function api(path, options = {}) {
   const isString = typeof body === 'string'
 
   if (body != null && !isFormData && !isBlob) {
-    // If a plain object/array was passed, JSON encode it
     if (!isString && (isPlainObject(body) || Array.isArray(body))) {
       finalBody = JSON.stringify(body)
       if (!finalHeaders.has('Content-Type')) {
         finalHeaders.set('Content-Type', 'application/json')
       }
     } else if (isString) {
-      // If they pass a string, assume they know what they’re doing.
-      // But set JSON content type if it looks like JSON and no header provided.
       if (!finalHeaders.has('Content-Type')) {
         const t = body.trim()
         if (t.startsWith('{') || t.startsWith('[')) {
@@ -156,10 +197,47 @@ export async function api(path, options = {}) {
   const data = await readBody(res)
 
   if (!res.ok) {
-    // Broadcast session expiry for auth gate
-    if (res.status === 401 || res.status === 403) {
-      window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT))
+    if (res.status === 401) {
+      // If we had no token, this can be a bootstrap race.
+      // Force a token refresh and retry once before declaring session expired.
+      cachedToken = null
+      cachedAt = 0
+  
+      const hadToken = !!token
+  
+      // Retry exactly once
+      try {
+        const retryToken = await getAccessTokenCached()
+        const retryHeaders = new Headers(finalHeaders)
+  
+        // Replace Authorization with refreshed token if present
+        if (retryToken) retryHeaders.set('Authorization', `Bearer ${retryToken}`)
+        else retryHeaders.delete('Authorization')
+  
+        const retryRes = await fetch(url, {
+          method,
+          headers: retryHeaders,
+          body: finalBody,
+          signal,
+        })
+  
+        const retryData = await readBody(retryRes)
+  
+        if (retryRes.ok) return retryData
+  
+        // Still 401 after retry -> now it's a real session failure (if we ever had a token)
+        if (retryRes.status === 401 && (hadToken || retryToken)) {
+          dispatchSessionExpiredOnce()
+        }
+  
+        throw makeError(retryRes, retryData)
+      } catch (e) {
+        // Network errors etc. shouldn't force logout
+        throw e
+      }
     }
+  
+    // 403 = forbidden (e.g. admin endpoint) → do NOT logout
     throw makeError(res, data)
   }
 

@@ -33,17 +33,6 @@ function getNextMilestone(total) {
   return next || MILESTONE_LADDER[MILESTONE_LADDER.length - 1]
 }
 
-function getCrossedMilestone(prev, next) {
-  const a = Number(prev ?? 0)
-  const b = Number(next ?? 0)
-  if (!(b > a)) return null
-  let crossed = null
-  for (const m of MILESTONE_LADDER) {
-    if (a < m && b >= m) crossed = m
-  }
-  return crossed
-}
-
 function fv(pv, pmt, r, n) {
   if (n <= 0) return pv
   if (Math.abs(r) < 1e-9) return pv + pmt * n
@@ -144,6 +133,15 @@ function clearPendingCelebration() {
   }
 }
 
+// Clear both keys (and any legacy variants you may have used previously)
+function clearCelebrationStorage() {
+  try {
+    localStorage.removeItem(CELEBRATION_PENDING_KEY)
+    // Don’t remove LAST key by default — it prevents re-firing.
+//  localStorage.removeItem(CELEBRATION_LAST_KEY)
+  } catch {}
+}
+
 function toCents(n) {
   const x = Number(n || 0)
   return Number.isFinite(x) ? Math.round(x * 100) : 0
@@ -167,7 +165,6 @@ function MilestoneReceipt({ visible, milestone, ccy, onDismiss }) {
         visible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none',
       ].join(' ')}
     >
-      {/* Rim light + subtle glow */}
       <div className="relative">
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute -left-16 -top-16 w-40 h-40 rounded-full bg-emerald-500/10 blur-[40px]" />
@@ -183,28 +180,20 @@ function MilestoneReceipt({ visible, milestone, ccy, onDismiss }) {
           </div>
 
           <div className="min-w-0 flex-1">
-  <div className="text-[10px] font-semibold tracking-[.18em] uppercase text-emerald-700/80 dark:text-emerald-300/80">
-    Milestone achieved
-  </div>
+            <div className="text-[10px] font-semibold tracking-[.18em] uppercase text-emerald-700/80 dark:text-emerald-300/80">
+              Milestone achieved
+            </div>
 
-  {/* Mobile: 3 lines. Desktop: amount + message inline */}
-  <div className="mt-1 min-w-0">
-    {/* Line 2: money */}
-    <div className="font-display text-lg sm:text-2xl text-ink dark:text-white tabular-nums leading-tight break-words">
-      {fmtCurrencyCompact(milestone, ccy)}
-    </div>
+            <div className="mt-1 min-w-0">
+              <div className="font-display text-lg sm:text-2xl text-ink dark:text-white tabular-nums leading-tight break-words">
+                {fmtCurrencyCompact(milestone, ccy)}
+              </div>
 
-    {/* Line 3: message */}
-    <div className="mt-1 text-xs sm:text-xs text-ink-muted/60 dark:text-white/35 leading-snug">
-      You’ve crossed a new net worth threshold.
-    </div>
-  </div>
-
-  {/* Optional: if you WANT inline on >=sm, swap to this pattern instead:
-      - keep the above for mobile only, and add an sm:flex row below.
-      But honestly 3-line looks premium and avoids layout stress.
-  */}
-</div>
+              <div className="mt-1 text-xs text-ink-muted/60 dark:text-white/35 leading-snug">
+                You’ve crossed a new net worth threshold.
+              </div>
+            </div>
+          </div>
 
           <button
             onClick={onDismiss}
@@ -216,15 +205,167 @@ function MilestoneReceipt({ visible, milestone, ccy, onDismiss }) {
           </button>
         </div>
 
-        {/* hairline bottom sparkle */}
         <div className="h-px bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent" />
       </div>
     </div>
   )
 }
 
+/* ──────────────────────────────────────────── */
+/* Premium onboarding module                     */
+/* ──────────────────────────────────────────── */
+
+function OnboardingPanel({ needsGoal, needsAccounts, accountsCount = 0, onGoal, onAccounts }) {
+  const totalSteps = 2
+  const doneSteps = (needsGoal ? 0 : 1) + (needsAccounts ? 0 : 1)
+  const pct = Math.round((doneSteps / totalSteps) * 100)
+
+  // ✅ Only complete when BOTH are done
+  const allDone = !needsGoal && !needsAccounts
+
+  // Local UI lifecycle: once complete, collapse the panel and show a tiny toast
+  const [closing, setClosing] = React.useState(false)
+  const [showDoneToast, setShowDoneToast] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!allDone) return
+
+    setClosing(true)
+
+    const t1 = window.setTimeout(() => setShowDoneToast(true), 260)
+    const t2 = window.setTimeout(() => setShowDoneToast(false), 2400)
+
+    return () => {
+      window.clearTimeout(t1)
+      window.clearTimeout(t2)
+    }
+  }, [allDone])
+
+  const Step = ({ done, title, subtitle, actionLabel, onAction }) => (
+    <div className="flex items-start justify-between gap-4">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          {done ? (
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/12 border border-emerald-500/20">
+              <CheckCircle size={14} className="text-emerald-600 dark:text-emerald-400" />
+            </span>
+          ) : (
+            <span className="w-2.5 h-2.5 rounded-full bg-accent mt-1.5" />
+          )}
+
+          <div className="text-sm font-semibold text-ink dark:text-white truncate">{title}</div>
+
+          {done ? (
+            <span className="text-[10px] font-semibold tracking-[.14em] uppercase px-2 py-0.5 rounded-full bg-black/[.03] dark:bg-white/[.06] border border-black/[.06] dark:border-white/[.10] text-ink-muted/60 dark:text-white/30">
+              Done
+            </span>
+          ) : null}
+        </div>
+
+        <div className="mt-1 text-xs text-ink-muted/60 dark:text-white/35 leading-relaxed">
+          {subtitle}
+        </div>
+      </div>
+
+      {!done && (
+        <button
+          type="button"
+          onClick={onAction}
+          className="shrink-0 px-3.5 py-2 rounded-2xl text-xs font-semibold bg-black/[.03] dark:bg-white/[.06] border border-black/[.06] dark:border-white/[.10] text-ink dark:text-white hover:bg-black/[.05] dark:hover:bg-white/[.09] transition-colors"
+        >
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  )
+
+  return (
+    <div className="relative">
+      <div
+        className={[
+          'rounded-3xl border overflow-hidden',
+          'bg-white/70 dark:bg-white/[.05] backdrop-blur-xl',
+          'border-black/[.06] dark:border-white/[.08]',
+          'shadow-[0_18px_55px_rgba(0,0,0,0.08)]',
+          'transition-all duration-500 ease-[cubic-bezier(.16,1,.3,1)]',
+          closing
+            ? 'opacity-0 -translate-y-1 scale-[0.98] max-h-0 pointer-events-none'
+            : 'opacity-100 translate-y-0 scale-100 max-h-[420px]',
+        ].join(' ')}
+      >
+        <div className="px-6 py-5">
+          <div className="flex items-start justify-between gap-6">
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold tracking-[.16em] uppercase text-ink-muted/60 dark:text-white/30">
+                Getting started
+              </div>
+              <div className="mt-1 text-sm font-semibold text-ink dark:text-white">
+                Complete your wealth setup
+              </div>
+              <div className="mt-1 text-xs text-ink-muted/60 dark:text-white/35">
+                {doneSteps} of {totalSteps} complete · {accountsCount} accounts connected
+              </div>
+            </div>
+
+            <div className="shrink-0 text-xs font-semibold tabular-nums text-ink-muted/60 dark:text-white/30">
+              {pct}%
+            </div>
+          </div>
+
+          <div className="mt-4 h-2 rounded-full bg-black/[.06] dark:bg-white/[.08] overflow-hidden">
+            <div
+              className="h-full rounded-full bg-accent transition-all duration-700 ease-[cubic-bezier(.16,1,.3,1)]"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+
+          <div className="mt-5 space-y-4">
+            <Step
+              done={!needsGoal}
+              title="Set your primary goal"
+              subtitle="Unlock your outlook and long-horizon modelling."
+              actionLabel="Set goal"
+              onAction={onGoal}
+            />
+
+            <div className="h-px bg-black/[.06] dark:bg-white/[.08]" />
+
+            <Step
+              done={!needsAccounts}
+              title="Add your first account"
+              subtitle="Add ISA, SIPP, bank, savings, crypto, property — whatever counts toward net worth."
+              actionLabel="Add account"
+              onAction={onAccounts}
+            />
+          </div>
+        </div>
+      </div>
+
+      {showDoneToast && (
+        <div className="mt-3">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/15 text-emerald-700 dark:text-emerald-300 shadow-[0_12px_35px_rgba(0,0,0,0.06)] animate-fade-in">
+            <CheckCircle size={16} className="opacity-90" />
+            <span className="text-xs font-semibold tracking-[.04em]">Setup complete</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
 export default function Home() {
-  const { setBaseCurrency, setPage, dataVersion, bumpData, showToast, baseCurrency, handleLogout } = useApp()
+  const {
+    setBaseCurrency,
+    primaryGoal,
+    setPage,
+    dataVersion,
+    bumpData,
+    showToast,
+    baseCurrency,
+    logout,
+    onboarding,
+  } = useApp()
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -242,54 +383,32 @@ export default function Home() {
   const [pendingCelebrate, setPendingCelebrate] = useState(null)
   const [celebrateVisible, setCelebrateVisible] = useState(false)
 
-  const [dismissAddAccountNudge, setDismissAddAccountNudge] = useState(() => {
-  try {
-    return localStorage.getItem('dismiss_add_account_nudge') === 'true'
-  } catch {
-    return false
-  }
-})
-
-const dismissNudge = () => {
-  setDismissAddAccountNudge(true)
-  try {
-    localStorage.setItem('dismiss_add_account_nudge', 'true')
-  } catch {}
-}
-
-    // Derived (safe even when data is null)
+  // Derived (safe even when data is null)
   const total = useMemo(() => Number(data?.current_total || 0), [data])
   const totalCents = useMemo(() => toCents(total), [total])
   const ccy = useMemo(() => data?.base_currency || 'GBP', [data])
 
   const clearCelebration = useCallback(() => {
-  // animate out
-  setCelebrateVisible(false)
-
-  window.setTimeout(() => {
-    setPendingCelebrate(null)
     setCelebrateVisible(false)
 
-    // Clear pending payload
-    clearPendingCelebration()
+    window.setTimeout(() => {
+      setPendingCelebrate(null)
+      setCelebrateVisible(false)
 
-    // Clear all gating keys (legacy + current)
-    clearCelebrationStorage()
-
-    // (Optional) also reset in-memory gate, if your logic uses it
-    setLastCelebrated(0)
-  }, 220)
-}, [])
+      clearPendingCelebration()
+      clearCelebrationStorage()
+    }, 220)
+  }, [])
 
   // 1) On mount: hydrate pending celebration from storage (so it survives page switching)
   useEffect(() => {
-  const p = getPendingCelebration()
-  if (p?.milestone) {
-    setPendingCelebrate(p)
-    const t = window.setTimeout(() => setCelebrateVisible(true), 30)
-    return () => window.clearTimeout(t)
-  }
-}, [])
+    const p = getPendingCelebration()
+    if (p?.milestone) {
+      setPendingCelebrate(p)
+      const t = window.setTimeout(() => setCelebrateVisible(true), 30)
+      return () => window.clearTimeout(t)
+    }
+  }, [])
 
   // 2) While Home is open: if net worth changes vs the saved receipt value, auto-close it
   useEffect(() => {
@@ -302,14 +421,19 @@ const dismissNudge = () => {
     if (totalCents !== savedCents) {
       clearCelebration()
     }
-  }, [data, totalCents, pendingCelebrate?.milestone, pendingCelebrate?.total_at_time_cents, clearCelebration])
+  }, [
+    data,
+    totalCents,
+    pendingCelebrate?.milestone,
+    pendingCelebrate?.total_at_time_cents,
+    clearCelebration,
+  ])
 
   const load = useCallback(async () => {
     setError(null)
     try {
       const d = await api('/dashboard?range=3M')
 
-      // Set data first so the page renders even if celebration logic fails
       setData(d)
       setBaseCurrency(d.base_currency || 'GBP')
 
@@ -322,42 +446,41 @@ const dismissNudge = () => {
         setTimeout(() => setAnimatingDelta(false), 600)
       }
 
-// 1) If a pending receipt exists, keep showing it until net worth changes.
-const existingPending = getPendingCelebration()
-if (existingPending?.milestone) {
-  const savedCents = Number(existingPending.total_at_time_cents ?? NaN)
+      // If a pending receipt exists, keep showing it until net worth changes.
+      const existingPending = getPendingCelebration()
+      if (existingPending?.milestone) {
+        const savedCents = Number(existingPending.total_at_time_cents ?? NaN)
 
-  if (Number.isFinite(savedCents) && savedCents !== nextTotalCents) {
-    clearPendingCelebration()
-    setPendingCelebrate(null)
-    setCelebrateVisible(false)
-  } else {
-    setPendingCelebrate(existingPending)
-    setCelebrateVisible(true)
-  }
-}
+        if (Number.isFinite(savedCents) && savedCents !== nextTotalCents) {
+          clearPendingCelebration()
+          setPendingCelebrate(null)
+          setCelebrateVisible(false)
+        } else {
+          setPendingCelebrate(existingPending)
+          setCelebrateVisible(true)
+        }
+      }
 
-// 2) ✅ Reliable trigger: highest milestone reached based on current total
-const reached = getHighestReached(nextTotal)
-if (reached) {
-  const last = getLastCelebrated()
+      // Reliable trigger: highest milestone reached based on current total
+      const reached = getHighestReached(nextTotal)
+      if (reached) {
+        const last = getLastCelebrated()
+        if (reached > last) {
+          setLastCelebrated(reached)
 
-  if (reached > last) {
-    setLastCelebrated(reached)
+          const payload = {
+            milestone: reached,
+            total_at_time_cents: nextTotalCents,
+            created_at: Date.now(),
+          }
+          setPendingCelebration(payload)
+          setPendingCelebrate(payload)
+          setCelebrateVisible(false)
+          setTimeout(() => setCelebrateVisible(true), 30)
+        }
+      }
 
-    const payload = {
-  milestone: reached,
-  total_at_time_cents: nextTotalCents,
-  created_at: Date.now(), // optional
-}
-setPendingCelebration(payload)
-setPendingCelebrate(payload)
-setCelebrateVisible(false)
-setTimeout(() => setCelebrateVisible(true), 30)
-  }
-}
-
-prevTotal.current = nextTotal
+      prevTotal.current = nextTotal
     } catch (e) {
       console.error('Dashboard load error:', e)
       setError(e?.message || 'Failed to load dashboard')
@@ -439,15 +562,18 @@ prevTotal.current = nextTotal
   const hasMilestone = activeMilestoneTarget > 0
   const usingSuggested = !(hasSavedMilestone && !milestoneAchieved)
 
-  const milestoneProgressPct = hasMilestone
-    ? Math.min(100, (total / activeMilestoneTarget) * 100)
-    : 0
-  const milestoneRemaining = hasMilestone
-    ? Math.max(activeMilestoneTarget - total, 0)
-    : 0
+  const milestoneProgressPct = hasMilestone ? Math.min(100, (total / activeMilestoneTarget) * 100) : 0
+  const milestoneRemaining = hasMilestone ? Math.max(activeMilestoneTarget - total, 0) : 0
 
   // Retirement goal
-  const retirementGoal = data.primary_goal || null
+  const rawGoal = primaryGoal || null
+
+  const retirementGoal =
+  rawGoal &&
+  (rawGoal.id || rawGoal.name) &&
+  Number(rawGoal?.target_amount || 0) > 0
+    ? rawGoal
+    : null
   const retirementTarget = Number(retirementGoal?.target_amount || 0)
   const retirementProgress =
     retirementTarget > 0 ? Math.min(100, (total / retirementTarget) * 100) : null
@@ -468,9 +594,7 @@ prevTotal.current = nextTotal
       : null
 
   const reachAge =
-    mToMilestone === null || !Number.isFinite(currentAge)
-      ? null
-      : Math.round(currentAge + mToMilestone / 12)
+    mToMilestone === null || !Number.isFinite(currentAge) ? null : Math.round(currentAge + mToMilestone / 12)
 
   const startEditMilestone = () => {
     setMilestoneInput(String(activeMilestoneTarget || ''))
@@ -507,16 +631,28 @@ prevTotal.current = nextTotal
       ? 'ring-2 ring-emerald-400/40 dark:ring-emerald-400/25'
       : ''
 
+  // Onboarding (truth comes from dashboard payload)
+const accountsCount = Number(data?.accounts_count ?? 0) || 0
+
+// goal: only done if dashboard actually has a goal
+const hasGoal = !!data?.primary_goal
+const needsGoal = !hasGoal
+
+// accounts: need at least 1
+const needsAccounts = accountsCount === 0
+
+const showOnboarding = needsGoal || needsAccounts
+
   return (
     <div className="space-y-6">
       {/* Thin premium receipt (persists + fades) */}
       {pendingCelebrate?.milestone ? (
         <MilestoneReceipt
-  visible={celebrateVisible}
-  milestone={pendingCelebrate?.milestone}
-  ccy={baseCurrency}
-  onDismiss={clearCelebration}
-/>
+          visible={celebrateVisible}
+          milestone={pendingCelebrate?.milestone}
+          ccy={baseCurrency}
+          onDismiss={clearCelebration}
+        />
       ) : null}
 
       {/* ═══ Hero Card ═══ */}
@@ -646,50 +782,16 @@ prevTotal.current = nextTotal
         </div>
       </div>
 
-{(data.accounts_count || 0) === 0 && !dismissAddAccountNudge && (
-  <Card className="px-5 py-4 mt-4">
-    <div className="flex items-start justify-between gap-4">
-      <div className="min-w-0 flex-1">
-        <div className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/60 dark:text-white/30">
-          Next step
-        </div>
-        <div className="mt-1 text-sm font-semibold text-ink dark:text-white">
-          Add your first account
-        </div>
-        <div className="mt-1 text-xs text-ink-muted/60 dark:text-white/30 leading-snug">
-          Add your ISA, SIPP, bank & savings accounts — anything you want included in your net worth.
-        </div>
-
-        <div className="mt-3 flex items-center gap-2">
-          <button
-            onClick={() => setPage('accounts')}
-            className="px-4 py-2 rounded-2xl bg-accent text-white text-sm font-semibold hover:bg-accent-dark active:scale-[.98] transition-all"
-            type="button"
-          >
-            Add account
-          </button>
-
-          <button
-            onClick={dismissNudge}
-            className="px-3 py-2 rounded-2xl text-xs font-semibold text-ink-muted/70 dark:text-white/35 hover:bg-black/[.04] dark:hover:bg-white/[.06] transition-colors"
-            type="button"
-          >
-            Not now
-          </button>
-        </div>
-      </div>
-
-      <button
-        onClick={dismissNudge}
-        className="p-2 -mr-1 rounded-xl text-ink-muted dark:text-white/35 hover:bg-black/5 dark:hover:bg-white/5 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
-        type="button"
-        aria-label="Dismiss"
-      >
-        ×
-      </button>
-    </div>
-  </Card>
-)}
+      {/* ═══ Premium onboarding (disappears when complete) ═══ */}
+      {showOnboarding && (
+        <OnboardingPanel
+          needsGoal={needsGoal}
+          needsAccounts={needsAccounts}
+          accountsCount={accountsCount}
+          onGoal={() => setPage('goal_setup')}
+          onAccounts={() => setPage('accounts')}
+        />
+      )}
 
       {/* ═══ Trend + Retirement ═══ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -730,7 +832,11 @@ prevTotal.current = nextTotal
           </div>
 
           <div className="mt-3 text-xs text-ink-muted/55 dark:text-white/25 tabular-nums">
-            {sparkValues.length >= 2 ? <>{fmtCurrency(delta, ccy)} over 90D</> : <>Add another snapshot to see trend</>}
+            {sparkValues.length >= 2 ? (
+              <>{fmtCurrency(delta, ccy)} over 90D</>
+            ) : (
+              <>Add another snapshot to see trend</>
+            )}
           </div>
         </Card>
 
@@ -741,7 +847,9 @@ prevTotal.current = nextTotal
                 Retirement plan
               </div>
               {retirementGoal?.name ? (
-                <div className="text-xs text-ink-muted/60 dark:text-white/25 mt-1">{retirementGoal.name}</div>
+                <div className="text-xs text-ink-muted/60 dark:text-white/25 mt-1">
+                  {retirementGoal.name}
+                </div>
               ) : (
                 <div className="text-xs text-ink-muted/60 dark:text-white/25 mt-1">Primary goal</div>
               )}
@@ -780,44 +888,44 @@ prevTotal.current = nextTotal
       </div>
 
       {/* ═══ Stats bar (Accounts + Snapshots) ═══ */}
-<Card className="px-5 py-4">
-  <div className="flex items-center justify-between gap-4">
-    <button
-      onClick={() => setPage('accounts')}
-      className="text-left flex-1 min-w-0 hover:opacity-90 transition-opacity"
-      type="button"
-    >
-      <div className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/60 dark:text-white/30">
-        Accounts
-      </div>
-      <div className="text-sm font-semibold text-ink dark:text-white tabular-nums mt-1">
-        {data.accounts_count || 0}{' '}
-        <span className="text-ink-muted/60 dark:text-white/30 font-medium">total</span>
-      </div>
-    </button>
+      <Card className="px-5 py-4">
+        <div className="flex items-center justify-between gap-4">
+          <button
+            onClick={() => setPage('accounts')}
+            className="text-left flex-1 min-w-0 hover:opacity-90 transition-opacity"
+            type="button"
+          >
+            <div className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/60 dark:text-white/30">
+              Accounts
+            </div>
+            <div className="text-sm font-semibold text-ink dark:text-white tabular-nums mt-1">
+              {data.accounts_count || 0}{' '}
+              <span className="text-ink-muted/60 dark:text-white/30 font-medium">total</span>
+            </div>
+          </button>
 
-    <div className="w-px h-10 bg-black/[.06] dark:bg-white/[.06]" />
+          <div className="w-px h-10 bg-black/[.06] dark:bg-white/[.06]" />
 
-    <button
-      onClick={() => setPage('snapshots')}
-      className="text-left flex-1 min-w-0 hover:opacity-90 transition-opacity"
-      type="button"
-    >
-      <div className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/60 dark:text-white/30">
-        Snapshots
-      </div>
-      <div className="text-sm font-semibold text-ink dark:text-white tabular-nums mt-1">
-        {data.total_snapshots || 0}{' '}
-        <span className="text-ink-muted/60 dark:text-white/30 font-medium">recorded</span>
-      </div>
-    </button>
-  </div>
-</Card>
+          <button
+            onClick={() => setPage('snapshots')}
+            className="text-left flex-1 min-w-0 hover:opacity-90 transition-opacity"
+            type="button"
+          >
+            <div className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/60 dark:text-white/30">
+              Snapshots
+            </div>
+            <div className="text-sm font-semibold text-ink dark:text-white tabular-nums mt-1">
+              {data.total_snapshots || 0}{' '}
+              <span className="text-ink-muted/60 dark:text-white/30 font-medium">recorded</span>
+            </div>
+          </button>
+        </div>
+      </Card>
 
       {/* Mobile logout — only visible on small screens */}
       <div className="lg:hidden mt-6 pb-2">
         <button
-          onClick={handleLogout}
+          onClick={logout}
           className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-sm font-medium text-loss/80 hover:text-loss border border-loss/20 hover:bg-loss-light/60 dark:hover:bg-loss/10 transition-colors"
           type="button"
         >

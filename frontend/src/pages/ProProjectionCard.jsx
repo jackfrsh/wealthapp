@@ -57,13 +57,7 @@ function currencyFmt(n, ccy = 'GBP') {
 /* Projection calculation */
 /* ───────────────────────────────────────────── */
 
-function calcSeries({
-  included,
-  horizonMonths,
-  fallbackAnnualReturnPct,
-  simulation,
-  longHorizon,
-}) {
+function calcSeries({ included, horizonMonths, fallbackAnnualReturnPct, simulation, longHorizon }) {
   const itemsBase = included.map((a) => ({
     id: a.id,
     bal: Number(a?.balance || 0),
@@ -74,13 +68,10 @@ function calcSeries({
   const itemsSim = included.map((a) => {
     const baseBal = Number(a?.balance || 0)
     const isSelected =
-      simulation?.accountId != null &&
-      String(a.id) === String(simulation.accountId)
+      simulation?.accountId != null && String(a.id) === String(simulation.accountId)
 
     const lumpAdd =
-      simulation?.mode === 'lump' && isSelected
-        ? Number(simulation?.amount || 0)
-        : 0
+      simulation?.mode === 'lump' && isSelected ? Number(simulation?.amount || 0) : 0
 
     return {
       id: a.id,
@@ -101,28 +92,20 @@ function calcSeries({
   })
 
   for (let i = 1; i <= horizonMonths; i++) {
-    // baseline
     for (const x of itemsBase) {
       x.bal = x.bal * (1 + x.r) + x.m
     }
 
-    // simulated
     for (const x of itemsSim) {
       const isSelected =
-        simulation?.accountId != null &&
-        String(x.id) === String(simulation.accountId)
+        simulation?.accountId != null && String(x.id) === String(simulation.accountId)
 
       const extraMonthly =
-        simulation?.mode === 'monthly' && isSelected
-          ? Number(simulation?.amount || 0)
-          : 0
+        simulation?.mode === 'monthly' && isSelected ? Number(simulation?.amount || 0) : 0
 
       x.bal = x.bal * (1 + x.r) + x.m + extraMonthly
     }
 
-    // Labels:
-    // - short horizons: keep a few month labels
-    // - long horizons (10y/20y): only label years
     const isYear = i % 12 === 0
     const isHalfYear = i % 6 === 0
 
@@ -151,69 +134,18 @@ function calcSeries({
 }
 
 /* ───────────────────────────────────────────── */
-/* Tooltip */
-/* ───────────────────────────────────────────── */
-
-function ProjectionTooltip({ active, payload, label, baseCurrency }) {
-  if (!active || !payload || payload.length === 0) return null
-
-  const b = payload.find((p) => p.dataKey === 'baseline')?.value
-  const s = payload.find((p) => p.dataKey === 'simulated')?.value
-  const d = payload[0]?.payload
-
-  // Compute an approximate date from the month index
-  const monthOffset = d?.x
-  let dateStr = label === 'Now' ? 'Now' : label || ''
-  if (typeof monthOffset === 'number' && monthOffset > 0) {
-    const future = new Date()
-    future.setMonth(future.getMonth() + monthOffset)
-    dateStr = future.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
-  }
-
-  return (
-    <div className="rounded-2xl px-4 py-3 bg-white dark:bg-[#1c2029] border border-black/[.08] dark:border-white/[.08] shadow-xl">
-      <div className="text-xs text-ink-muted dark:text-white/35 mb-2">
-        {dateStr}
-      </div>
-
-      {typeof b === 'number' && (
-        <div className="flex justify-between gap-6">
-          <div className="text-xs text-ink-muted dark:text-white/35">
-            Baseline
-          </div>
-          <div className="text-sm font-semibold tabular-nums text-ink dark:text-white">
-            {currencyFmt(b, baseCurrency)}
-          </div>
-        </div>
-      )}
-
-      {typeof s === 'number' && (
-        <div className="flex justify-between gap-6 mt-1">
-          <div className="text-xs text-ink-muted dark:text-white/35">
-            Simulated
-          </div>
-          <div className="text-sm font-semibold tabular-nums text-ink dark:text-white">
-            {currencyFmt(s, baseCurrency)}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-/* ───────────────────────────────────────────── */
 /* Main Component */
 /* ───────────────────────────────────────────── */
 
 export default function ProProjectionCard({
   accounts = [],
-  goalTarget = null,          // Retirement target line
-  goalName = 'Retirement',    // Label should match Strategy plan name
-  milestoneTarget = null,     // Short/medium “hero” goal line
+  goalTarget = null,
+  goalName = 'Retirement',
+  milestoneTarget = null,
   fallbackAnnualReturnPct = 7,
   simulation = null,
 }) {
-  const { isPro, setPage, baseCurrency, dark } = useApp()
+  const { isPro, setPage, baseCurrency, isDark } = useApp()
 
   const included = (accounts || []).filter(getIncludeFlag)
   const canChart = included.length > 0
@@ -226,10 +158,8 @@ export default function ProProjectionCard({
     { id: '20y', label: '20y', months: 240 },
   ]
 
-  // Own the horizon state internally (prevents parent prop locking it)
   const [horizon, setHorizon] = useState('24m')
 
-  // Safety: if someone later removes 24m option, fall back cleanly
   useEffect(() => {
     if (!OPTIONS.some((o) => o.id === horizon)) setHorizon('24m')
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -240,7 +170,7 @@ export default function ProProjectionCard({
     return found ? found.months : 24
   }, [horizon])
 
-  const longHorizon = horizonMonths >= 120 // 10y/20y
+  const longHorizon = horizonMonths >= 120
 
   const { series, startBase, endBase, endSim } = useMemo(() => {
     return calcSeries({
@@ -252,26 +182,20 @@ export default function ProProjectionCard({
     })
   }, [included, horizonMonths, fallbackAnnualReturnPct, simulation, longHorizon])
 
-  // Line colours (distinct + readable)
-  const baselineStroke = dark ? 'rgba(255,255,255,.20)' : 'rgba(0,0,0,.22)'
+  const baselineStroke = isDark ? 'rgba(255,255,255,.20)' : 'rgba(0,0,0,.22)'
   const simStroke = 'var(--accent)'
 
-  // Reference line colours (distinct)
-  const retirementStroke = 'rgba(245,158,11,0.70)' // amber
-  const milestoneStroke = dark
-    ? 'rgba(52,211,153,0.75)' // emerald-ish
-    : 'rgba(16,185,129,0.70)'
+  const retirementStroke = 'rgba(245,158,11,0.70)'
+  const milestoneStroke = isDark ? 'rgba(52,211,153,0.75)' : 'rgba(16,185,129,0.70)'
 
-  // Paywall overlay
   const locked = !isPro
   const chartOpacity = locked ? 'opacity-25' : 'opacity-100'
 
-  // X-axis interval: make 20y readable
   const xInterval = useMemo(() => {
     if (horizonMonths <= 24) return 0
     if (horizonMonths <= 60) return 1
     if (horizonMonths <= 120) return 3
-    return 7 // 20y: show far fewer labels
+    return 7
   }, [horizonMonths])
 
   const hasRetirement = Number(goalTarget) > 0
@@ -300,7 +224,6 @@ export default function ProProjectionCard({
         </span>
       </div>
 
-      {/* Horizon controls */}
       <div className="mt-4 flex items-center gap-2">
         {OPTIONS.map((opt) => {
           const active = horizon === opt.id
@@ -331,12 +254,12 @@ export default function ProProjectionCard({
         </div>
       ) : (
         <>
-          {/* Legend pills */}
           <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
             <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/[.03] dark:bg-white/[.05] text-ink-muted dark:text-white/35">
               <span className="w-2 h-2 rounded-full" style={{ background: baselineStroke }} />
               Baseline
             </span>
+
             <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/[.03] dark:bg-white/[.05] text-ink-muted dark:text-white/35">
               <span className="w-2 h-2 rounded-full" style={{ background: simStroke }} />
               Simulated
@@ -363,25 +286,19 @@ export default function ProProjectionCard({
                 <LineChart data={series}>
                   <CartesianGrid {...gridProps} />
 
-                  <XAxis
-                    dataKey="label"
-                    {...xAxisProps}
-                    interval={xInterval}
-                    minTickGap={10}
-                  />
+                  <XAxis dataKey="label" {...xAxisProps} interval={xInterval} minTickGap={10} />
 
                   <YAxis
                     {...yAxisProps}
                     width={46}
-                    tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
+                    tickFormatter={(v) => compactTickFormatter(v)}
                   />
 
                   <Tooltip
-  content={<WealthTooltip currency={baseCurrency} />}
-  {...tooltipProps}
-/>
+                    {...tooltipProps}
+                    content={(p) => <WealthTooltip {...p} currency={baseCurrency} />}
+                  />
 
-                  {/* Goal lines */}
                   {hasRetirement ? (
                     <ReferenceLine
                       y={Number(goalTarget)}
@@ -421,41 +338,30 @@ export default function ProProjectionCard({
 
             {!isPro && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <UpgradeButton
-  onClick={() => setPage('upgrade')}
-  icon={Lock}
-  size="md"
->
-  Unlock projections
-</UpgradeButton>
+                <UpgradeButton onClick={() => setPage('upgrade')} icon={Lock} size="md">
+                  Unlock projections
+                </UpgradeButton>
               </div>
             )}
           </div>
 
-          {/* Summary row */}
           <div className="mt-4 grid grid-cols-3 gap-3">
             <div className="rounded-2xl bg-black/[.03] dark:bg-white/[.04] p-4">
-              <div className="text-[11px] text-ink-muted/60 dark:text-white/30">
-                Now
-              </div>
+              <div className="text-[11px] text-ink-muted/60 dark:text-white/30">Now</div>
               <div className="mt-1 text-sm font-semibold tabular-nums text-ink dark:text-white">
                 {isPro ? currencyFmt(startBase, baseCurrency) : '—'}
               </div>
             </div>
 
             <div className="rounded-2xl bg-black/[.03] dark:bg-white/[.04] p-4">
-              <div className="text-[11px] text-ink-muted/60 dark:text-white/30">
-                Baseline
-              </div>
+              <div className="text-[11px] text-ink-muted/60 dark:text-white/30">Baseline</div>
               <div className="mt-1 text-sm font-semibold tabular-nums text-ink dark:text-white">
                 {isPro ? currencyFmt(endBase, baseCurrency) : '—'}
               </div>
             </div>
 
             <div className="rounded-2xl bg-black/[.03] dark:bg-white/[.04] p-4">
-              <div className="text-[11px] text-ink-muted/60 dark:text-white/30">
-                Simulated
-              </div>
+              <div className="text-[11px] text-ink-muted/60 dark:text-white/30">Simulated</div>
               <div className="mt-1 text-sm font-semibold tabular-nums text-ink dark:text-white">
                 {isPro ? currencyFmt(endSim, baseCurrency) : '—'}
               </div>

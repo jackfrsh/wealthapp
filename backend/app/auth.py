@@ -34,9 +34,59 @@ from passlib.context import CryptContext
 from sqlmodel import Session, select
 
 from .database import get_session
-from .models import User
+from .models import User, AnalyticsEvent
 
 logger = logging.getLogger("wealth.auth")
+
+import json
+
+
+# region agent log
+def _agent_debug_log(
+    *,
+    run_id: str,
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict | None = None,
+) -> None:
+    """Lightweight NDJSON debug logger for this debug session."""
+    try:
+        payload = {
+            "sessionId": "a82a6a",
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(datetime.now().timestamp() * 1000),
+        }
+        with open(
+            "/Users/martyn/wealth-app/.cursor/debug-a82a6a.log",
+            "a",
+            encoding="utf-8",
+        ) as f:
+            f.write(json.dumps(payload) + "\n")
+    except Exception:
+        # Debug-only, must never break auth
+        pass
+
+
+# endregion
+
+def _log_event(session: Session, user_id: int, name: str, meta: dict | None = None) -> None:
+    """Best-effort analytics logging. Never blocks auth."""
+    try:
+        session.add(
+            AnalyticsEvent(
+                user_id=user_id,
+                name=name,
+                meta_json=json.dumps(meta or {}),
+            )
+        )
+        session.commit()
+    except Exception:
+        session.rollback()
 
 # Always load backend/.env regardless of where uvicorn is started from
 ENV_PATH = Path(__file__).resolve().parents[1] / ".env"  # backend/.env
@@ -170,6 +220,16 @@ def get_current_user(
 
     from sqlalchemy.exc import IntegrityError
 
+    # region agent log
+    _agent_debug_log(
+        run_id="pre-fix",
+        hypothesis_id="H1",
+        location="backend/app/auth.py:get_current_user",
+        message="after_jwt_verified",
+        data={"has_sub": bool(sub), "has_email": bool(email)},
+    )
+    # endregion
+
     user = session.exec(select(User).where(User.supabase_user_id == sub)).first()
 
     if user is None:
@@ -200,11 +260,19 @@ def get_current_user(
                 session.add(user)
                 session.commit()
                 session.refresh(user)
+
+                # Ensure settings exist
+                _ensure_default_settings(session, user.id)
+
+                # Server-grade signup event (fires once: user row creation)
+                _log_event(session, user.id, "signup")
+
             except IntegrityError:
                 session.rollback()
                 user = session.exec(select(User).where(User.username == email)).first()
                 if user is None:
                     raise HTTPException(status_code=500, detail="User creation failed unexpectedly")
+
                 # If existing row has no supabase_user_id, link it
                 if not user.supabase_user_id:
                     user.supabase_user_id = sub
@@ -217,8 +285,8 @@ def get_current_user(
                         detail="Username already linked to a different Supabase account",
                     )
 
-            # Race-safe default settings creation
-            _ensure_default_settings(session, user.id)
+                # Ensure settings exist (covers duplicate/create-race path too)
+                _ensure_default_settings(session, user.id)
 
     # Always ensure settings exist (covers linked-existing-user paths too)
     _ensure_default_settings(session, user.id)

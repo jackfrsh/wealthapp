@@ -3,6 +3,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from sqlmodel import SQLModel
+from .database import engine
+from .database import ensure_schema
+from . import models  # noqa: F401
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -17,6 +22,8 @@ from .routers import (
     insights,
     projection,
     history,
+    admin,
+    events,
     billing,
 )
 
@@ -55,6 +62,8 @@ app.include_router(insights.router, prefix=API_PREFIX)
 app.include_router(projection.router, prefix=API_PREFIX)
 app.include_router(history.router, prefix=API_PREFIX)
 app.include_router(billing.router, prefix=API_PREFIX)
+app.include_router(events.router, prefix=API_PREFIX)
+app.include_router(admin.router, prefix=API_PREFIX)
 
 # ────────────────────────────────────────────
 # Health
@@ -63,6 +72,9 @@ app.include_router(billing.router, prefix=API_PREFIX)
 def health():
     return {"ok": True}
 
+@app.on_event("startup")
+def _startup():
+    ensure_schema()
 # ────────────────────────────────────────────
 # Serve frontend static files (production)
 # ────────────────────────────────────────────

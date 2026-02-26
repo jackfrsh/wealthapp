@@ -6,7 +6,7 @@ POST   /goals
 PATCH  /goals/{id}
 PUT    /goals/{id}
 DELETE /goals/{id}
-GET    /goals/primary
+GET    /goals/primary (404 if none)
 GET    /goals/{id}/forecast
 """
 
@@ -207,6 +207,7 @@ def get_primary_goal(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    # If goals exist but none marked primary, fix that first.
     _ensure_primary_goal(session, current_user.id)
 
     goal = session.exec(
@@ -217,7 +218,7 @@ def get_primary_goal(
     ).first()
 
     if not goal:
-        raise HTTPException(status_code=404, detail="No primary goal")
+        raise HTTPException(status_code=404, detail="No primary goal set")
 
     return goal
 

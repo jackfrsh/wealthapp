@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useApp } from '../App'
+import { Lock } from 'lucide-react'
 
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n))
 
@@ -47,7 +48,6 @@ function monthsToReachGoal_perAccount({
     .map((a) => {
       const baseBal = Number(a?.balance || 0)
       const isSelected = extraAccountId != null && String(a.id) === String(extraAccountId)
-
       const lumpAdd = mode === 'lump' && isSelected ? Number(extraAmount || 0) : 0
 
       return {
@@ -123,7 +123,6 @@ export default function WhatIfCard({
   const [amount, setAmount] = useState(100)
   const [accountId, setAccountId] = useState('')
 
-  // Default selection: highest return account
   useEffect(() => {
     if (accountId || included.length === 0) return
     const best = [...included].sort((a, b) => {
@@ -134,7 +133,6 @@ export default function WhatIfCard({
     setAccountId(best?.id ?? included[0].id)
   }, [accountId, included, portfolioAnnualReturnPct])
 
-  // Keep slider sensible when switching modes
   useEffect(() => {
     if (mode === 'monthly') {
       if (amount > 500) setAmount(100)
@@ -144,14 +142,9 @@ export default function WhatIfCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode])
 
-  // Push simulation up to Insights (so chart can react live)
   useEffect(() => {
     if (!onSimulationChange) return
-    onSimulationChange({
-      mode,
-      amount,
-      accountId,
-    })
+    onSimulationChange({ mode, amount, accountId })
   }, [mode, amount, accountId, onSimulationChange])
 
   const canCompute = Boolean(goalTarget) && included.length > 0
@@ -214,32 +207,45 @@ export default function WhatIfCard({
     ? getAnnualReturnPct(selected, portfolioAnnualReturnPct)
     : portfolioAnnualReturnPct
 
+  const toggleBtn = (active) =>
+    [
+      'px-4 py-1.5 text-xs font-semibold rounded-xl transition-all duration-200 ease-smooth',
+      active
+        ? 'bg-white dark:bg-white/10 text-ink dark:text-white shadow-[0_1px_0_rgba(255,255,255,.06)_inset]'
+        : 'text-ink-muted dark:text-white/40 hover:text-ink dark:hover:text-white/65',
+    ].join(' ')
+
   return (
-    <div className="rounded-2xl border border-black/[.06] dark:border-white/[.06] bg-white dark:bg-white/5 shadow-[0_4px_12px_rgba(17,24,39,.08)] p-6">
-      <div className="text-xs font-semibold tracking-[.14em] uppercase text-ink-muted/60 dark:text-white/30">
-        Insights
-      </div>
+    <div className="rounded-3xl border border-black/[.06] dark:border-white/[.07] bg-card dark:bg-surface-dark-2 shadow-card p-6">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <div className="text-xs font-semibold tracking-tightish text-ink-muted/70 dark:text-white/35">
+            What-if
+          </div>
+          <div className="mt-1 text-lg font-semibold tracking-tightish text-ink dark:text-white">
+            Accelerate your milestone
+          </div>
+          <div className="mt-1 text-sm text-ink-muted/70 dark:text-white/35">
+            Model contributions and see how much sooner you reach your target.
+          </div>
+        </div>
 
-      <div className="mt-2 text-lg font-semibold text-ink dark:text-white">
-        Accelerate your goal
-      </div>
-
-      <div className="mt-1 text-sm text-ink-muted/70 dark:text-white/35">
-        Model contributions and see how much sooner you reach your target.
+        {!isPro && (
+          <button
+            type="button"
+            onClick={() => setPage('upgrade')}
+            className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-2xl border border-black/[.08] dark:border-white/[.10] bg-black/[.02] dark:bg-white/[.05] text-xs font-semibold text-ink dark:text-white hover:bg-black/[.04] dark:hover:bg-white/[.07] transition-colors"
+          >
+            <Lock size={14} className="opacity-75" />
+            Pro
+          </button>
+        )}
       </div>
 
       <div className="mt-5 grid gap-4">
-        {/* Mode Toggle */}
-        <div className="flex rounded-xl bg-black/[.03] dark:bg-white/[.05] p-1 w-fit">
-          <button
-            type="button"
-            onClick={() => setMode('monthly')}
-            className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-              mode === 'monthly'
-                ? 'bg-white dark:bg-white/10 text-ink dark:text-white shadow-sm'
-                : 'text-ink-muted dark:text-white/40'
-            }`}
-          >
+        {/* Mode toggle */}
+        <div className="flex rounded-2xl bg-black/[.03] dark:bg-white/[.05] p-1 w-fit">
+          <button type="button" onClick={() => setMode('monthly')} className={toggleBtn(mode === 'monthly')}>
             Monthly
           </button>
 
@@ -252,13 +258,9 @@ export default function WhatIfCard({
               }
               setMode('lump')
             }}
-            className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-              mode === 'lump'
-                ? 'bg-white dark:bg-white/10 text-ink dark:text-white shadow-sm'
-                : 'text-ink-muted dark:text-white/40'
-            }`}
+            className={toggleBtn(mode === 'lump')}
           >
-            One-Off {!isPro && <span className="ml-1 text-[9px] font-medium tracking-wider text-amber-600 dark:text-amber-300">PRO</span>}
+            One-off
           </button>
         </div>
 
@@ -290,7 +292,7 @@ export default function WhatIfCard({
             value={accountId || ''}
             onChange={(e) => setAccountId(e.target.value)}
             disabled={included.length === 0}
-            className="text-sm bg-transparent border border-black/[.08] dark:border-white/[.08] rounded-xl px-3 py-2 text-ink dark:text-white disabled:opacity-50"
+            className="text-sm bg-transparent border border-black/[.08] dark:border-white/[.10] rounded-2xl px-3 py-2 text-ink dark:text-white disabled:opacity-50"
           >
             {included.length === 0 ? (
               <option value="">No included accounts</option>
@@ -311,7 +313,7 @@ export default function WhatIfCard({
         ) : null}
 
         {/* Result */}
-        <div className="mt-2 rounded-xl bg-black/[.03] dark:bg-white/[.04] p-4">
+        <div className="mt-2 rounded-2xl bg-black/[.03] dark:bg-white/[.04] p-4">
           {!canCompute ? (
             <div className="text-sm text-ink-muted/70 dark:text-white/35">
               {goalTarget
@@ -319,7 +321,7 @@ export default function WhatIfCard({
                 : 'Set a target goal to see acceleration.'}
             </div>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <div className="flex items-baseline justify-between">
                 <div className="text-sm text-ink-muted/70 dark:text-white/35">Current pace</div>
                 <div className="text-sm font-semibold tabular-nums text-ink dark:text-white">
@@ -349,7 +351,6 @@ export default function WhatIfCard({
                 </span>
               </div>
 
-              {/* Money delta: Pro-only (subtle lock) */}
               {moneyDeltaByBaselineDate != null && (
                 <div className="pt-1 text-sm">
                   {isPro ? (
@@ -362,10 +363,12 @@ export default function WhatIfCard({
                     </div>
                   ) : (
                     <button
+                      type="button"
                       onClick={() => setPage('upgrade')}
-                      className="text-xs font-semibold text-amber-700 dark:text-amber-300 hover:opacity-80 transition-opacity"
+                      className="inline-flex items-center gap-2 text-xs font-semibold tracking-tightish text-accent hover:text-accent-dark transition-colors"
                     >
-                      🔒 Unlock projected gain impact
+                      <Lock size={13} className="opacity-80" />
+                      Unlock projected gain impact
                     </button>
                   )}
                 </div>

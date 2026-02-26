@@ -1,8 +1,9 @@
 // frontend/src/pages/Outlook.jsx
-import React, { useState, useEffect, useCallback, useRef, useMemo, act } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { api } from '../api'
 import { useApp } from '../App'
 import Card from '../components/Card'
+import { track } from '../track'
 import { fmtCurrency, fmtCurrencyCompact } from '../utils'
 import {
   AreaChart,
@@ -16,7 +17,17 @@ import {
 } from 'recharts'
 
 import WealthTooltip from '../components/charts/WealthTooltip'
-import { xAxisProps, yAxisProps, gridProps, tooltipProps, compactTickFormatter, chartMargin, ACCENT_STROKE, activeDotStyle} from '../components/charts/chartTheme'
+import {
+  xAxisProps,
+  yAxisProps,
+  gridProps,
+  tooltipProps,
+  compactTickFormatter,
+  chartMargin,
+  ACCENT_STROKE,
+  activeDotStyle,
+} from '../components/charts/chartTheme'
+
 import UpgradeButton from '../components/UpgradeButton'
 import {
   ChevronDown,
@@ -33,7 +44,7 @@ import {
   Lock,
 } from 'lucide-react'
 
-const FREE_HORIZON = 1 // Free users see 1-year projection only
+const FREE_HORIZON = 1
 
 export default function Outlook() {
   const {
@@ -75,29 +86,27 @@ export default function Outlook() {
   const [trajOpen, setTrajOpen] = useState(true)
   const [projData, setProjData] = useState(null)
   const [projHistory, setProjHistory] = useState([])
-  // IMPORTANT: don’t derive initial state from isPro (prevents Pro flicker)
-  const [projYears, setProjYears] = useState(FREE_HORIZON)
+  // Store user preference; free users get clamped via effective horizon
+  const [projYears, setProjYears] = useState(25)
   const [projLoading, setProjLoading] = useState(false)
 
-  // Sync default horizon once settings are known (prevents flicker)
-  useEffect(() => {
-    if (!settingsReady) return
-    setProjYears(isPro ? 25 : FREE_HORIZON)
-  }, [settingsReady, isPro])
-
   // ─── Inflation adjustment ───────────────────────────────
-  const INFLATION_RATE = 0.025 // 2.5% annual
+  const INFLATION_RATE = 0.025
   const [inflationAdj, setInflationAdj] = useState(false)
 
-  // Helper: deflate a nominal value to real terms
-  // NOTE: must not be a hook (e.g. useCallback) because Outlook has early returns.
+  // Deflate a nominal value to real terms (only applies for Pro + toggle)
   const deflate = (value, yearsFromNow) => {
     if (!settingsReady) return value
     if (!inflationAdj || !isPro) return value
     return value / Math.pow(1 + INFLATION_RATE, yearsFromNow)
   }
 
+  // Horizons list
   const HORIZONS = settingsReady && isPro ? [1, 5, 10, 15, 20, 25, 30, 40] : [1]
+
+  // Effective horizon: free users always 1y (even if projYears is 25)
+  const effectiveProjYears =
+    settingsReady && isPro ? projYears : FREE_HORIZON
 
   const goalId = primaryGoal?.id
 
@@ -110,8 +119,12 @@ export default function Outlook() {
       try {
         let url = `/goals/${goalId}/forecast`
         const params = []
-        if (mc !== undefined && mc !== '') params.push(`monthly_contribution=${encodeURIComponent(mc)}`)
-        if (er !== undefined && er !== '') params.push(`expected_return=${encodeURIComponent(er)}`)
+        if (mc !== undefined && mc !== '') {
+          params.push(`monthly_contribution=${encodeURIComponent(mc)}`)
+        }
+        if (er !== undefined && er !== '') {
+          params.push(`expected_return=${encodeURIComponent(er)}`)
+        }
         if (params.length) url += '?' + params.join('&')
 
         const d = await api(url)
@@ -146,34 +159,61 @@ export default function Outlook() {
     }
   }, [primaryGoal, loadForecast])
 
-  // ─── Projections loader ─────────────────────────────────
-  const loadProjections = useCallback(
-    async (y) => {
-      setProjLoading(true)
-      try {
-        const years = y || projYears
-        const days = Math.max(365, Math.round(years * 365))
+  // ─── Projections loader (DEFINE BEFORE EFFECTS THAT USE IT) ──────────────
+  const loadProjections = useCallback(async (years) => {
+    const horizon = years ?? FREE_HORIZON
 
-const [proj, hist] = await Promise.all([
-  api(`/projection/networth?years=${years}`),
-  api(`/history/networth?days=${days}`),
-])
-        setProjData(proj)
-        setProjHistory(hist.points || [])
-      } catch (e) {
-        console.error('Projections load error:', e)
-      } finally {
-        setProjLoading(false)
-      }
-    },
-    [projYears]
-  )
+    setProjLoading(true)
+    try {
+      const days = Math.max(365, Math.round(horizon * 365))
 
-  // Load projections when section opens or horizon changes
+      const [proj, hist] = await Promise.all([
+        api(`/projection/networth?years=${horizon}`),
+        api(`/history/networth?days=${days}`),
+      ])
+
+      setProjData(proj)
+      setProjHistory(hist.points || [])
+    } catch (e) {
+      console.error('Projections load error:', e)
+    } finally {
+      setProjLoading(false)
+    }
+  }, [])
+
+  // Keep a sensible default when entitlement becomes known
   useEffect(() => {
-    if (projOpen) loadProjections(projYears)
-  }, [projOpen, projYears, loadProjections])
+    if (!settingsReady) return
 
+    // If user is Pro and still on 1y, bump to 25y once
+    if (isPro) {
+      setProjYears((prev) => (prev && prev !== FREE_HORIZON ? prev : 25))
+    } else {
+      // Don’t force projYears to 1 (keep preference for when they upgrade),
+      // but we do clamp via effectiveProjYears anyway.
+      setProjYears((prev) => prev || 25)
+    }
+  }, [settingsReady, isPro])
+
+  // Load whenever projections panel is open and effective horizon changes
+  useEffect(() => {
+    if (!projOpen) return
+    if (!settingsReady) return
+    loadProjections(effectiveProjYears)
+  }, [projOpen, settingsReady, effectiveProjYears, loadProjections])
+
+  // If Pro flips on while panel is open, force-load 25y immediately
+  useEffect(() => {
+    if (!projOpen) return
+    if (!settingsReady) return
+    if (!isPro) return
+    loadProjections(25)
+  }, [projOpen, settingsReady, isPro, loadProjections])
+
+  useEffect(() => {
+    track('projection_opened')
+  }, [])
+  
   // ─── Strategy actions ───────────────────────────────────
   const showFeedback = (msg) => {
     setFeedback(msg)
@@ -188,52 +228,50 @@ const [proj, hist] = await Promise.all([
   }
 
   const applyAssumptions = async () => {
-  if (!goalId) return
+    if (!goalId) return
 
-  const mc = Number(String(localContrib).replace(/,/g, ''))
-  const er = Number(String(localReturn).replace(/,/g, ''))
-  const prevStatus = forecast?.status
-
-  try {
-    // ✅ Explicit PATCH
-    await api(`/goals/${goalId}`, {
-      method: 'PATCH', // change to PUT if backend only supports PUT
-      body: {
-        monthly_contribution: mc,
-        expected_annual_return_pct: er,
-      },
-    })
-
-    await loadPrimaryGoal()
-    bumpData()
-    setDirty(false)
-    setLoading(true)
-    await loadForecast(mc, er)
+    const mc = Number(String(localContrib).replace(/,/g, ''))
+    const er = Number(String(localReturn).replace(/,/g, ''))
+    const prevStatus = forecast?.status
 
     try {
-      const newForecast = await api(
-        `/goals/${goalId}/forecast?monthly_contribution=${encodeURIComponent(
-          mc
-        )}&expected_return=${encodeURIComponent(er)}`
-      )
+      await api(`/goals/${goalId}`, {
+        method: 'PATCH',
+        body: {
+          monthly_contribution: mc,
+          expected_annual_return_pct: er,
+        },
+      })
 
-      if (
-        (newForecast.status === 'on_track' ||
-          newForecast.status === 'ahead') &&
-        prevStatus === 'adjust'
-      ) {
-        showFeedback("You're now on track.")
+      await loadPrimaryGoal()
+      bumpData()
+      setDirty(false)
+      setLoading(true)
+      await loadForecast(mc, er)
+
+      try {
+        const newForecast = await api(
+          `/goals/${goalId}/forecast?monthly_contribution=${encodeURIComponent(
+            mc
+          )}&expected_return=${encodeURIComponent(er)}`
+        )
+
+        if (
+          (newForecast.status === 'on_track' || newForecast.status === 'ahead') &&
+          prevStatus === 'adjust'
+        ) {
+          showFeedback("You're now on track.")
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
+    } catch (e) {
+      console.error(e)
+      showToast(e?.message || String(e), 'error')
+    } finally {
+      setLoading(false)
     }
-  } catch (e) {
-    console.error(e)
-    showToast(e?.message || String(e), 'error')
-  } finally {
-    setLoading(false)
   }
-}
 
   const openEdit = () => {
     const g = forecast?.goal || primaryGoal
@@ -248,67 +286,65 @@ const [proj, hist] = await Promise.all([
     })
     setEditOpen(true)
   }
+
   const closeEdit = () => setEditOpen(false)
   const updateEdit = (field, value) => setEditForm((f) => ({ ...f, [field]: value }))
 
   const saveEditPlan = async () => {
-  if (!goalId) return
+    if (!goalId) return
 
-  if (
-    !String(editForm.current_age || '').trim() ||
-    !String(editForm.target_age || '').trim() ||
-    !String(editForm.target_amount || '').trim()
-  ) {
-    showToast('Please fill in current age, target age and target amount', 'error')
-    return
+    if (
+      !String(editForm.current_age || '').trim() ||
+      !String(editForm.target_age || '').trim() ||
+      !String(editForm.target_amount || '').trim()
+    ) {
+      showToast('Please fill in current age, target age and target amount', 'error')
+      return
+    }
+
+    const payload = {
+      name: editForm.name,
+      current_age: Number(String(editForm.current_age).replace(/,/g, '')),
+      target_age: Number(String(editForm.target_age).replace(/,/g, '')),
+      target_amount: Number(String(editForm.target_amount).replace(/,/g, '')),
+      monthly_contribution: Number(String(editForm.monthly_contribution || 0).replace(/,/g, '')),
+      expected_annual_return_pct: Number(
+        String(editForm.expected_annual_return_pct || 0).replace(/,/g, '')
+      ),
+    }
+
+    try {
+      setEditSaving(true)
+
+      await api(`/goals/${goalId}`, {
+        method: 'PATCH',
+        body: payload,
+      })
+
+      showToast('Plan updated', 'success')
+
+      await loadPrimaryGoal()
+      bumpData()
+      setEditOpen(false)
+
+      setLoading(true)
+      await loadForecast(payload.monthly_contribution, payload.expected_annual_return_pct)
+    } catch (e) {
+      console.error(e)
+      showToast(e?.message || String(e), 'error')
+    } finally {
+      setEditSaving(false)
+      setLoading(false)
+    }
   }
 
-  const payload = {
-    name: editForm.name,
-    current_age: Number(String(editForm.current_age).replace(/,/g, '')),
-    target_age: Number(String(editForm.target_age).replace(/,/g, '')),
-    target_amount: Number(String(editForm.target_amount).replace(/,/g, '')),
-    monthly_contribution: Number(String(editForm.monthly_contribution || 0).replace(/,/g, '')),
-    expected_annual_return_pct: Number(
-      String(editForm.expected_annual_return_pct || 0).replace(/,/g, '')
-    ),
-  }
-
-  try {
-    setEditSaving(true)
-
-    // ✅ Explicit PATCH
-    await api(`/goals/${goalId}`, {
-      method: 'PATCH', // change to PUT if backend only supports PUT
-      body: payload,
-    })
-
-    showToast('Plan updated', 'success')
-
-    await loadPrimaryGoal()
-    bumpData()
-    setEditOpen(false)
-
-    setLoading(true)
-    await loadForecast(
-      payload.monthly_contribution,
-      payload.expected_annual_return_pct
-    )
-  } catch (e) {
-    console.error(e)
-    showToast(e?.message || String(e), 'error')
-  } finally {
-    setEditSaving(false)
-    setLoading(false)
-  }
-}
-
-  // ─── Milestone selection (must be above early returns; uses hooks) ───────
+  // ─── Milestone selection ────────────────────────────────
   const milestones = projData?.milestones || []
 
-  // Dynamically pick milestones based on selected horizon
   const filteredMilestones = useMemo(() => {
-    const all = milestones.filter((m) => m.year <= projYears).sort((a, b) => a.year - b.year)
+    const all = milestones
+      .filter((m) => m.year <= effectiveProjYears)
+      .sort((a, b) => a.year - b.year)
     if (all.length === 0) return []
 
     const yearsForHorizon = (h) => {
@@ -322,7 +358,7 @@ const [proj, hist] = await Promise.all([
       return [10, 20, 30, 40]
     }
 
-    const wantYears = yearsForHorizon(projYears).filter((y) => y <= projYears)
+    const wantYears = yearsForHorizon(effectiveProjYears).filter((y) => y <= effectiveProjYears)
 
     const pickForYear = (y) => {
       const exact = all.find((m) => m.year === y)
@@ -343,18 +379,19 @@ const [proj, hist] = await Promise.all([
     if (last && !picked.some((p) => p.year === last.year)) picked.push(last)
 
     return picked.slice(0, 4)
-  }, [milestones, projYears])
+  }, [milestones, effectiveProjYears])
 
-  // ═══════════════════════════════════════════════════════
-  // RENDERS
-  // ═══════════════════════════════════════════════════════
-
+  // ─── Renders ────────────────────────────────────────────
   if (!primaryGoal) {
     return (
       <div className="space-y-7">
-        <h1 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">Outlook</h1>
+        <h1 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">
+          Outlook
+        </h1>
         <Card className="p-10 text-center">
-          <p className="text-ink-muted dark:text-white/40 mb-4">Set a primary goal to unlock your financial outlook.</p>
+          <p className="text-ink-muted dark:text-white/40 mb-4">
+            Set a primary goal to unlock your financial outlook.
+          </p>
           <button
             onClick={() => setPage('home')}
             className="text-sm font-semibold px-5 py-2.5 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-colors"
@@ -380,7 +417,9 @@ const [proj, hist] = await Promise.all([
   if (error && !forecast) {
     return (
       <div className="space-y-7">
-        <h1 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">Outlook</h1>
+        <h1 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">
+          Outlook
+        </h1>
         <Card className="p-8 text-center">
           <AlertTriangle size={32} className="text-amber-500 mx-auto mb-4" />
           <p className="text-sm text-ink-muted dark:text-white/50 mb-2">Unable to load forecast</p>
@@ -405,18 +444,21 @@ const [proj, hist] = await Promise.all([
   const yearsRemaining = forecast?.years_remaining || 0
   const currentNW = forecast?.current_net_worth || 0
 
-  const statusLabels = { ahead: 'Ahead of plan', on_track: 'On track', adjust: 'Adjust to stay on track' }
+  const statusLabels = {
+    ahead: 'Ahead of plan',
+    on_track: 'On track',
+    adjust: 'Adjust to stay on track',
+  }
   const statusColors = {
     ahead: 'text-gain dark:text-emerald-400 bg-gain/10',
     on_track: 'text-accent dark:text-blue-400 bg-accent/10',
     adjust: 'text-amber-600 dark:text-amber-400 bg-amber-500/10',
   }
 
-  // Apply inflation adjustment to headline figures
   const displayProjEnd = deflate(projEnd, yearsRemaining)
   const displayTarget = deflate(targetAmt, yearsRemaining)
 
-  // Goal trajectory chart data
+  // Trajectory chart data
   const projPoints = forecast?.projected_points || []
   const reqPoints = forecast?.required_points || []
   const chartData = []
@@ -434,36 +476,33 @@ const [proj, hist] = await Promise.all([
     }
   }
 
-  // ─── Account Projections chart data ─────────────────────
+  // Account Projections chart data
   const projChartData = []
+  if (projData) {
+    const pHist = projHistory || []
+    const pPoints = projData.points || []
 
-if (projData) {
-  const pHist = projHistory || []
-  const pPoints = projData.points || []
-
-  // History window should already match horizon after your "days = years*365" change
-  for (const h of pHist) {
-    projChartData.push({
-      date: h.date,
-      actual: h.net_worth,
-      projected: null,
-    })
-  }
-
-  for (let i = 0; i < pPoints.length; i++) {
-    if (i === 0 || i % 3 === 0 || i === pPoints.length - 1) {
-      const yearsOut = i / 12
+    for (const h of pHist) {
       projChartData.push({
-        date: pPoints[i].date,
-        actual: null, // keep actual for history only
-        projected: deflate(pPoints[i].projected_net_worth, yearsOut),
+        date: h.date,
+        actual: h.net_worth,
+        projected: null,
       })
     }
-  }
 
-  // IMPORTANT: sort by date so Recharts draws correctly
-  projChartData.sort((a, b) => new Date(a.date) - new Date(b.date))
-}
+    for (let i = 0; i < pPoints.length; i++) {
+      if (i === 0 || i % 3 === 0 || i === pPoints.length - 1) {
+        const yearsOut = i / 12
+        projChartData.push({
+          date: pPoints[i].date,
+          actual: null,
+          projected: deflate(pPoints[i].projected_net_worth, yearsOut),
+        })
+      }
+    }
+
+    projChartData.sort((a, b) => new Date(a.date) - new Date(b.date))
+  }
 
   const inp =
     'w-full px-4 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] bg-white dark:bg-surface-dark text-base text-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all'
@@ -478,7 +517,6 @@ if (projData) {
 
   return (
     <div className="space-y-7">
-      {/* Non-blocking error */}
       {error && forecast && (
         <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-sm text-amber-700 dark:text-amber-400">
           <AlertTriangle size={16} />
@@ -491,7 +529,7 @@ if (projData) {
         </div>
       )}
 
-      {/* ═══ Executive Summary ═══ */}
+      {/* Executive Summary */}
       <div className="strategy-header rounded-3xl p-7 sm:p-9">
         <div className="space-y-4">
           <div className="flex items-start justify-between gap-4">
@@ -512,7 +550,6 @@ if (projData) {
               {statusLabels[status]}
             </span>
 
-            {/* Inflation toggle — Pro only (wait for settingsReady to avoid flicker) */}
             {settingsReady &&
               (isPro ? (
                 <button
@@ -553,7 +590,9 @@ if (projData) {
               </div>
             </div>
             <div>
-              <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">Target{inflationAdj ? ' (real)' : ''}</div>
+              <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">
+                Target{inflationAdj ? ' (real)' : ''}
+              </div>
               <div className="font-display text-2xl text-ink dark:text-white tabular-nums">
                 {fmtCurrencyCompact(displayTarget, ccy)}
               </div>
@@ -572,175 +611,152 @@ if (projData) {
         </div>
       </div>
 
-      {/* ═══ Trajectory (collapsible) ═══ */}
-<Card className="p-0 overflow-hidden sm:rounded-3xl rounded-2xl">
-  <details
-    className="group"
-    open={trajOpen}
-    onToggle={(e) => setTrajOpen(e.currentTarget.open)}
-  >
-    <summary
-      className="
-        [&::-webkit-details-marker]:hidden
-        list-none cursor-pointer select-none
-        px-4 sm:px-8 py-4
-        flex items-start justify-between gap-4
-        bg-white/60 dark:bg-white/[.04]
-        border-b border-black/[.06] dark:border-white/[.08]
-      "
-    >
-      <div className="min-w-0">
-        <h3 className="text-sm font-semibold text-ink dark:text-white">
-          Trajectory
-        </h3>
-        <div className="mt-1 text-xs text-ink-muted dark:text-white/35">
-          Projected net worth over time
-        </div>
+      {/* Trajectory */}
+      <Card className="p-0 overflow-hidden sm:rounded-3xl rounded-2xl">
+        <details className="group" open={trajOpen} onToggle={(e) => setTrajOpen(e.currentTarget.open)}>
+          <summary
+            className="
+              [&::-webkit-details-marker]:hidden
+              list-none cursor-pointer select-none
+              px-4 sm:px-8 py-4
+              flex items-start justify-between gap-4
+              bg-white/60 dark:bg-white/[.04]
+              border-b border-black/[.06] dark:border-white/[.08]
+            "
+          >
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-ink dark:text-white">Trajectory</h3>
+              <div className="mt-1 text-xs text-ink-muted dark:text-white/35">Projected net worth over time</div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-ink-muted dark:text-white/35">
-          <span className="flex items-center gap-1.5">
-            <span className="w-4 h-0.5 bg-accent rounded-full inline-block" /> Projected
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-4 h-0.5 bg-ink-muted/30 dark:bg-white/20 rounded-full inline-block" /> Required
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 border-2 border-amber-500 rounded-full inline-block" /> Target
-          </span>
-        </div>
-      </div>
-
-      <ChevronDown className="h-5 w-5 text-ink-muted dark:text-white/50 shrink-0 group-open:rotate-180 transition-transform mt-0.5" />
-    </summary>
-
-    <div className="px-4 sm:px-8 py-5 sm:py-6">
-      {/* Chart */}
-      {chartData.length > 1 ? (
-        <div className="h-[320px] sm:h-[340px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={chartMargin}>
-              <defs>
-                <linearGradient id="trajFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={ACCENT_STROKE} stopOpacity={0.08} />
-                  <stop offset="100%" stopColor={ACCENT_STROKE} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-
-              <CartesianGrid {...gridProps} />
-
-              <XAxis
-  dataKey="date"
-  {...xAxisProps}
-  tickFormatter={(d) =>
-    new Date(d).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
-  }
-/>
-
-              <YAxis
-                {...yAxisProps}
-                tickFormatter={compactTickFormatter}
-              />
-
-              <Tooltip
-                content={<WealthTooltip currency={ccy} />}
-                {...tooltipProps}
-              />
-
-              <ReferenceLine
-  y={displayTarget}
-  stroke="#d97706"
-  strokeDasharray="4 6"
-  strokeOpacity={0.35}
-/>
-
-<Area
-  type="monotone"
-  dataKey="required"
-  stroke="currentColor"
-  strokeWidth={1.75}
-  strokeOpacity={0.12}
-  strokeDasharray="6 4"
-  fill="none"
-  dot={false}
-  connectNulls
-/>
-
-<Area
-  type="monotone"
-  dataKey="projected"
-  stroke={ACCENT_STROKE}
-  strokeWidth={2.25}
-  fill="url(#trajFill)"
-  dot={false}
-  activeDot={activeDotStyle}
-/>
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      ) : (
-        <div className="h-[200px] flex items-center justify-center text-ink-muted dark:text-white/30 text-sm">
-          Add accounts to see your trajectory
-        </div>
-      )}
-
-      {/* Assumptions underneath chart */}
-      <div className="mt-5 rounded-3xl bg-white/70 dark:bg-white/[.05] border border-black/[.06] dark:border-white/[.08] p-4 sm:p-5">
-        <div className="text-xs font-semibold text-ink-muted dark:text-white/50 mb-3">
-          Assumptions
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-          <div>
-            <label className={lbl}>Monthly contribution ({ccy})</label>
-            <input
-              value={localContrib}
-              onChange={(e) => {
-                setLocalContrib(e.target.value)
-                setDirty(true)
-              }}
-              className={inp}
-              inputMode="decimal"
-            />
-          </div>
-
-          <div>
-            <label className={lbl}>Expected annual return (%)</label>
-            <input
-              value={localReturn}
-              onChange={(e) => {
-                setLocalReturn(e.target.value)
-                setDirty(true)
-              }}
-              className={inp}
-              inputMode="decimal"
-            />
-          </div>
-
-          {dirty && (
-            <div className="sm:col-span-2">
-              <button
-                onClick={applyAssumptions}
-                className="text-sm font-semibold px-5 py-3 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-all min-h-[44px] w-full sm:w-auto"
-                type="button"
-              >
-                Update projection
-              </button>
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-ink-muted dark:text-white/35">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-4 h-0.5 bg-accent rounded-full inline-block" /> Projected
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-4 h-0.5 bg-ink-muted/30 dark:bg-white/20 rounded-full inline-block" /> Required
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 border-2 border-amber-500 rounded-full inline-block" /> Target
+                </span>
+              </div>
             </div>
-          )}
-        </div>
 
-        <p className="mt-3 text-xs text-ink-muted/40 dark:text-white/20 leading-relaxed">
-          Returns are compounded monthly. Adjust anytime to see how changes affect your plan.
-        </p>
-      </div>
-    </div>
-  </details>
-</Card>
+            <ChevronDown className="h-5 w-5 text-ink-muted dark:text-white/50 shrink-0 group-open:rotate-180 transition-transform mt-0.5" />
+          </summary>
 
-      {/* ═══ Account Projections (Pro-gated) ═══ */}
+          <div className="px-4 sm:px-8 py-5 sm:py-6">
+            {chartData.length > 1 ? (
+              <div className="h-[320px] sm:h-[340px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={chartMargin}>
+                    <defs>
+                      <linearGradient id="trajFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={ACCENT_STROKE} stopOpacity={0.08} />
+                        <stop offset="100%" stopColor={ACCENT_STROKE} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+
+                    <CartesianGrid {...gridProps} />
+
+                    <XAxis
+                      dataKey="date"
+                      {...xAxisProps}
+                      tickFormatter={(d) =>
+                        new Date(d).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
+                      }
+                    />
+
+                    <YAxis {...yAxisProps} tickFormatter={compactTickFormatter} />
+
+                    <Tooltip content={<WealthTooltip currency={ccy} />} {...tooltipProps} />
+
+                    <ReferenceLine y={displayTarget} stroke="#d97706" strokeDasharray="4 6" strokeOpacity={0.35} />
+
+                    <Area
+                      type="monotone"
+                      dataKey="required"
+                      stroke="currentColor"
+                      strokeWidth={1.75}
+                      strokeOpacity={0.12}
+                      strokeDasharray="6 4"
+                      fill="none"
+                      dot={false}
+                      connectNulls
+                    />
+
+                    <Area
+                      type="monotone"
+                      dataKey="projected"
+                      stroke={ACCENT_STROKE}
+                      strokeWidth={2.25}
+                      fill="url(#trajFill)"
+                      dot={false}
+                      activeDot={activeDotStyle}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[200px] flex items-center justify-center text-ink-muted dark:text-white/30 text-sm">
+                Add accounts to see your trajectory
+              </div>
+            )}
+
+            <div className="mt-5 rounded-3xl bg-white/70 dark:bg-white/[.05] border border-black/[.06] dark:border-white/[.08] p-4 sm:p-5">
+              <div className="text-xs font-semibold text-ink-muted dark:text-white/50 mb-3">Assumptions</div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div>
+                  <label className={lbl}>Monthly contribution ({ccy})</label>
+                  <input
+                    value={localContrib}
+                    onChange={(e) => {
+                      setLocalContrib(e.target.value)
+                      setDirty(true)
+                    }}
+                    className={inp}
+                    inputMode="decimal"
+                  />
+                </div>
+
+                <div>
+                  <label className={lbl}>Expected annual return (%)</label>
+                  <input
+                    value={localReturn}
+                    onChange={(e) => {
+                      setLocalReturn(e.target.value)
+                      setDirty(true)
+                    }}
+                    className={inp}
+                    inputMode="decimal"
+                  />
+                </div>
+
+                {dirty && (
+                  <div className="sm:col-span-2">
+                    <button
+                      onClick={applyAssumptions}
+                      className="text-sm font-semibold px-5 py-3 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-all min-h-[44px] w-full sm:w-auto"
+                      type="button"
+                    >
+                      Update projection
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <p className="mt-3 text-xs text-ink-muted/40 dark:text-white/20 leading-relaxed">
+                Returns are compounded monthly. Adjust anytime to see how changes affect your plan.
+              </p>
+            </div>
+          </div>
+        </details>
+      </Card>
+
+      {/* Account Projections */}
       <Card className="overflow-hidden">
         <button
-          onClick={() => setProjOpen(!projOpen)}
+          onClick={() => setProjOpen((v) => !v)}
           className="w-full flex items-center justify-between px-4 sm:px-7 py-5 text-sm font-semibold text-ink dark:text-white hover:bg-surface-2/50 dark:hover:bg-white/[.02] transition-colors"
           type="button"
         >
@@ -758,9 +774,10 @@ if (projData) {
 
         {projOpen && (
           <div className="border-t border-black/[.04] dark:border-white/[.04] animate-fade-in">
-            {/* Horizon selector */}
             <div className="px-4 sm:px-7 pt-5 pb-3 flex items-center justify-between gap-4 flex-wrap">
-              <p className="text-xs text-ink-muted dark:text-white/35">Based on your accounts' contributions and expected returns.</p>
+              <p className="text-xs text-ink-muted dark:text-white/35">
+                Based on your accounts&apos; contributions and expected returns.
+              </p>
 
               <div className="flex bg-surface-2 dark:bg-white/5 rounded-full p-0.5 gap-0.5">
                 {HORIZONS.map((h) => (
@@ -768,7 +785,7 @@ if (projData) {
                     key={h}
                     onClick={() => setProjYears(h)}
                     className={`text-xs font-semibold px-3.5 py-2 rounded-full transition-all min-w-[44px] min-h-[36px] ${
-                      projYears === h
+                      effectiveProjYears === h
                         ? 'bg-white dark:bg-white/10 text-ink dark:text-white shadow-sm'
                         : 'text-ink-muted dark:text-white/35 hover:text-ink dark:hover:text-white/60'
                     }`}
@@ -796,11 +813,12 @@ if (projData) {
               </div>
             ) : !projData || !projData.points?.length ? (
               <div className="px-7 pb-7 text-center py-10">
-                <p className="text-sm text-ink-muted dark:text-white/35">Add accounts with balances to see projections.</p>
+                <p className="text-sm text-ink-muted dark:text-white/35">
+                  Add accounts with balances to see projections.
+                </p>
               </div>
             ) : (
               <div className="px-4 sm:px-7 pb-7 space-y-5">
-                {/* Milestone cards */}
                 {filteredMilestones.length > 0 && (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {filteredMilestones.map((m) => (
@@ -809,21 +827,20 @@ if (projData) {
                         className="p-4 sm:p-5 rounded-2xl border border-black/[.05] dark:border-white/[.05] bg-surface dark:bg-surface-dark"
                       >
                         <div className="flex items-center gap-1.5 mb-2">
-  <Calendar size={11} className="text-ink-muted/70 dark:text-white/30" />
-  <span className="text-[12px] font-semibold tracking-[.12em] uppercase text-ink-muted/65 dark:text-white/30">
-  In {m.year}y
-</span>
-</div>
+                          <Calendar size={11} className="text-ink-muted/70 dark:text-white/30" />
+                          <span className="text-[12px] font-semibold tracking-[.12em] uppercase text-ink-muted/65 dark:text-white/30">
+                            In {m.year}y
+                          </span>
+                        </div>
 
-<div className="font-display text-xl sm:text-2xl text-ink dark:text-white tracking-tight tabular-nums leading-tight">
-  {fmtCurrency(deflate(m.projected_net_worth, m.year), ccy)}
-</div>
+                        <div className="font-display text-xl sm:text-2xl text-ink dark:text-white tracking-tight tabular-nums leading-tight">
+                          {fmtCurrency(deflate(m.projected_net_worth, m.year), ccy)}
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {/* Chart */}
                 <div className="h-[280px] sm:h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={projChartData} margin={chartMargin}>
@@ -833,48 +850,46 @@ if (projData) {
                           <stop offset="100%" stopColor={ACCENT_STROKE} stopOpacity={0} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid {...gridProps} />
-                      <XAxis
-  dataKey="date"
-  {...xAxisProps}
-  tickFormatter={(d) =>
-    new Date(d).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
-  }
-/>
-                      <YAxis
-                        {...yAxisProps}
-                        tickFormatter={compactTickFormatter}
-                      />
-                      <Tooltip
-  content={<WealthTooltip currency={ccy} />}
-  {...tooltipProps}
-/>
-                      <Area
-  type="monotone"
-  dataKey="actual"
-  stroke={ACCENT_STROKE}
-  strokeWidth={2}
-  fill="url(#projFill)"
-  dot={false}
-  connectNulls={false}
-  activeDot={activeDotStyle}
-/>
 
-<Area
-  type="monotone"
-  dataKey="projected"
-  stroke={ACCENT_STROKE}
-  strokeWidth={2}
-  strokeDasharray="6 4"
-  fill="none"
-  dot={false}
-  connectNulls
-/>
+                      <CartesianGrid {...gridProps} />
+
+                      <XAxis
+                        dataKey="date"
+                        {...xAxisProps}
+                        tickFormatter={(d) =>
+                          new Date(d).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
+                        }
+                      />
+
+                      <YAxis {...yAxisProps} tickFormatter={compactTickFormatter} />
+
+                      <Tooltip content={<WealthTooltip currency={ccy} />} {...tooltipProps} />
+
+                      <Area
+                        type="monotone"
+                        dataKey="actual"
+                        stroke={ACCENT_STROKE}
+                        strokeWidth={2}
+                        fill="url(#projFill)"
+                        dot={false}
+                        connectNulls={false}
+                        activeDot={activeDotStyle}
+                      />
+
+                      <Area
+                        type="monotone"
+                        dataKey="projected"
+                        stroke={ACCENT_STROKE}
+                        strokeWidth={2}
+                        strokeDasharray="6 4"
+                        fill="none"
+                        dot={false}
+                        connectNulls
+                      />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
 
-                {/* Pro upsell for free users */}
                 {settingsReady && !isPro && filteredMilestones.length > 0 && (
                   <div className="flex items-center justify-between gap-4 px-5 py-4 rounded-2xl bg-amber-50 dark:bg-amber-500/[.06] border border-amber-500/15">
                     <div>
@@ -884,8 +899,8 @@ if (projData) {
                       </div>
                     </div>
                     <UpgradeButton onClick={() => setPage('upgrade')} size="sm">
-  Upgrade
-</UpgradeButton>
+                      Upgrade
+                    </UpgradeButton>
                   </div>
                 )}
               </div>
@@ -894,7 +909,7 @@ if (projData) {
         )}
       </Card>
 
-      {/* ═══ Edit Plan Modal ═══ */}
+      {/* Edit Plan Modal */}
       {editOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" />
@@ -1016,7 +1031,7 @@ function StratTooltip({ active, payload, ccy }) {
   return (
     <div className="bg-ink dark:bg-surface-dark-3 text-white px-4 py-3 rounded-2xl shadow-lg text-sm border border-white/5">
       {d.projected != null && (
-        <div className="font-medium tabular-nums" style={{fontVariantNumeric:"tabular-nums"}}>
+        <div className="font-medium tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>
           {fmtCurrency(d.projected, ccy)} <span className="font-normal text-white/50">projected</span>
         </div>
       )}

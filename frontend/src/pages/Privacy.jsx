@@ -1,49 +1,51 @@
+// frontend/src/pages/Privacy.jsx
 import React from 'react'
+import { useApp } from '../App'
 import Card from '../components/Card'
-import Button from '../components/Button'
 import { ArrowLeft } from 'lucide-react'
 
-export default function Privacy({ onBack }) {
+export default function Privacy() {
+  const { setPage } = useApp()
+
+  const goBack = () => {
+    try {
+      if (window.history.length > 1) window.history.back()
+      else setPage('landing', { replace: true })
+    } catch {
+      setPage('landing', { replace: true })
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-surface dark:bg-surface-dark">
-      <div className="max-w-[640px] mx-auto px-6 sm:px-10 py-12 sm:py-20">
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={ArrowLeft}
-          onClick={onBack}
-          className="mb-8"
+    <div className="min-h-screen px-4 sm:px-6 lg:px-8 py-10">
+      <div className="mx-auto max-w-3xl space-y-6">
+        <button
+          type="button"
+          onClick={goBack}
+          className="inline-flex items-center gap-2 text-sm font-semibold text-ink-muted dark:text-white/40 hover:text-ink dark:hover:text-white transition-colors"
         >
-          Back
-        </Button>
+          <ArrowLeft size={16} /> Back
+        </button>
 
-        <h1 className="text-3xl sm:text-4xl font-semibold text-ink dark:text-white tracking-tight">
-          Privacy
-        </h1>
-        <p className="mt-3 text-base text-ink-muted dark:text-white/40 leading-relaxed">
-          Your financial data is yours. Here's how we handle it.
-        </p>
+        <Card className="p-8">
+          <h1 className="font-display text-3xl text-ink dark:text-white tracking-tight">
+            Privacy
+          </h1>
+          <p className="mt-3 text-sm text-ink-muted dark:text-white/40 leading-relaxed">
+            Paddock is built to be calm and private: no ads, no tracker pixels, no selling data.
+          </p>
 
-        <Card className="mt-8">
-          <div className="space-y-4">
-            {[
-              'We never sell, share, or monetise your data.',
-              'No advertising — ever.',
-              'Your data is encrypted in transit using TLS.',
-              'We do not track you across other websites.',
-              'We store the minimum data required to run the service.',
-              'Account deletion removes your data permanently.',
-              'We do not use your data to train models.',
-              'No third-party analytics or tracking pixels.',
-            ].map((item) => (
-              <div
-                key={item}
-                className="flex items-start gap-3 text-sm text-ink dark:text-white/70"
-              >
-                <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-accent shrink-0" />
-                {item}
-              </div>
-            ))}
+          <div className="mt-6 space-y-3 text-sm text-ink-muted dark:text-white/40 leading-relaxed">
+            <p>
+              We collect only what’s needed to run the product (account access, settings, and your
+              wealth data you enter).
+            </p>
+            <p>
+              You can delete your account at any time. Data is encrypted in transit.
+            </p>
+            <p>
+              This page is a placeholder — replace with your formal privacy policy copy before launch.
+            </p>
           </div>
         </Card>
       </div>
