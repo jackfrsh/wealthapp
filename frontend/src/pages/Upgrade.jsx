@@ -13,17 +13,7 @@ function withTimeout(promise, ms = 3500) {
 }
 
 export default function Upgrade() {
-  const {
-    setPage,
-    isPro,
-    api,
-    setIsPro,
-    refreshSettings,
-    syncBilling,
-    loadPrimaryGoal,
-    loadAccountsCount,
-    bumpData,
-  } = useApp()
+  const { setPage, isPro, api, setIsPro, refreshSettings, syncBilling } = useApp()
 
   const [isLoading, setIsLoading] = useState(false)
   const [statusMsg, setStatusMsg] = useState('')
@@ -39,20 +29,8 @@ export default function Upgrade() {
 
   const isAccountLimit = reason === 'account_limit'
 
-  // 🔒 Dev/StrictMode guard so return flow only runs once
+  // Dev/StrictMode guard so return flow only runs once per mount
   const returnRanRef = useRef(false)
-
-  const postUpgradeSync = async () => {
-    // Source-of-truth entitlement first
-    await syncBilling?.()
-    await refreshSettings?.({ force: true })
-  
-    // Refresh onboarding facts so Home/Outlook don’t “lose” state on return
-    await Promise.allSettled([loadPrimaryGoal?.(), loadAccountsCount?.()])
-  
-    bumpData?.()
-    setPage?.('home', { replace: true })
-  }
 
   useEffect(() => {
     let cancelled = false
@@ -73,7 +51,7 @@ export default function Upgrade() {
       } catch {}
     }
 
-    // If we returned from Stripe, clean immediately so we never re-trigger on rerenders/back
+    // Clean immediately so we never re-trigger on back/forward
     if (success || cancel) cleanUrlNow()
 
     const run = async () => {
@@ -89,96 +67,81 @@ export default function Upgrade() {
       if (cancelled) return
       setStatusMsg('Finalising your upgrade…')
 
-      // 1) Optimistic unlock if checkout-status says paid (fast), but never block UI on this.
+      // 1) Optional fast verification (non-blocking)
       let verified = false
       if (sessionId) {
         try {
           const r = await withTimeout(
             api(`/billing/checkout-status?session_id=${encodeURIComponent(sessionId)}`),
-            2200
+            2500
           )
           if (cancelled) return
           if (r?.paid) {
             verified = true
-            setStatusMsg('Activated — syncing your account…')
             setIsPro?.(true) // optimistic
+            setStatusMsg('Activated — syncing your account…')
           }
         } catch {
           // ignore
         }
       }
-        // 2) Always do a full sync after return (even if checkout-status timed out)
-  try {
-    if (cancelled) return
-    setStatusMsg('Syncing your dashboard…')
-    await postUpgradeSync()
-    if (cancelled) return
-    setStatusMsg('All set.')
-  } catch (e) {
-    console.error('Post-upgrade sync failed:', e)
-    try {
-      await refreshSettings?.({ force: true })
-    } catch {}
-  }
 
-      // 2) Do ONE sync path with a timeout; don’t chain multiple slow calls.
-      //    This is the most common source of “hang”.
+      // 2) Single sync path (source of truth)
       try {
         setStatusMsg('Syncing billing…')
         if (typeof syncBilling === 'function') {
-          await withTimeout(syncBilling(), 3500)
+          await withTimeout(syncBilling(), 4500)
         } else {
-          await withTimeout(api('/billing/sync', { method: 'POST' }), 3500)
+          await withTimeout(api('/billing/sync', { method: 'POST' }), 4500)
         }
       } catch {
         // ignore — webhook delays happen
       }
       if (cancelled) return
 
-      // 3) Refresh settings once (short timeout). If it fails, keep optimistic state.
+      // 3) Refresh settings once
       let s = null
       try {
         setStatusMsg('Updating your plan…')
         s =
           typeof refreshSettings === 'function'
-            ? await withTimeout(refreshSettings({ force: true }), 3000)
-            : await withTimeout(api('/settings'), 3000)
+            ? await withTimeout(refreshSettings({ force: true }), 4500)
+            : await withTimeout(api('/settings'), 4500)
       } catch {
         // ignore
       }
       if (cancelled) return
 
-      const pro = !!s?.is_pro || verified || !!isPro
-      setIsPro?.(pro)
+      const proNow = !!s?.is_pro || verified || !!isPro
+      setIsPro?.(proNow)
+      setStatusMsg(proNow ? 'Pro activated ✓ Loading your dashboard…' : 'Payment received — activation may take a moment.')
 
-      setStatusMsg(pro ? 'Pro activated ✓' : 'Payment received — activation may take a moment.')
-
-      // Optional: if not pro yet, do a single delayed re-check in the background.
-      if (!pro) {
-        setTimeout(async () => {
+      /**
+       * IMPORTANT FIX:
+       * After Stripe return, relying on in-memory state is brittle.
+       * Hard-navigate to /home so App bootstrap rehydrates:
+       * - primary goal
+       * - accounts
+       * - entitlements
+       */
+      try {
+        // small delay so the user sees the confirmation message
+        setTimeout(() => {
           if (cancelled) return
-          try {
-            const s2 =
-              typeof refreshSettings === 'function'
-                ? await refreshSettings({ force: true })
-                : await api('/settings')
-            if (cancelled) return
-            if (s2?.is_pro) {
-              setIsPro?.(true)
-              setStatusMsg('Pro activated ✓')
-            }
-          } catch {}
-        }, 2500)
+          window.location.replace('/home')
+        }, 350)
+      } catch {
+        // fallback: in-app nav only
+        setPage?.('home', { replace: true })
       }
     }
-// If we returned from Stripe, clean immediately so we never re-trigger on rerenders/back
-if (success || cancel) cleanUrlNow()
+
     run()
 
     return () => {
       cancelled = true
     }
-  }, [api, refreshSettings, syncBilling, setIsPro, isPro])
+  }, [api, refreshSettings, syncBilling, setIsPro, isPro, setPage])
 
   const handleUpgrade = async () => {
     if (isLoading) return
