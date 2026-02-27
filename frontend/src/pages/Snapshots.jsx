@@ -1,3 +1,4 @@
+// frontend/src/pages/Snapshots.jsx
 import React, { useState, useEffect, useCallback } from 'react'
 import { api } from '../api'
 import { useApp } from '../App'
@@ -7,6 +8,21 @@ import EmptyState from '../components/EmptyState'
 import { fmtCurrency, fmtDate } from '../utils'
 import { Camera, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 
+function snapBaseTotal(s) {
+  if (!s) return null
+  if (s.total_base != null) {
+    const n = Number(s.total_base)
+    if (Number.isFinite(n)) return n
+  }
+  if (s.total_base_cents != null) {
+    const n = Number(s.total_base_cents)
+    if (Number.isFinite(n)) return n / 100
+  }
+  // fallback
+  const n = Number(s.total)
+  return Number.isFinite(n) ? n : null
+}
+
 export default function Snapshots() {
   const { showToast } = useApp()
   const [snaps, setSnaps] = useState([])
@@ -15,7 +31,7 @@ export default function Snapshots() {
 
   const load = useCallback(async () => {
     try {
-      const res = await api('/snapshots') // ✅ GET
+      const res = await api('/snapshots')
       setSnaps(Array.isArray(res) ? res : [])
     } catch (e) {
       console.error(e)
@@ -30,7 +46,7 @@ export default function Snapshots() {
 
   const create = async () => {
     try {
-      await api('/snapshots', { method: 'POST' }) // ✅ POST
+      await api('/snapshots', { method: 'POST' })
       showToast('Net worth recorded!')
       load()
     } catch (e) {
@@ -41,7 +57,7 @@ export default function Snapshots() {
   const del = async (id) => {
     if (!confirm('Delete this record?')) return
     try {
-      await api(`/snapshots/${id}`, { method: 'DELETE' }) // ✅ DELETE
+      await api(`/snapshots/${id}`, { method: 'DELETE' })
       showToast('Deleted')
       load()
     } catch (e) {
@@ -65,7 +81,9 @@ export default function Snapshots() {
     <div className="space-y-7">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">Net Worth History</h1>
+          <h1 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">
+            Net Worth History
+          </h1>
           <p className="text-sm text-ink-muted dark:text-white/35 mt-1.5">
             Record your net worth to track progress over time.
           </p>
@@ -100,20 +118,23 @@ export default function Snapshots() {
         <Card className="divide-y divide-black/[.04] dark:divide-white/[.04]">
           {sorted.map((snap, i) => {
             const prev = sorted[i + 1]
-            const delta = prev ? snap.total_base - prev.total_base : null
-            const deltaPct =
-              prev && prev.total_base !== 0
-                ? ((snap.total_base - prev.total_base) / Math.abs(prev.total_base)) * 100
-                : null
+            const cur = (snap.base_currency || 'GBP').toUpperCase()
+
+            const v = snapBaseTotal(snap)
+            const pv = prev ? snapBaseTotal(prev) : null
+
+            const delta = v != null && pv != null ? v - pv : null
+            const deltaPct = v != null && pv != null && pv !== 0 ? (delta / Math.abs(pv)) * 100 : null
+
             const isExpanded = expanded === snap.id
-            const breakdown = snap.breakdown || []
+            const breakdown = Array.isArray(snap.breakdown) ? snap.breakdown : []
 
             return (
               <div key={snap.id} className="px-6 py-5">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <div className="font-display text-xl sm:text-2xl text-ink dark:text-white tracking-tight tabular-nums">
-                      {fmtCurrency(snap.total_base, snap.base_currency)}
+                      {v != null ? fmtCurrency(v, cur) : 'Snapshot'}
                     </div>
                     <div className="text-xs text-ink-muted dark:text-white/35 mt-1">
                       {fmtDate(snap.created_at)}
@@ -122,8 +143,8 @@ export default function Snapshots() {
                   </div>
 
                   <div className="flex items-center gap-3">
-                    {delta !== null ? (
-                      <ChangePill change={delta} changePct={deltaPct || 0} currency={snap.base_currency} size="sm" />
+                    {delta !== null && deltaPct !== null ? (
+                      <ChangePill change={delta} changePct={deltaPct} currency={cur} size="sm" />
                     ) : (
                       <span className="text-xs text-ink-muted dark:text-white/25 font-medium">First</span>
                     )}
@@ -151,13 +172,13 @@ export default function Snapshots() {
                 {isExpanded && breakdown.length > 0 && (
                   <div className="mt-4 pt-4 border-t border-black/[.03] dark:border-white/[.03] space-y-2.5 animate-fade-in">
                     {breakdown.map((b) => (
-                      <div key={b.id} className="flex justify-between items-center text-sm">
+                      <div key={b.id || `${b.name}-${b.currency}`} className="flex justify-between items-center text-sm">
                         <span className="text-ink-muted dark:text-white/45">
                           {b.name}{' '}
                           <span className="text-ink-muted/40 dark:text-white/20">({b.currency})</span>
                         </span>
                         <span className="text-ink dark:text-white font-medium tabular-nums">
-                          {fmtCurrency(b.value_base, snap.base_currency)}
+                          {fmtCurrency(Number.isFinite(Number(b.value_base)) ? Number(b.value_base) : 0, cur)}
                         </span>
                       </div>
                     ))}

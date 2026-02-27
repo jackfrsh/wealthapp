@@ -114,24 +114,18 @@ export default function Upgrade() {
 
       const proNow = !!s?.is_pro || verified || !!isPro
       setIsPro?.(proNow)
-      setStatusMsg(proNow ? 'Pro activated ✓ Loading your dashboard…' : 'Payment received — activation may take a moment.')
+      setStatusMsg(
+        proNow
+          ? 'Pro activated ✓ Loading your dashboard…'
+          : 'Payment received — activation may take a moment.'
+      )
 
-      /**
-       * IMPORTANT FIX:
-       * After Stripe return, relying on in-memory state is brittle.
-       * Hard-navigate to /home so App bootstrap rehydrates:
-       * - primary goal
-       * - accounts
-       * - entitlements
-       */
       try {
-        // small delay so the user sees the confirmation message
         setTimeout(() => {
           if (cancelled) return
           window.location.replace('/home')
         }, 350)
       } catch {
-        // fallback: in-app nav only
         setPage?.('home', { replace: true })
       }
     }
@@ -264,8 +258,8 @@ export default function Upgrade() {
 
               <div className="text-xs text-ink-muted/60 dark:text-white/30">
                 {plan === 'annual'
-                  ? 'Best value. Includes a 7-day trial.'
-                  : 'Switch to annual anytime to save over time.'}
+                  ? 'Annual includes a 7-day trial.'
+                  : 'Monthly has no trial. Switch to annual anytime.'}
               </div>
             </div>
 
@@ -299,7 +293,7 @@ export default function Upgrade() {
               className="w-full"
               disabled={isLoading}
             >
-              {isLoading ? 'Redirecting…' : 'Upgrade now'}
+              {isLoading ? 'Redirecting…' : 'Upgrade'}
             </UpgradeButton>
           ) : (
             <button

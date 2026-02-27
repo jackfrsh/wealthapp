@@ -48,8 +48,6 @@ export default function AuthModal({
     setNotice('')
     setError('')
     setLoading(false)
-
-    // focus first input
     requestAnimationFrame(() => firstFieldRef.current?.focus?.())
   }, [open, initial, forceMode])
 
@@ -62,7 +60,6 @@ export default function AuthModal({
 
     const onKeyDown = (e) => {
       if (e.key === 'Escape') onClose?.()
-      // very small focus trap
       if (e.key === 'Tab') {
         const root = panelRef.current
         if (!root) return
@@ -205,7 +202,6 @@ export default function AuthModal({
       })
       if (signInError) throw signInError
 
-      // App.jsx will route on auth state change — close modal
       close()
     } catch (e) {
       setError(e?.message || 'Sign in failed.')
@@ -280,7 +276,6 @@ export default function AuthModal({
     }
   }
 
-  // Styles
   const inp =
     'w-full h-11 px-4 rounded-2xl border border-black/[.08] dark:border-white/[.10] ' +
     'bg-white/80 dark:bg-white/[.06] text-ink dark:text-white text-sm ' +
@@ -298,16 +293,10 @@ export default function AuthModal({
   if (!open) return null
 
   return (
-    <div
-      className="fixed inset-0 z-[1000]"
-      aria-modal="true"
-      role="dialog"
-      aria-label="Sign in"
-    >
+    <div className="fixed inset-0 z-[1000]" aria-modal="true" role="dialog" aria-label="Sign in">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/35 dark:bg-black/55 backdrop-blur-sm
-                   animate-[fadeIn_.18s_ease-out]"
+        className="absolute inset-0 bg-black/35 dark:bg-black/55 backdrop-blur-sm animate-[fadeIn_.18s_ease-out]"
         onMouseDown={close}
       />
 
@@ -316,8 +305,7 @@ export default function AuthModal({
         <div
           ref={panelRef}
           onMouseDown={(e) => e.stopPropagation()}
-          className="w-full max-w-[520px]
-                     animate-[modalIn_.22s_cubic-bezier(.2,.8,.2,1)]"
+          className="w-full max-w-[520px] animate-[modalIn_.22s_cubic-bezier(.2,.8,.2,1)]"
         >
           <Card className="p-0 overflow-hidden bg-white/90 dark:bg-surface-dark-2 border border-black/[.08] dark:border-white/[.10] shadow-[0_24px_60px_rgba(0,0,0,.18)]">
             {/* Header */}
@@ -327,7 +315,7 @@ export default function AuthModal({
                   Paddock<span className="text-accent">.</span>
                 </div>
                 <div className="text-xs text-ink-muted/60 dark:text-white/25 mt-1">
-                  Net worth tracker & wealth planner
+                  Net worth and long-term projections
                 </div>
               </div>
 
@@ -419,7 +407,7 @@ export default function AuthModal({
 
                     <UpgradeButton
                       onClick={submitAuth}
-                      disabled={mode === 'login' ? !canAuth : !canAuth}
+                      disabled={!canAuth}
                       className="w-full min-h-[48px]"
                       size="md"
                       variant="primary"
@@ -440,7 +428,7 @@ export default function AuthModal({
 
                     {mode === 'register' && (
                       <div className="text-[11px] text-ink-muted/55 dark:text-white/20 leading-relaxed text-center">
-                        By creating an account, you agree to our Terms of Service.
+                        No ads. No tracking cookies. Cancel anytime if you upgrade.
                       </div>
                     )}
                   </div>
@@ -448,9 +436,7 @@ export default function AuthModal({
               ) : (
                 <>
                   <div className="mb-5">
-                    <div className="text-sm font-semibold text-ink dark:text-white">
-                      Reset password
-                    </div>
+                    <div className="text-sm font-semibold text-ink dark:text-white">Reset password</div>
                     <div className="text-xs text-ink-muted/60 dark:text-white/30 mt-1">
                       Choose a new password for your account.
                     </div>
@@ -534,21 +520,11 @@ export default function AuthModal({
         </div>
       </div>
 
-      {/* Local keyframes */}
       <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes modalIn {
-          from {
-            opacity: 0;
-            transform: translateY(10px) scale(.985);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
+          from { opacity: 0; transform: translateY(10px) scale(.985); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
         }
       `}</style>
     </div>

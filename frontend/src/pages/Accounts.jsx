@@ -5,6 +5,7 @@ import { useApp } from '../App'
 import Card from '../components/Card'
 import Modal from '../components/Modal'
 import EmptyState from '../components/EmptyState'
+import ChangePill from '../components/ChangePill'
 import { track } from '../track'
 import UpgradeButton from '../components/UpgradeButton'
 import {
@@ -15,6 +16,8 @@ import {
   CURRENCIES,
 } from '../utils'
 import { Plus, Pencil, Trash2, Settings, Camera, ChevronDown, Clock } from 'lucide-react'
+
+import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 const TYPES = ['bank', 'isa', 'sipp', 'crypto', 'investment', 'property', 'mortgage', 'loan', 'other']
 
@@ -40,16 +43,16 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n))
 }
 
-// Snapshot value helper (server payloads vary)
-function snapTotal(s) {
-  const v =
-    s?.total ??
-    s?.net_worth ??
-    s?.value ??
-    s?.amount ??
-    s?.total_value ??
-    s?.total_amount
-  const n = Number(v)
+/**
+ * Snapshot helpers
+ * Your payload example:
+ *  - total_base (pounds in base currency)
+ *  - base_currency
+ *  - breakdown[] optional
+ */
+function snapBaseTotal(s) {
+  if (!s) return null
+  const n = Number(s.total_base)
   return Number.isFinite(n) ? n : null
 }
 
@@ -64,9 +67,9 @@ export default function Accounts() {
   const [form, setForm] = useState({ ...emptyForm })
   const [saving, setSaving] = useState(false)
 
-  // Snapshot state
+  // Snapshot state (minimal)
   const [snaps, setSnaps] = useState([])
-  const [snapsLoading, setSnapsLoading] = useState(true)
+  const [snapsLoading, setSnapsLoading] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [expandedSnap, setExpandedSnap] = useState(null)
 
@@ -106,6 +109,7 @@ export default function Accounts() {
   }, [load])
 
   const loadSnaps = useCallback(async () => {
+    setSnapsLoading(true)
     try {
       const res = await api('/snapshots', { method: 'GET' })
       setSnaps(Array.isArray(res) ? res : [])
@@ -116,14 +120,19 @@ export default function Accounts() {
     }
   }, [])
 
+  // Only fetch snapshots when the user opens history OR after recording/deleting.
   useEffect(() => {
+    if (!historyOpen) return
+    // If we already have snaps, don’t refetch every toggle.
+    if (snaps.length) return
     loadSnaps()
-  }, [loadSnaps])
+  }, [historyOpen, snaps.length, loadSnaps])
 
   const recordSnapshot = async () => {
     try {
       await api('/snapshots', { method: 'POST' })
       showToast?.('Net worth recorded!')
+      // After recording, refresh snaps so “Last recorded” and history are correct.
       await loadSnaps()
       bumpData?.()
     } catch (e) {
@@ -149,15 +158,45 @@ export default function Accounts() {
   }, [snaps])
 
   const latestSnap = sortedSnaps[0] || null
-  const prevSnap = sortedSnaps[1] || null
-  const latestVal = latestSnap ? snapTotal(latestSnap) : null
-  const prevVal = prevSnap ? snapTotal(prevSnap) : null
-  const snapDelta =
-    latestVal != null && prevVal != null ? latestVal - prevVal : null
-  const snapDeltaPct =
-    latestVal != null && prevVal != null && prevVal !== 0
-      ? (snapDelta / Math.abs(prevVal)) * 100
-      : null
+  const snapCurrency = (latestSnap?.base_currency || baseCurrency || 'GBP').toUpperCase()
+
+  // Account mix (donut)
+  const typeCounts = useMemo(() => {
+    const map = new Map()
+    for (const a of accounts) {
+      const t = a?.type || 'other'
+      map.set(t, (map.get(t) || 0) + 1)
+    }
+    return map
+  }, [accounts])
+
+  const donutData = useMemo(() => {
+    const total = accounts.length || 1
+    const arr = Array.from(typeCounts.entries()).map(([type, count]) => ({
+      type,
+      count,
+      value: count,
+      pct: (count / total) * 100,
+      label: ACCOUNT_TYPE_LABELS?.[type] || type,
+    }))
+    arr.sort((a, b) => b.count - a.count)
+    return arr
+  }, [typeCounts, accounts.length])
+
+  // Compact palette (keeps the donut “quiet”)
+  const donutFills = useMemo(
+    () => [
+      'rgba(255,255,255,0.70)',
+      'rgba(255,255,255,0.45)',
+      'rgba(255,255,255,0.28)',
+      'rgba(255,255,255,0.18)',
+      'rgba(255,255,255,0.12)',
+      'rgba(255,255,255,0.08)',
+      'rgba(255,255,255,0.06)',
+      'rgba(255,255,255,0.05)',
+    ],
+    []
+  )
 
   const openAdd = () => {
     setEditing(null)
@@ -208,7 +247,6 @@ export default function Accounts() {
         return
       }
 
-      // Creating new account
       if (accountLimitReached) {
         setModal(false)
         goUpgrade()
@@ -292,8 +330,6 @@ export default function Accounts() {
             <Settings size={18} />
           </button>
 
-          {/* IMPORTANT: when limit reached, don’t show an extra Upgrade CTA here.
-              The limit banner below owns the CTA. */}
           <button
             onClick={() => {
               if (accountLimitReached) return
@@ -327,10 +363,7 @@ export default function Accounts() {
               </div>
 
               <div className="mt-3 h-2 rounded-full bg-black/[.06] dark:bg-white/[.08] overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-accent transition-all"
-                  style={{ width: `${usage.pct}%` }}
-                />
+                <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${usage.pct}%` }} />
               </div>
             </div>
 
@@ -371,12 +404,9 @@ export default function Accounts() {
             <Card className="p-5 border-amber-500/30 bg-amber-50 dark:bg-amber-500/5">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <div className="text-sm font-semibold text-ink dark:text-white">
-                    Free plan limit reached
-                  </div>
+                  <div className="text-sm font-semibold text-ink dark:text-white">Free plan limit reached</div>
                   <div className="text-xs text-ink-muted dark:text-white/35 mt-1">
-                    Free users can track up to {FREE_ACCOUNT_LIMIT} accounts. Pro unlocks unlimited
-                    accounts and longer projections.
+                    Free users can track up to {FREE_ACCOUNT_LIMIT} accounts. Pro unlocks unlimited accounts and longer projections.
                   </div>
                 </div>
 
@@ -399,9 +429,7 @@ export default function Accounts() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         {Icon ? <Icon size={16} className="opacity-70" /> : null}
-                        <div className="text-sm font-semibold text-ink dark:text-white truncate">
-                          {a.name}
-                        </div>
+                        <div className="text-sm font-semibold text-ink dark:text-white truncate">{a.name}</div>
                       </div>
                       <div className="text-xs text-ink-muted dark:text-white/35 mt-1">
                         {label} · {String(a.currency || '').toUpperCase()}
@@ -476,13 +504,79 @@ export default function Accounts() {
             })}
           </div>
 
-          {/* Snapshots — premium: hero + useful delta + optional history */}
+          {/* Account mix — compact donut */}
+          <Card className="p-6">
+            <div className="flex items-start justify-between gap-6">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-ink dark:text-white">Account mix</div>
+                <div className="text-xs text-ink-muted dark:text-white/35 mt-1">
+                  A compact overview of what you’re tracking.
+                </div>
+
+                <div className="mt-4 space-y-2">
+                  {donutData.slice(0, 3).map((d) => (
+                    <div key={d.type} className="flex items-center justify-between gap-3">
+                      <div className="text-sm text-ink dark:text-white/80 truncate">{d.label}</div>
+                      <div className="text-xs text-ink-muted dark:text-white/35 tabular-nums">
+                        {d.count} · {d.pct.toFixed(0)}%
+                      </div>
+                    </div>
+                  ))}
+                  {donutData.length > 3 ? (
+                    <div className="text-xs text-ink-muted dark:text-white/35">
+                      +{donutData.length - 3} more
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="shrink-0 w-[132px] h-[132px]">
+                {donutData.length ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={donutData}
+                        dataKey="value"
+                        nameKey="label"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius="62%"
+                        outerRadius="88%"
+                        paddingAngle={2}
+                        stroke="rgba(255,255,255,0.08)"
+                        strokeWidth={1}
+                        isAnimationActive={false}
+                      >
+                        {donutData.map((_, i) => (
+                          <Cell key={i} fill={donutFills[i % donutFills.length]} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="w-full h-full rounded-3xl bg-black/[.02] dark:bg-white/[.04] border border-black/[.06] dark:border-white/[.08]" />
+                )}
+
+                {/* Center label */}
+                <div className="pointer-events-none -mt-[132px] w-[132px] h-[132px] grid place-items-center">
+                  <div className="text-center">
+                    <div className="text-xs text-ink-muted dark:text-white/35">Total</div>
+                    <div className="text-lg font-semibold text-ink dark:text-white tabular-nums">
+                      {accounts.length}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Snapshots — minimal (no totals; Home owns “wealth”) */}
           <div className="pt-2 space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold text-ink dark:text-white">Snapshots</div>
                 <div className="text-xs text-ink-muted dark:text-white/35">
-                  Record your net worth over time.
+                  Record net worth over time. Your total lives on Home.
                 </div>
               </div>
 
@@ -514,64 +608,20 @@ export default function Accounts() {
               </div>
             </div>
 
-            <Card className="p-6">
-              {snapsLoading ? (
-                <div className="h-20 rounded-2xl skeleton" />
-              ) : !latestSnap ? (
-                <div className="text-sm text-ink-muted dark:text-white/35">
-                  No snapshots yet. Record your first net worth snapshot to start building history.
-                </div>
-              ) : (
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/60 dark:text-white/30">
-                      Latest snapshot
-                    </div>
-
-                    <div className="mt-2 text-sm font-semibold text-ink dark:text-white">
-                      {fmtDate(latestSnap.created_at)}
-                    </div>
-
-                    {latestVal != null ? (
-                      <div className="mt-2 font-display text-3xl sm:text-4xl tracking-[-0.03em] text-ink dark:text-white [font-variant-numeric:tabular-nums]">
-                        {fmtCurrency(latestVal, baseCurrency || 'GBP')}
-                      </div>
-                    ) : (
-                      <div className="mt-2 text-sm text-ink-muted dark:text-white/35">
-                        Snapshot recorded.
-                      </div>
-                    )}
-
-                    {snapDelta != null && snapDeltaPct != null ? (
-                      <div className="mt-3 text-xs text-ink-muted/60 dark:text-white/30 tabular-nums">
-                        Change vs previous:{' '}
-                        <span className="font-semibold text-ink dark:text-white">
-                          {snapDelta >= 0 ? '+' : ''}
-                          {fmtCurrency(snapDelta, baseCurrency || 'GBP')}
-                        </span>{' '}
-                        <span className="text-ink-muted/50 dark:text-white/25">
-                          ({snapDeltaPct >= 0 ? '+' : ''}
-                          {snapDeltaPct.toFixed(1)}%)
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="mt-3 text-xs text-ink-muted/60 dark:text-white/30">
-                        Record one more snapshot to see change.
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => deleteSnap(latestSnap.id)}
-                      className="px-3.5 py-2 rounded-2xl text-xs font-semibold border border-black/[.08] dark:border-white/[.10] text-ink-muted dark:text-white/35 hover:text-ink dark:hover:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors"
-                    >
-                      Delete
-                    </button>
+            {/* Minimal “status” row */}
+            <Card className="p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-xs text-ink-muted dark:text-white/35">Last recorded</div>
+                  <div className="mt-1 text-sm font-semibold text-ink dark:text-white">
+                    {latestSnap ? fmtDate(latestSnap.created_at) : snaps.length ? '—' : 'Not yet'}
                   </div>
                 </div>
-              )}
+
+                <div className="text-xs text-ink-muted dark:text-white/35 tabular-nums">
+                  {latestSnap?.excluded_accounts > 0 ? `${latestSnap.excluded_accounts} excluded` : ''}
+                </div>
+              </div>
             </Card>
 
             {historyOpen && (
@@ -584,16 +634,20 @@ export default function Accounts() {
                   </div>
                 ) : sortedSnaps.length === 0 ? (
                   <div className="text-sm text-ink-muted dark:text-white/35">
-                    No snapshots yet. Record your first net worth snapshot to start building history.
+                    No snapshots yet. Record one to start building history.
                   </div>
                 ) : (
                   <div className="space-y-2">
                     {sortedSnaps.map((s, idx) => {
+                      const prev = sortedSnaps[idx + 1]
+                      const v = snapBaseTotal(s)
+                      const pv = prev ? snapBaseTotal(prev) : null
+                      const d = v != null && pv != null ? v - pv : null
+                      const pct = d != null && pv != null && pv !== 0 ? (d / Math.abs(pv)) * 100 : null
+
                       const isOpen = expandedSnap === s.id
-                      const val = snapTotal(s)
-                      const next = sortedSnaps[idx + 1]
-                      const nextVal = next ? snapTotal(next) : null
-                      const d = val != null && nextVal != null ? val - nextVal : null
+                      const hasBreakdown = Array.isArray(s.breakdown) && s.breakdown.length > 0
+                      const cur = (s.base_currency || snapCurrency || 'GBP').toUpperCase()
 
                       return (
                         <div
@@ -602,40 +656,37 @@ export default function Accounts() {
                         >
                           <button
                             type="button"
-                            onClick={() => setExpandedSnap((prev) => (prev === s.id ? null : s.id))}
+                            onClick={() => setExpandedSnap((prevId) => (prevId === s.id ? null : s.id))}
                             className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-black/[.02] dark:hover:bg-white/[.04] transition-colors text-left"
                           >
                             <div className="min-w-0">
                               <div className="text-sm font-semibold text-ink dark:text-white">
                                 {fmtDate(s.created_at)}
                               </div>
-                              <div className="text-xs text-ink-muted dark:text-white/35 tabular-nums">
-                                {val != null ? (
-                                  <>
-                                    {fmtCurrency(val, baseCurrency || 'GBP')}
-                                    {d != null ? (
-                                      <span className="ml-2 text-ink-muted/50 dark:text-white/25">
-                                        · {d >= 0 ? '+' : ''}
-                                        {fmtCurrency(d, baseCurrency || 'GBP')}
-                                      </span>
-                                    ) : null}
-                                  </>
-                                ) : (
-                                  'Snapshot'
-                                )}
+                              <div className="text-xs text-ink-muted dark:text-white/35">
+                                {idx === sortedSnaps.length - 1 ? 'First snapshot' : 'Compared to previous'}
                               </div>
                             </div>
-                            <ChevronDown
-                              size={16}
-                              className={`opacity-60 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-                            />
+
+                            <div className="flex items-center gap-3 shrink-0">
+                              {d != null && pct != null ? (
+                                <ChangePill change={d} changePct={pct} currency={cur} size="sm" />
+                              ) : (
+                                <span className="text-xs text-ink-muted dark:text-white/25 font-medium">—</span>
+                              )}
+
+                              <ChevronDown
+                                size={16}
+                                className={`opacity-60 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                              />
+                            </div>
                           </button>
 
                           {isOpen && (
                             <div className="px-4 pb-4 pt-2 bg-black/[.01] dark:bg-white/[.03] border-t border-black/[.06] dark:border-white/[.07]">
                               <div className="flex items-center justify-between gap-3">
                                 <div className="text-xs text-ink-muted dark:text-white/35">
-                                  Recorded net worth snapshot
+                                  {hasBreakdown ? 'Breakdown' : 'Snapshot'}
                                 </div>
                                 <button
                                   type="button"
@@ -645,6 +696,28 @@ export default function Accounts() {
                                   Delete
                                 </button>
                               </div>
+
+                              {hasBreakdown ? (
+                                <div className="mt-3 space-y-2.5">
+                                  {s.breakdown.map((b) => (
+                                    <div
+                                      key={b.id || `${b.name}-${b.currency}`}
+                                      className="flex justify-between items-center text-sm"
+                                    >
+                                      <span className="text-ink-muted dark:text-white/45">
+                                        {b.name}{' '}
+                                        <span className="text-ink-muted/40 dark:text-white/20">({b.currency})</span>
+                                      </span>
+                                      <span className="text-ink dark:text-white font-medium tabular-nums">
+                                        {fmtCurrency(
+                                          Number.isFinite(Number(b.value_base)) ? Number(b.value_base) : 0,
+                                          cur
+                                        )}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
                             </div>
                           )}
                         </div>
@@ -719,9 +792,7 @@ export default function Accounts() {
           </div>
 
           <div className="flex items-center justify-between gap-3">
-            <label className="text-sm font-semibold text-ink dark:text-white">
-              Include in net worth
-            </label>
+            <label className="text-sm font-semibold text-ink dark:text-white">Include in net worth</label>
             <input
               type="checkbox"
               checked={!!form.include_in_net_worth}

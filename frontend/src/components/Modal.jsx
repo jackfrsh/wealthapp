@@ -22,7 +22,7 @@ export default function Modal({ open, onClose, title, children }) {
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/35 dark:bg-black/55 backdrop-blur-sm"
-        onMouseDown={() => onClose?.()}
+        onClick={() => onClose?.()}
       />
 
       {/* Centering wrapper */}
@@ -61,7 +61,7 @@ export default function Modal({ open, onClose, title, children }) {
             </div>
 
             {/* ✅ scrolling body */}
-            <div className="p-6 sm:p-7 overflow-y-auto overscroll-contain">
+            <div className="p-6 sm:p-7 overflow-y-auto overscroll-contain pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
               {children}
             </div>
           </div>
