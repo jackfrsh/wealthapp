@@ -25,3 +25,25 @@ venv/
 node_modules/
 dist/
 build/
+
+# local env (never commit)
+.env
+.env.*
+*.env
+frontend/.env.local
+backend/.env
+
+# python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# venv
+.venv/
+venv/
+
+# node
+node_modules/
+dist/
+build/
