@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: wealth
+      POSTGRES_PASSWORD: wealth
+      POSTGRES_DB: wealth
+    ports:
+      - "5432:5432"
+    volumes:
+      - wealth_pg:/var/lib/postgresql/data
+
+volumes:
+  wealth_pg:

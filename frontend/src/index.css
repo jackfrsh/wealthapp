@@ -1,0 +1,323 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── PADDOCK DESIGN TOKENS ───────────────────────────── */
+/* Elite, calm, aspirational. Dark-first. Warm slate accent. */
+
+:root {
+  /* Surfaces (LIGHT) */
+  --bg:       #F5F7FA;
+  --bg-card:  #FFFFFF;
+  --bg-inset: #F1F4F8;
+
+  --bg-hero:     #FFFFFF;
+  --bg-strategy: linear-gradient(145deg, #FFFFFF 0%, #F6F8FB 55%, #F2F5F9 100%);
+
+  /* Typography (LIGHT) */
+  --text:       #0F172A;
+  --text-2:     #1E293B;
+  --text-3:     #334155;
+  --text-muted: #6B7280;
+
+  /* Accent (LIGHT) — warm slate */
+  --accent:       #2F5E93;
+  --accent-dark:  #244A73;
+  --accent-light: #EAF1F8;
+
+  /* Polarity (LIGHT) — muted */
+  --positive:      #1F6A4A;
+  --positive-soft: #EAF6F0;
+
+  --negative:      #B24A3A;
+  --negative-soft: #FAEDEA;
+
+  /* Border + shadows (LIGHT) */
+  --border: rgba(15, 23, 42, 0.10);
+
+  --shadow-card:       0 1px 1px rgba(15, 23, 42, 0.03);
+  --shadow-card-hover: 0 10px 28px rgba(15, 23, 42, 0.10);
+  --shadow-card-lg:    0 14px 44px rgba(15, 23, 42, 0.12);
+
+  /* No glow blobs */
+  --shadow-glow:       0 0 0 rgba(0,0,0,0);
+  --shadow-inner-ring: inset 0 0 0 1px rgba(15, 23, 42, 0.04);
+
+  /* RGB tokens */
+  --bg-rgb: 245 247 250;
+  --bg-card-rgb: 255 255 255;
+  --bg-inset-rgb: 241 244 248;
+
+  --border-rgb: 15 23 42;
+
+  --text-rgb: 15 23 42;
+  --text-2-rgb: 30 41 59;
+  --text-3-rgb: 51 65 85;
+  --text-muted-rgb: 107 114 128;
+
+  --accent-rgb: 47 94 147;
+  --accent-dark-rgb: 36 74 115;
+  --accent-light-rgb: 234 241 248;
+
+  --positive-rgb: 31 106 74;
+  --positive-soft-rgb: 234 246 240;
+
+  --negative-rgb: 178 74 58;
+  --negative-soft-rgb: 250 237 234;
+}
+
+.dark {
+  /* Surfaces (DARK) — lifted charcoal with warmth */
+  --bg:       #171A1F;
+  --bg-card:  #1D2128;
+  --bg-inset: #252A33;
+
+  --bg-hero:     linear-gradient(145deg, #1E232B 0%, #1D2128 45%, #191D24 100%);
+  --bg-strategy: linear-gradient(145deg, #1A1F27 0%, #1D2128 60%, #1E232B 100%);
+
+  /* Typography (DARK) — warm off-white */
+  --text:       #F1F2F3;
+  --text-2:     #D2D5D9;
+  --text-3:     #A6ADB6;
+  --text-muted: #707783;
+
+  /* Accent (DARK) */
+  --accent:       #4B79A8;
+  --accent-dark:  #3A628E;
+  --accent-light: #0F1720;
+
+  /* Polarity (DARK) */
+  --positive:      #2A9A6E;
+  --positive-soft: #0E1A14;
+
+  --negative:      #C05A46;
+  --negative-soft: #1C1210;
+
+  --border: rgba(255,255,255,.07);
+
+  --shadow-card:       0 1px 3px rgba(0,0,0,.20), 0 6px 18px rgba(0,0,0,.18);
+  --shadow-card-hover: 0 12px 36px rgba(0,0,0,.36), 0 6px 18px rgba(0,0,0,.18);
+  --shadow-card-lg:    0 18px 62px rgba(0,0,0,.40), 0 8px 20px rgba(0,0,0,.20);
+
+  --shadow-glow:       0 0 0 rgba(0,0,0,0);
+  --shadow-inner-ring: inset 0 0 0 1px rgba(255,255,255,.06);
+
+  /* RGB tokens */
+  --bg-rgb: 23 26 31;
+  --bg-card-rgb: 29 33 40;
+  --bg-inset-rgb: 37 42 51;
+
+  --border-rgb: 255 255 255;
+
+  --text-rgb: 241 242 243;
+  --text-2-rgb: 210 213 217;
+  --text-3-rgb: 166 173 182;
+  --text-muted-rgb: 112 119 131;
+
+  --accent-rgb: 75 121 168;
+  --accent-dark-rgb: 58 98 142;
+  --accent-light-rgb: 15 23 32;
+
+  --positive-rgb: 42 154 110;
+  --positive-soft-rgb: 14 26 20;
+
+  --negative-rgb: 192 90 70;
+  --negative-soft-rgb: 28 18 16;
+}
+
+/* ─── Base ─────────────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  @apply bg-surface text-ink font-sans text-base;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular numbers */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+button, a { -webkit-tap-highlight-color: transparent; }
+
+/* Safe area */
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* Premium headline helpers */
+.h1 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.h2 {
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+.muted {
+  color: rgb(var(--text-muted-rgb) / 1);
+}
+
+/* Hero number */
+.hero-number {
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-weight: 700;
+  font-size: clamp(3.1rem, 7.5vw, 3.9rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { @apply bg-ink/10 dark:bg-white/10 rounded-full; }
+::-webkit-scrollbar-thumb:hover { @apply bg-ink/20 dark:bg-white/20; }
+
+/* Skeleton shimmer */
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.skeleton {
+  background: linear-gradient(90deg, rgba(15,23,42,.03) 25%, rgba(15,23,42,.06) 50%, rgba(15,23,42,.03) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+  border-radius: inherit;
+}
+.dark .skeleton {
+  background: linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.08) 50%, rgba(255,255,255,.04) 75%);
+  background-size: 200% 100%;
+}
+
+/* Delta animation (subtle) */
+@keyframes deltaFlash { 0% { opacity: 1; } 30% { opacity: 0.7; } 100% { opacity: 1; } }
+.animate-delta { animation: deltaFlash 0.6s ease-out; }
+
+/* Prevent iOS zoom */
+input, select, textarea { font-size: 1rem; }
+
+/* Currency helpers */
+.currency { opacity: 0.7; margin-right: 2px; }
+.amount { font-variant-numeric: tabular-nums; }
+
+/* Premium focus ring */
+.focus-ring {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+.dark .focus-ring {
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.10);
+}
+
+/* Premium press */
+.pressable {
+  transform: translateY(0);
+  transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
+}
+.pressable:active { transform: translateY(1px); }
+
+/* Hairline border helper */
+.hairline {
+  border: 1px solid var(--border);
+}
+
+/* Premium loader: calm, luxurious, breathing */
+@keyframes paddockBar {
+  0%   { transform: translateX(-42%); opacity: 0.18; }
+  22%  { opacity: 0.38; }
+  50%  { transform: translateX(0%);  opacity: 0.48; }
+  78%  { opacity: 0.34; }
+  100% { transform: translateX(42%); opacity: 0.18; }
+}
+
+.paddock-loader-bar {
+  width: 72px;
+  height: 2px;
+  border-radius: 9999px;
+
+  /* softer + more “ink” than “brand billboard” */
+  background: rgba(var(--accent-rgb), 0.42);
+
+  /* the luxury bit: a subtle inner highlight so it feels like material */
+  box-shadow:
+    0 0 0 1px rgba(var(--accent-rgb), 0.08),
+    0 6px 16px rgba(var(--accent-rgb), 0.10);
+
+  animation: paddockBar 1.95s cubic-bezier(.22, .90, .18, 1) infinite;
+  will-change: transform, opacity;
+}
+
+/* Dark mode: slightly brighter so it doesn’t disappear */
+.dark .paddock-loader-bar {
+  background: rgba(var(--accent-rgb), 0.52);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255, 0.05),
+    0 10px 26px rgba(0,0,0, 0.35);
+}
+
+@keyframes paddockWordmark {
+  0%   { opacity: 0.55; }
+  50%  { opacity: 0.92; }
+  100% { opacity: 0.55; }
+}
+
+.paddock-loader-wordmark {
+  animation: paddockWordmark 1.95s cubic-bezier(.22,.90,.18,1) infinite;
+}
+
+/* Subtle premium grain + vignette (very low) */
+/* Subtle premium grain + vignette (very low) */
+.paddock-backdrop {
+  position: relative;
+  isolation: isolate;
+}
+
+.paddock-backdrop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(1200px 600px at 20% 10%, rgba(var(--accent-rgb), 0.06), transparent 55%),
+    radial-gradient(900px 500px at 80% 0%, rgba(0,0,0,0.035), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.60), rgba(255,255,255,0.20));
+  pointer-events: none;
+}
+
+.dark .paddock-backdrop::before {
+  background:
+    radial-gradient(1200px 600px at 20% 10%, rgba(var(--accent-rgb), 0.10), transparent 55%),
+    radial-gradient(900px 500px at 80% 0%, rgba(255,255,255,0.04), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.03), transparent 55%);
+}
+
+/* Tiny grain (optional but luxurious) */
+.paddock-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+.dark .paddock-backdrop::after { opacity: 0.045; }
+
+/* optional */
+.paddock-modal-glow {
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+}
+
+/* Skeleton → content transition */
+.skeleton {
+  will-change: background-position;
+}
+
+/* Accessibility: respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
