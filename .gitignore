@@ -4,3 +4,24 @@
 .env.*
 backend/.env
 frontend/.env
+
+# secrets
+.env
+.env.*
+backend/.env
+frontend/.env
+
+# python junk
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# venv
+.venv/
+venv/
+
+# node
+node_modules/
+dist/
+build/
