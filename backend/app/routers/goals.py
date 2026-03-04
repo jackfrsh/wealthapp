@@ -6,7 +6,9 @@ POST   /goals
 PATCH  /goals/{id}
 PUT    /goals/{id}
 DELETE /goals/{id}
-GET    /goals/primary (404 if none)
+
+✅ Apple-style:
+GET    /goals/primary -> 200 with Goal OR 200 with null (no goal yet)
 GET    /goals/{id}/forecast
 """
 
@@ -39,10 +41,8 @@ def _monthly_rate(annual_percent: float) -> float:
 def _future_value(pv: float, pmt: float, r: float, n: int) -> float:
     if n <= 0:
         return pv
-
     if r == 0:
         return pv + pmt * n
-
     return pv * (1 + r) ** n + pmt * (((1 + r) ** n - 1) / r)
 
 
@@ -132,7 +132,6 @@ def compute_goal_forecast(
     else:
         status = "adjust"
 
-    # ── Build monthly series for Strategy chart ──────────────────────────
     def _add_months(d: _date, months: int) -> _date:
         y = d.year + (d.month - 1 + months) // 12
         m = (d.month - 1 + months) % 12 + 1
@@ -143,7 +142,7 @@ def compute_goal_forecast(
     required_points = []
     balance = float(current_net_worth)
 
-    hit_month = None  # first month we hit target
+    hit_month = None
 
     for m in range(0, n + 1):
         dt_obj = _add_months(start, m)
@@ -151,15 +150,12 @@ def compute_goal_forecast(
 
         projected_points.append({"date": dt, "value": round(balance, 2)})
 
-        # Detect first time projected balance reaches target
         if target > 0 and hit_month is None and balance >= target:
             hit_month = m
 
-        # Required: linear interpolation from current to target
         req_value = current_net_worth + (target - current_net_worth) * (m / n) if n > 0 else target
         required_points.append({"date": dt, "value": round(req_value, 2)})
 
-        # Advance one month (compound + contribution)
         if m < n:
             balance = balance * (1.0 + r) + mc
 
@@ -221,12 +217,12 @@ def list_goals(
     return session.exec(select(Goal).where(Goal.user_id == current_user.id)).all()
 
 
-@router.get("/primary", response_model=Goal)
+# ✅ Apple-style: "missing" is not an error during onboarding
+@router.get("/primary", response_model=Optional[Goal])
 def get_primary_goal(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    # If goals exist but none marked primary, fix that first.
     _ensure_primary_goal(session, current_user.id)
 
     goal = session.exec(
@@ -236,8 +232,9 @@ def get_primary_goal(
         )
     ).first()
 
+    # 200 OK with null (JSON null) instead of 404
     if not goal:
-        raise HTTPException(status_code=404, detail="No primary goal set")
+        return None
 
     return goal
 

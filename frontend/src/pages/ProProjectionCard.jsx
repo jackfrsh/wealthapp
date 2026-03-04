@@ -1,21 +1,18 @@
+// frontend/src/pages/ProProjectionCard.jsx
 import React, { useMemo, useState, useEffect } from 'react'
 import { useApp } from '../App'
 import Card from '../components/Card'
 import UpgradeButton from '../components/UpgradeButton'
 import { Lock, TrendingUp } from 'lucide-react'
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  ReferenceLine,
-} from 'recharts'
 
 import WealthTooltip from '../components/charts/WealthTooltip'
-import { xAxisProps, yAxisProps, gridProps, tooltipProps, compactTickFormatter } from '../components/charts/chartTheme'
+import {
+  xAxisProps,
+  yAxisProps,
+  gridProps,
+  tooltipProps,
+  compactTickFormatter,
+} from '../components/charts/chartTheme'
 
 /* ───────────────────────────────────────────── */
 /* Helpers */
@@ -67,11 +64,8 @@ function calcSeries({ included, horizonMonths, fallbackAnnualReturnPct, simulati
 
   const itemsSim = included.map((a) => {
     const baseBal = Number(a?.balance || 0)
-    const isSelected =
-      simulation?.accountId != null && String(a.id) === String(simulation.accountId)
-
-    const lumpAdd =
-      simulation?.mode === 'lump' && isSelected ? Number(simulation?.amount || 0) : 0
+    const isSelected = simulation?.accountId != null && String(a.id) === String(simulation.accountId)
+    const lumpAdd = simulation?.mode === 'lump' && isSelected ? Number(simulation?.amount || 0) : 0
 
     return {
       id: a.id,
@@ -84,25 +78,14 @@ function calcSeries({ included, horizonMonths, fallbackAnnualReturnPct, simulati
   const sum = (arr) => arr.reduce((s, x) => s + x.bal, 0)
   const rows = []
 
-  rows.push({
-    x: 0,
-    label: 'Now',
-    baseline: sum(itemsBase),
-    simulated: sum(itemsSim),
-  })
+  rows.push({ x: 0, label: 'Now', baseline: sum(itemsBase), simulated: sum(itemsSim) })
 
   for (let i = 1; i <= horizonMonths; i++) {
-    for (const x of itemsBase) {
-      x.bal = x.bal * (1 + x.r) + x.m
-    }
+    for (const x of itemsBase) x.bal = x.bal * (1 + x.r) + x.m
 
     for (const x of itemsSim) {
-      const isSelected =
-        simulation?.accountId != null && String(x.id) === String(simulation.accountId)
-
-      const extraMonthly =
-        simulation?.mode === 'monthly' && isSelected ? Number(simulation?.amount || 0) : 0
-
+      const isSelected = simulation?.accountId != null && String(x.id) === String(simulation.accountId)
+      const extraMonthly = simulation?.mode === 'monthly' && isSelected ? Number(simulation?.amount || 0) : 0
       x.bal = x.bal * (1 + x.r) + x.m + extraMonthly
     }
 
@@ -134,6 +117,107 @@ function calcSeries({ included, horizonMonths, fallbackAnnualReturnPct, simulati
 }
 
 /* ───────────────────────────────────────────── */
+/* ✅ Safe Recharts loader (never crash the page) */
+/* ───────────────────────────────────────────── */
+
+function SafeChart({
+  data,
+  xInterval,
+  baseCurrency,
+  baselineStroke,
+  simStroke,
+  retirementStroke,
+  milestoneStroke,
+  goalTarget,
+  milestoneTarget,
+  hasRetirement,
+  hasMilestone,
+}) {
+  const [recharts, setRecharts] = useState(null)
+  const [loadFailed, setLoadFailed] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    if (recharts || loadFailed) return
+
+    ;(async () => {
+      try {
+        const mod = await import('recharts')
+        if (cancelled) return
+        setRecharts(mod)
+      } catch (e) {
+        if (cancelled) return
+        console.error('Recharts failed to load:', e)
+        setLoadFailed(true)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [recharts, loadFailed])
+
+  // If the bundle can’t load, we show a stable fallback box (no ErrorBoundary).
+  if (loadFailed || !recharts) {
+    return (
+      <div className="h-[240px] rounded-2xl bg-black/[.03] dark:bg-white/[.04] border border-black/[.06] dark:border-white/[.08] grid place-items-center">
+        <div className="text-xs text-ink-muted dark:text-white/35 text-center px-6">
+          Chart unavailable right now. Your projection totals still work.
+        </div>
+      </div>
+    )
+  }
+
+  const {
+    ResponsiveContainer,
+    LineChart,
+    Line,
+    XAxis,
+    YAxis,
+    Tooltip,
+    CartesianGrid,
+    ReferenceLine,
+  } = recharts
+
+  // Extra safety: if Recharts renders throw (minified vendor crash), catch and fallback.
+  try {
+    return (
+      <div className="h-[240px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data}>
+            <CartesianGrid {...gridProps} />
+            <XAxis dataKey="label" {...xAxisProps} interval={xInterval} minTickGap={10} />
+            <YAxis {...yAxisProps} width={46} tickFormatter={(v) => compactTickFormatter(v)} />
+
+            <Tooltip {...tooltipProps} content={(p) => <WealthTooltip {...p} currency={baseCurrency} />} />
+
+            {hasRetirement ? (
+              <ReferenceLine y={Number(goalTarget)} strokeDasharray="4 4" stroke={retirementStroke} />
+            ) : null}
+
+            {hasMilestone ? (
+              <ReferenceLine y={Number(milestoneTarget)} strokeDasharray="3 6" stroke={milestoneStroke} />
+            ) : null}
+
+            <Line type="monotone" dataKey="baseline" stroke={baselineStroke} strokeWidth={2} dot={false} isAnimationActive />
+            <Line type="monotone" dataKey="simulated" stroke={simStroke} strokeWidth={2} dot={false} isAnimationActive />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    )
+  } catch (e) {
+    console.error('Recharts render crashed:', e)
+    return (
+      <div className="h-[240px] rounded-2xl bg-black/[.03] dark:bg-white/[.04] border border-black/[.06] dark:border-white/[.08] grid place-items-center">
+        <div className="text-xs text-ink-muted dark:text-white/35 text-center px-6">
+          Chart failed to render. Your projection totals still work.
+        </div>
+      </div>
+    )
+  }
+}
+
+/* ───────────────────────────────────────────── */
 /* Main Component */
 /* ───────────────────────────────────────────── */
 
@@ -145,7 +229,13 @@ export default function ProProjectionCard({
   fallbackAnnualReturnPct = 7,
   simulation = null,
 }) {
-  const { isPro, setPage, baseCurrency, isDark } = useApp()
+  const app = useApp()
+  const isPro = !!app?.isPro
+  const setPage = app?.setPage
+  const baseCurrency = (app?.baseCurrency || 'GBP').toUpperCase()
+
+  // support both names safely (you’ve had dark in other files)
+  const dark = app?.dark ?? app?.isDark ?? false
 
   const included = (accounts || []).filter(getIncludeFlag)
   const canChart = included.length > 0
@@ -173,20 +263,14 @@ export default function ProProjectionCard({
   const longHorizon = horizonMonths >= 120
 
   const { series, startBase, endBase, endSim } = useMemo(() => {
-    return calcSeries({
-      included,
-      horizonMonths,
-      fallbackAnnualReturnPct,
-      simulation,
-      longHorizon,
-    })
+    return calcSeries({ included, horizonMonths, fallbackAnnualReturnPct, simulation, longHorizon })
   }, [included, horizonMonths, fallbackAnnualReturnPct, simulation, longHorizon])
 
-  const baselineStroke = isDark ? 'rgba(255,255,255,.20)' : 'rgba(0,0,0,.22)'
+  const baselineStroke = dark ? 'rgba(255,255,255,.20)' : 'rgba(0,0,0,.22)'
   const simStroke = 'var(--accent)'
 
   const retirementStroke = 'rgba(245,158,11,0.70)'
-  const milestoneStroke = isDark ? 'rgba(52,211,153,0.75)' : 'rgba(16,185,129,0.70)'
+  const milestoneStroke = dark ? 'rgba(52,211,153,0.75)' : 'rgba(16,185,129,0.70)'
 
   const locked = !isPro
   const chartOpacity = locked ? 'opacity-25' : 'opacity-100'
@@ -210,9 +294,7 @@ export default function ProProjectionCard({
           </div>
           <div className="mt-2 flex items-center gap-2">
             <TrendingUp size={18} className="text-ink-muted/70 dark:text-white/35" />
-            <div className="text-lg font-semibold text-ink dark:text-white">
-              Net worth projection
-            </div>
+            <div className="text-lg font-semibold text-ink dark:text-white">Net worth projection</div>
           </div>
           <div className="mt-1 text-sm text-ink-muted/70 dark:text-white/35">
             Baseline vs your simulated changes.
@@ -232,7 +314,7 @@ export default function ProProjectionCard({
               key={opt.id}
               type="button"
               onClick={() => {
-                if (!isPro) return setPage('upgrade')
+                if (!isPro) return setPage?.('upgrade')
                 setHorizon(opt.id)
               }}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors border ${
@@ -281,64 +363,25 @@ export default function ProProjectionCard({
           </div>
 
           <div className="mt-4 relative">
-            <div className={`h-[240px] ${chartOpacity} transition-opacity`}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={series}>
-                  <CartesianGrid {...gridProps} />
-
-                  <XAxis dataKey="label" {...xAxisProps} interval={xInterval} minTickGap={10} />
-
-                  <YAxis
-                    {...yAxisProps}
-                    width={46}
-                    tickFormatter={(v) => compactTickFormatter(v)}
-                  />
-
-                  <Tooltip
-                    {...tooltipProps}
-                    content={(p) => <WealthTooltip {...p} currency={baseCurrency} />}
-                  />
-
-                  {hasRetirement ? (
-                    <ReferenceLine
-                      y={Number(goalTarget)}
-                      strokeDasharray="4 4"
-                      stroke={retirementStroke}
-                    />
-                  ) : null}
-
-                  {hasMilestone ? (
-                    <ReferenceLine
-                      y={Number(milestoneTarget)}
-                      strokeDasharray="3 6"
-                      stroke={milestoneStroke}
-                    />
-                  ) : null}
-
-                  <Line
-                    type="monotone"
-                    dataKey="baseline"
-                    stroke={baselineStroke}
-                    strokeWidth={2}
-                    dot={false}
-                    isAnimationActive
-                  />
-
-                  <Line
-                    type="monotone"
-                    dataKey="simulated"
-                    stroke={simStroke}
-                    strokeWidth={2}
-                    dot={false}
-                    isAnimationActive
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+            <div className={`transition-opacity ${chartOpacity}`}>
+              <SafeChart
+                data={series}
+                xInterval={xInterval}
+                baseCurrency={baseCurrency}
+                baselineStroke={baselineStroke}
+                simStroke={simStroke}
+                retirementStroke={retirementStroke}
+                milestoneStroke={milestoneStroke}
+                goalTarget={goalTarget}
+                milestoneTarget={milestoneTarget}
+                hasRetirement={hasRetirement}
+                hasMilestone={hasMilestone}
+              />
             </div>
 
             {!isPro && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <UpgradeButton onClick={() => setPage('upgrade')} icon={Lock} size="md">
+                <UpgradeButton onClick={() => setPage?.('upgrade')} icon={Lock} size="md">
                   Unlock projections
                 </UpgradeButton>
               </div>

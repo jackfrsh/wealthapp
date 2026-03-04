@@ -1,4 +1,3 @@
-// frontend/src/api.js
 import { getCached, setCache, invalidateCache, invalidatePath } from './apiCache'
 
 export { invalidateCache, invalidatePath }
@@ -11,7 +10,7 @@ const REQUEST_TIMEOUT_MS = 15_000
 // Priority:
 // 1) Explicit env override (VITE_API_URL)
 // 2) Auto: local dev -> http://127.0.0.1:8000/api
-//          deployed  -> /api (same-origin, no CORS, no mixed content)
+//          deployed  -> /api (same-origin)
 const envBase = (import.meta.env.VITE_API_URL || '').trim().replace(/\/$/, '')
 
 const isLocalHost = (() => {
@@ -96,23 +95,18 @@ function makeError(res, data) {
 
 /* ─────────────────────────────────────────────
    Access token caching + de-dupe
-   Prevents “token storms” (many api calls each triggering getSession()).
 ───────────────────────────────────────────── */
 
 let cachedToken = null
 let cachedAt = 0
 let tokenInFlight = null
 
-// Keep short so we don’t hold stale auth, but long enough to collapse bursts
 const TOKEN_TTL_MS = 15_000
 
 async function getAccessTokenCached() {
   const now = Date.now()
 
-  // If we recently resolved a token, reuse it for a short window
   if (cachedToken && now - cachedAt < TOKEN_TTL_MS) return cachedToken
-
-  // If there’s already a token fetch happening, await it
   if (tokenInFlight) return tokenInFlight
 
   tokenInFlight = (async () => {
@@ -123,7 +117,6 @@ async function getAccessTokenCached() {
       t = null
     }
 
-    // Fallback to legacy storage token if provider yields nothing
     if (!t) t = getToken()
 
     cachedToken = t || null
@@ -156,16 +149,29 @@ function dispatchSessionExpiredOnce() {
  *
  * GET requests are cached in-memory with per-path TTL.
  * All requests have a 15s timeout via AbortController.
+ *
+ * Apple-level: Expected outcomes are modeled explicitly:
+ * - options.nullOn404: return null (instead of throwing) on 404
+ * - options.okStatuses: array of extra HTTP statuses to treat as OK
  */
 export async function api(path, options = {}) {
-  const { method = 'GET', headers = {}, body = undefined, signal, skipCache = false } = options
+  const {
+    method = 'GET',
+    headers = {},
+    body = undefined,
+    signal,
+    skipCache = false,
+
+    // ✅ Apple-ish “expected outcomes”
+    nullOn404 = false,
+    okStatuses = [],
+  } = options
 
   const url =
     path.startsWith('http')
       ? path
       : `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`
 
-  // ── Cache: return cached GET responses instantly ──
   const isGet = method.toUpperCase() === 'GET'
   if (isGet && !skipCache) {
     const cached = getCached(path)
@@ -173,9 +179,7 @@ export async function api(path, options = {}) {
   }
 
   const token = await getAccessTokenCached()
-
   const finalHeaders = new Headers(headers)
-
   let finalBody = body
 
   const isFormData =
@@ -207,7 +211,6 @@ export async function api(path, options = {}) {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
-  // If caller provided their own signal, listen for it too
   if (signal) {
     if (signal.aborted) controller.abort()
     else signal.addEventListener('abort', () => controller.abort(), { once: true })
@@ -223,7 +226,7 @@ export async function api(path, options = {}) {
     })
   } catch (e) {
     clearTimeout(timeoutId)
-    if (e.name === 'AbortError' && !signal?.aborted) {
+    if (e?.name === 'AbortError' && !signal?.aborted) {
       const err = new Error('Request timed out')
       err.status = 0
       err.detail = 'The server took too long to respond. Please try again.'
@@ -234,69 +237,73 @@ export async function api(path, options = {}) {
     clearTimeout(timeoutId)
   }
 
+  // ✅ Handle “expected 404 means empty state”
+  if (res.status === 404 && nullOn404) {
+    // do not cache “not found” unless you intentionally want to
+    return null
+  }
+
   const data = await readBody(res)
 
-  if (!res.ok) {
+  // ✅ Allow extra “OK-like” statuses
+  const okish = res.ok || (Array.isArray(okStatuses) && okStatuses.includes(res.status))
+  if (!okish) {
     if (res.status === 401) {
-      // If we had no token, this can be a bootstrap race.
-      // Force a token refresh and retry once before declaring session expired.
+      // Force token refresh + retry once before declaring session expired.
       cachedToken = null
       cachedAt = 0
-  
+
       const hadToken = !!token
-  
-      // Retry exactly once
+
       try {
         const retryToken = await getAccessTokenCached()
         const retryHeaders = new Headers(finalHeaders)
-  
-        // Replace Authorization with refreshed token if present
+
         if (retryToken) retryHeaders.set('Authorization', `Bearer ${retryToken}`)
         else retryHeaders.delete('Authorization')
-  
+
         const retryRes = await fetch(url, {
           method,
           headers: retryHeaders,
           body: finalBody,
-          signal,
+          signal: controller.signal, // ✅ match our abort behavior
         })
-  
+
+        // Handle expected 404 on retry too
+        if (retryRes.status === 404 && nullOn404) return null
+
         const retryData = await readBody(retryRes)
-  
-        if (retryRes.ok) {
+        const retryOkish =
+          retryRes.ok ||
+          (Array.isArray(okStatuses) && okStatuses.includes(retryRes.status))
+
+        if (retryOkish) {
           if (isGet) setCache(path, retryData)
           return retryData
         }
-  
-        // Still 401 after retry -> now it's a real session failure (if we ever had a token)
+
         if (retryRes.status === 401 && (hadToken || retryToken)) {
           dispatchSessionExpiredOnce()
         }
-  
+
         throw makeError(retryRes, retryData)
       } catch (e) {
         // Network errors etc. shouldn't force logout
         throw e
       }
     }
-  
-    // 403 = forbidden (e.g. admin endpoint) → do NOT logout
+
+    // ✅ 403 is forbidden (e.g. role/RLS/admin). Do NOT logout.
     throw makeError(res, data)
   }
 
-  // ── Cache: store successful GET responses ──
   if (isGet) setCache(path, data)
-
   return data
 }
 
 // Optional small wrappers
 export const apiGet = (path, opts) => api(path, { ...opts, method: 'GET' })
-export const apiPost = (path, body, opts) =>
-  api(path, { ...opts, method: 'POST', body })
-export const apiPut = (path, body, opts) =>
-  api(path, { ...opts, method: 'PUT', body })
-export const apiPatch = (path, body, opts) =>
-  api(path, { ...opts, method: 'PATCH', body })
-export const apiDelete = (path, opts) =>
-  api(path, { ...opts, method: 'DELETE' })
+export const apiPost = (path, body, opts) => api(path, { ...opts, method: 'POST', body })
+export const apiPut = (path, body, opts) => api(path, { ...opts, method: 'PUT', body })
+export const apiPatch = (path, body, opts) => api(path, { ...opts, method: 'PATCH', body })
+export const apiDelete = (path, opts) => api(path, { ...opts, method: 'DELETE' })

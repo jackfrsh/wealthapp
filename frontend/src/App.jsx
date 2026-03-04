@@ -7,6 +7,7 @@ import React, {
   createContext,
   useContext,
   Suspense,
+  useTransition,
 } from 'react'
 
 import { supabase } from './supabase'
@@ -24,13 +25,15 @@ import Privacy from './pages/Privacy'
 import Security from './pages/Security'
 import Terms from './pages/Terms'
 
-// Lazy-load authed pages — Landing/Auth ship in main bundle, everything else is code-split
-const Home = React.lazy(() => import('./pages/Home'))
-const Outlook = React.lazy(() => import('./pages/Outlook'))
+// ✅ Eager-load core authed pages (instant navigation, no suspense blank)
+import Home from './pages/Home'
+import Outlook from './pages/Outlook'
+import Accounts from './pages/Accounts'
+import Settings from './pages/Settings'
+import GoalSetup from './pages/GoalSetup'
+
+// 💤 Keep rarely-visited pages lazy
 const Insights = React.lazy(() => import('./pages/Insights'))
-const Accounts = React.lazy(() => import('./pages/Accounts'))
-const Settings = React.lazy(() => import('./pages/Settings'))
-const GoalSetup = React.lazy(() => import('./pages/GoalSetup'))
 const Upgrade = React.lazy(() => import('./pages/Upgrade'))
 const Admin = React.lazy(() => import('./pages/Admin'))
 
@@ -38,6 +41,9 @@ import Toast from './components/Toast'
 import Sidebar from './components/Sidebar'
 import MobileNav from './components/MobileNav'
 import BottomNav from './components/BottomNav'
+import MultiCurrencyGuide from './pages/guides/MultiCurrency'
+import LongTermProjectionGuide from './pages/guides/LongTermProjection'
+import InflationAdjustedGuide from './pages/guides/InflationAdjusted'
 
 /* ────────────────────────────────────────────
    Error Boundary — catches render crashes
@@ -48,22 +54,32 @@ class ErrorBoundary extends React.Component {
   static getDerivedStateFromError(error) {
     return { hasError: true, error }
   }
+  componentDidCatch(error, info) {
+    try {
+      console.error('ErrorBoundary caught:', error)
+      console.error('Component stack:', info?.componentStack)
+    } catch {}
+  }
 
   render() {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-surface dark:bg-surface-dark px-6">
           <div className="text-center max-w-md space-y-4">
-            <div className="font-display text-3xl text-ink dark:text-white">
-              Something went wrong
-            </div>
+            <div className="font-display text-3xl text-ink dark:text-white">Something went wrong</div>
             <p className="text-sm text-ink-muted dark:text-white/60">
               An unexpected error occurred. Please refresh the page to continue.
             </p>
+
+            {this.state.error ? (
+              <pre className="mt-3 text-left text-xs bg-black/5 dark:bg-white/5 p-3 rounded-xl overflow-auto max-h-[40vh]">
+                {String(this.state.error?.stack || this.state.error?.message || this.state.error)}
+              </pre>
+            ) : null}
+
             <button
               onClick={() => window.location.reload()}
-              className="mt-4 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-medium
-                         hover:bg-accent/90 transition-colors"
+              className="mt-4 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors"
               type="button"
             >
               Refresh
@@ -96,15 +112,24 @@ const PAGE_TO_PATH = {
   goal_setup: '/goal_setup',
   admin: '/admin',
   home: '/home',
+  guide_multi_currency: '/guides/multi-currency-net-worth-tracker',
+  guide_long_term_projection: '/guides/long-term-wealth-projection',
+  guide_inflation_adjusted: '/guides/inflation-adjusted-net-worth',
 }
 
 function pageFromPath(pathname) {
   const p = (pathname || '').toLowerCase()
+
   if (p === '/' || p === '') return 'landing'
   if (p.startsWith('/auth')) return 'auth'
   if (p.startsWith('/privacy')) return 'privacy'
   if (p.startsWith('/security')) return 'security'
   if (p.startsWith('/terms')) return 'terms'
+
+  if (p.startsWith('/guides/multi-currency-net-worth-tracker')) return 'guide_multi_currency'
+  if (p.startsWith('/guides/long-term-wealth-projection')) return 'guide_long_term_projection'
+  if (p.startsWith('/guides/inflation-adjusted-net-worth')) return 'guide_inflation_adjusted'
+
   if (p.startsWith('/upgrade')) return 'upgrade'
   if (p.startsWith('/settings')) return 'settings'
   if (p.startsWith('/accounts')) return 'accounts'
@@ -113,23 +138,15 @@ function pageFromPath(pathname) {
   if (p.startsWith('/goal_setup')) return 'goal_setup'
   if (p.startsWith('/admin')) return 'admin'
   if (p.startsWith('/home')) return 'home'
-  return 'landing'
+
+  return null
 }
 
-function resolveTheme(pref) {
-  if (pref === 'dark') return true
-  if (pref === 'light') return false
-  return window.matchMedia('(prefers-color-scheme: dark)').matches
-}
-function applyThemeToDom(pref) {
-  document.documentElement.classList.toggle('dark', resolveTheme(pref))
-}
-
-/* ────────────────────────────────────────────
-   App
-──────────────────────────────────────────── */
 export default function App() {
   const [page, _setPage] = useState('landing')
+  useEffect(() => {
+    if (import.meta.env.DEV) console.log('Current page:', page)
+  }, [page])
 
   const [authed, setAuthed] = useState(false)
   const [checking, setChecking] = useState(true)
@@ -137,52 +154,49 @@ export default function App() {
 
   const [username, setUsername] = useState('')
 
-// ────────────────────────────────────────────
-// Theme (single source of truth)
-// ────────────────────────────────────────────
-const THEME_KEY = 'theme_preference'
+  // Theme
+  const THEME_KEY = 'theme_preference'
 
-const resolveTheme = (pref) => {
-  if (pref === 'dark') return true
-  if (pref === 'light') return false
-  return window.matchMedia('(prefers-color-scheme: dark)').matches
-}
-
-const applyThemeToDom = (pref) => {
-  document.documentElement.classList.toggle('dark', resolveTheme(pref))
-}
-
-const [themePref, _setThemePref] = useState(() => {
-  try {
-    return localStorage.getItem(THEME_KEY) || 'system'
-  } catch {
-    return 'system'
+  const resolveTheme = (pref) => {
+    if (pref === 'dark') return true
+    if (pref === 'light') return false
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
   }
-})
 
-// ✅ the only setter anyone should use
-const setThemePreference = useCallback((pref) => {
-  const next = pref || 'system'
-  _setThemePref(next)        // state
-  applyThemeToDom(next)      // DOM instantly
-  try {
-    localStorage.setItem(THEME_KEY, next)
-  } catch {}
-}, [])
+  const applyThemeToDom = (pref) => {
+    document.documentElement.classList.toggle('dark', resolveTheme(pref))
+  }
 
-// Ensure DOM is correct on first paint + whenever state changes
-useEffect(() => {
-  applyThemeToDom(themePref)
-}, [themePref])
+  const [themePref, _setThemePref] = useState(() => {
+    try {
+      return localStorage.getItem(THEME_KEY) || 'system'
+    } catch {
+      return 'system'
+    }
+  })
 
-// Live system theme changes only when pref === 'system'
-useEffect(() => {
-  if (themePref !== 'system') return
-  const mq = window.matchMedia('(prefers-color-scheme: dark)')
-  const handler = () => applyThemeToDom('system')
-  mq.addEventListener?.('change', handler)
-  return () => mq.removeEventListener?.('change', handler)
-}, [themePref])
+  const [isNavPending, startNavTransition] = useTransition()
+
+  const setThemePreference = useCallback((pref) => {
+    const next = pref || 'system'
+    _setThemePref(next)
+    applyThemeToDom(next)
+    try {
+      localStorage.setItem(THEME_KEY, next)
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    applyThemeToDom(themePref)
+  }, [themePref])
+
+  useEffect(() => {
+    if (themePref !== 'system') return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const handler = () => applyThemeToDom('system')
+    mq.addEventListener?.('change', handler)
+    return () => mq.removeEventListener?.('change', handler)
+  }, [themePref])
 
   const [baseCurrency, setBaseCurrency] = useState('GBP')
   const [isPro, setIsPro] = useState(false)
@@ -194,10 +208,8 @@ useEffect(() => {
     setToast({ id: Date.now() + Math.random(), kind, message })
   }, [])
 
-  // undefined = loading/not fetched yet, null = fetched and missing, object = exists
   const [primaryGoal, setPrimaryGoal] = useState(undefined)
   const [goalLoading, setGoalLoading] = useState(false)
-
   const [accountsCount, setAccountsCount] = useState(undefined)
 
   const [dataVersion, setDataVersion] = useState(0)
@@ -208,52 +220,39 @@ useEffect(() => {
 
   const dark = resolveTheme(themePref)
 
-  // Stable history-aware setPage
-  const setPage = useCallback((next, { replace = false } = {}) => {
-    const n = next || 'landing'
-    _setPage(n)
-    try {
-      const path = PAGE_TO_PATH[n] || '/'
-      const current = window.location.pathname || '/'
-      if (current !== path) {
-        if (replace) window.history.replaceState({}, '', path)
-        else window.history.pushState({}, '', path)
-      }
-    } catch {}
-  }, [])
+  const setPage = useCallback(
+    (next, { replace = false } = {}) => {
+      const n = next || 'landing'
+      startNavTransition(() => _setPage(n))
+      try {
+        const path = PAGE_TO_PATH[n] || '/'
+        const current = window.location.pathname || '/'
+        if (current !== path) {
+          if (replace) window.history.replaceState({}, '', path)
+          else window.history.pushState({}, '', path)
+        }
+      } catch {}
+    },
+    [startNavTransition]
+  )
 
-  // Initial route + back button
   useEffect(() => {
-    const initial = pageFromPath(window.location.pathname)
-    _setPage(initial)
+    const initialRaw = pageFromPath(window.location.pathname)
+    const initial = initialRaw || 'landing'
+    setPage(initial, { replace: true })
     try {
       window.history.replaceState({}, '', PAGE_TO_PATH[initial] || '/')
     } catch {}
 
     const onPop = () => {
-      const p = pageFromPath(window.location.pathname)
-      _setPage(p)
+      const pRaw = pageFromPath(window.location.pathname)
+      const p = pRaw || (authed ? 'home' : 'landing')
+      setPage(p, { replace: true })
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
-  }, [])
+  }, [setPage, authed])
 
-  // Theme apply
-  useEffect(() => {
-    applyThemeToDom(themePref)
-  }, [themePref])
-
-  // If system theme + OS changes, reflect instantly
-  useEffect(() => {
-    if (themePref !== 'system') return
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const handler = () => applyThemeToDom('system')
-    handler()
-    mq.addEventListener?.('change', handler)
-    return () => mq.removeEventListener?.('change', handler)
-  }, [themePref])
-
-  // Document title per page
   const PAGE_TITLES = {
     landing: 'Paddock — Private Net Worth Tracker & Wealth Dashboard',
     auth: 'Sign in — Paddock',
@@ -267,51 +266,43 @@ useEffect(() => {
     privacy: 'Privacy — Paddock',
     security: 'Security — Paddock',
     terms: 'Terms of Service — Paddock',
+    guide_multi_currency: 'Multi-Currency Net Worth Tracking — Paddock',
+    guide_long_term_projection: 'Long-Term Wealth Projections — Paddock',
+    guide_inflation_adjusted: 'Inflation-Adjusted Net Worth — Paddock',
     admin: 'Admin — Paddock',
   }
   useEffect(() => {
     document.title = PAGE_TITLES[page] || 'Paddock'
   }, [page])
 
-  // Entitlements refresh (rate-limited)
+  // Entitlements refresh
   const entitlementsCheckedAtRef = useRef(0)
-  const refreshSettings = useCallback(
-    async ({ force = false } = {}) => {
-      const now = Date.now()
-      const STALE_MS = 60_000
-      if (!force && entitlementsCheckedAtRef.current && now - entitlementsCheckedAtRef.current < STALE_MS) {
-        return null
-      }
-      entitlementsCheckedAtRef.current = now
+  const refreshSettings = useCallback(async ({ force = false } = {}) => {
+    const now = Date.now()
+    const STALE_MS = 60_000
+    if (!force && entitlementsCheckedAtRef.current && now - entitlementsCheckedAtRef.current < STALE_MS) {
+      return null
+    }
+    entitlementsCheckedAtRef.current = now
 
-      try {
-        const s = await api('/settings')
-        // 🍎 Do NOT touch theme here.
-        setBaseCurrency((s?.base_currency || 'GBP').toUpperCase())
-        setIsPro(!!s?.is_pro)
-        setSubscriptionStatus(s?.subscription_status || null)
-        setTrialEnd(s?.trial_end || null)
-        return s
-      } catch {
-        return null
-      }
-    },
-    [api]
-  )
+    try {
+      const s = await api('/settings')
+      setBaseCurrency((s?.base_currency || 'GBP').toUpperCase())
+      setIsPro(!!s?.is_pro)
+      setSubscriptionStatus(s?.subscription_status || null)
+      setTrialEnd(s?.trial_end || null)
+      return s
+    } catch {
+      return null
+    }
+  }, [])
 
-  /**
-   * Primary goal fetch: only 404 means "missing".
-   */
   const fetchPrimaryGoal = useCallback(async () => {
     setGoalLoading(true)
     try {
       const g = await api('/goals/primary')
-
       const looksLikeGoal =
-        g &&
-        typeof g === 'object' &&
-        !Array.isArray(g) &&
-        (g.id != null || g.goal_id != null)
+        g && typeof g === 'object' && !Array.isArray(g) && (g.id != null || g.goal_id != null)
 
       if (!looksLikeGoal) {
         setPrimaryGoal(null)
@@ -331,11 +322,8 @@ useEffect(() => {
     } finally {
       setGoalLoading(false)
     }
-  }, [api])
+  }, [])
 
-  /**
-   * Accounts count fetch: don't turn transient failure into 0.
-   */
   const fetchAccountsCount = useCallback(async () => {
     try {
       const rows = await api('/accounts')
@@ -347,7 +335,7 @@ useEffect(() => {
       setAccountsCount((prev) => (prev === undefined ? undefined : prev))
       return null
     }
-  }, [api])
+  }, [])
 
   const syncBilling = useCallback(async () => {
     try {
@@ -357,26 +345,24 @@ useEffect(() => {
     } catch {
       return false
     }
-  }, [api, refreshSettings])
+  }, [refreshSettings])
 
-  // Auth bootstrap (single-load per token)
+  // Auth bootstrap
   const bootIdRef = useRef(0)
   const tokenRef = useRef(null)
-  const bootTokenRef = useRef(null) // remembers the token we already bootstrapped
+  const bootTokenRef = useRef(null)
 
   const logout = useCallback(async () => {
     try {
       await supabase?.auth?.signOut?.()
     } catch {}
 
-    // reset bootstrap guard
     bootTokenRef.current = null
     tokenRef.current = null
 
     setAuthed(false)
     setUsername('')
     setIsPro(false)
-
     setPrimaryGoal(undefined)
     setAccountsCount(undefined)
 
@@ -388,10 +374,9 @@ useEffect(() => {
       localStorage.removeItem('upgrade_reason')
     } catch {}
 
-    setPage('landing', { replace: true })
-  }, [setPage])
+    startNavTransition(() => setPage('landing', { replace: true }))
+  }, [setPage, startNavTransition])
 
-  // Session expired handling
   useEffect(() => {
     const onExpired = () => {
       showToast('Session expired — please sign in again.', 'error')
@@ -406,7 +391,7 @@ useEffect(() => {
       setChecking(false)
       setAuthed(false)
       setSettingsReady(true)
-      setPage('landing', { replace: true })
+      startNavTransition(() => setPage('landing', { replace: true }))
       return
     }
 
@@ -420,7 +405,6 @@ useEffect(() => {
       const token = session?.access_token || null
       tokenRef.current = token
 
-      // No token = public
       if (!token) {
         bootTokenRef.current = null
         setAuthed(false)
@@ -428,14 +412,11 @@ useEffect(() => {
         setAccountsCount(undefined)
         setSettingsReady(true)
         setChecking(false)
-        setPage('landing', { replace: true })
+        startNavTransition(() => setPage('landing', { replace: true }))
         return
       }
 
-      // Load-once guard (skip duplicate bootstrap for same token)
-      if (bootTokenRef.current === token) {
-        return
-      }
+      if (bootTokenRef.current === token) return
       bootTokenRef.current = token
 
       try {
@@ -446,8 +427,7 @@ useEffect(() => {
         setPrimaryGoal(undefined)
         setAccountsCount(undefined)
 
-        // Parallel load (single pass)
-        await Promise.allSettled([
+        const results = await Promise.allSettled([
           refreshSettings({ force: true }),
           fetchPrimaryGoal(),
           fetchAccountsCount(),
@@ -455,19 +435,24 @@ useEffect(() => {
         if (cancelled || myId !== bootIdRef.current) return
 
         const fromPath = pageFromPath(window.location.pathname)
+        const resolvedFromPath = fromPath || 'home'
+
         const isPublic =
-          fromPath === 'landing' ||
-          fromPath === 'auth' ||
-          fromPath === 'privacy' ||
-          fromPath === 'security' ||
-          fromPath === 'terms'
+          resolvedFromPath === 'landing' ||
+          resolvedFromPath === 'auth' ||
+          resolvedFromPath === 'privacy' ||
+          resolvedFromPath === 'security' ||
+          resolvedFromPath === 'terms' ||
+          resolvedFromPath === 'guide_multi_currency' ||
+          resolvedFromPath === 'guide_long_term_projection' ||
+          resolvedFromPath === 'guide_inflation_adjusted'
 
-        const isBlocked = fromPath === 'upgrade'
+        const isBlocked = resolvedFromPath === 'upgrade'
 
-        if (fromPath && !isPublic && !isBlocked) {
-          setPage(fromPath, { replace: true })
+        if (resolvedFromPath && !isPublic && !isBlocked) {
+          startNavTransition(() => setPage(resolvedFromPath, { replace: true }))
         } else {
-          setPage('home', { replace: true })
+          startNavTransition(() => setPage('home', { replace: true }))
         }
       } catch (e) {
         console.error('Bootstrap failed:', e)
@@ -477,7 +462,6 @@ useEffect(() => {
       }
     }
 
-    // Initial session check
     supabase.auth
       .getSession()
       .then(({ data }) => bootstrap(data?.session || null))
@@ -488,18 +472,12 @@ useEffect(() => {
         setAuthed(false)
         setSettingsReady(true)
         setChecking(false)
-        setPage('landing', { replace: true })
+        startNavTransition(() => setPage('landing', { replace: true }))
       })
 
-    // Auth change listener
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (cancelled) return
       tokenRef.current = session?.access_token || null
-
-      // Important: if token changes, allow a new bootstrap
-      if (bootTokenRef.current !== tokenRef.current) {
-        // allow bootstrap to run
-      }
       bootstrap(session || null)
     })
 
@@ -507,7 +485,7 @@ useEffect(() => {
       cancelled = true
       data?.subscription?.unsubscribe?.()
     }
-  }, [fetchAccountsCount, fetchPrimaryGoal, refreshSettings, setPage])
+  }, [fetchAccountsCount, fetchPrimaryGoal, refreshSettings, setPage, showToast, logout, startNavTransition])
 
   // Loading gate
   if (checking || (authed && !settingsReady)) {
@@ -526,12 +504,9 @@ useEffect(() => {
     )
   }
 
-  // Onboarding signals for Home
   const onboarding = {
-    goalStatus:
-      primaryGoal === undefined ? 'loading' : primaryGoal === null ? 'missing' : 'set',
-    accountsStatus:
-      accountsCount === undefined ? 'loading' : accountsCount === 0 ? 'missing' : 'set',
+    goalStatus: primaryGoal === undefined ? 'loading' : primaryGoal === null ? 'missing' : 'set',
+    accountsStatus: accountsCount === undefined ? 'loading' : accountsCount === 0 ? 'missing' : 'set',
     accountsCount: typeof accountsCount === 'number' ? accountsCount : 0,
     needsGoal: primaryGoal === null,
     needsAccounts: typeof accountsCount === 'number' ? accountsCount === 0 : false,
@@ -549,7 +524,7 @@ useEffect(() => {
 
     themePref,
     setThemePreference,
-    setThemePref: setThemePreference, // back-compat alias ONLY
+    setThemePref: setThemePreference,
     dark,
 
     baseCurrency,
@@ -581,13 +556,13 @@ useEffect(() => {
     refreshSettings,
     syncBilling,
 
-    invalidatePath, // expose for targeted invalidation if needed
+    invalidatePath,
 
     logout,
   }
 
-  // Suspense fallback
-  const PageFallback = () => (
+  // Small inline skeleton used ONLY for lazy rare pages
+  const LazyFallback = () => (
     <div className="space-y-6 animate-fade-in">
       <div className="h-8 w-48 rounded-lg bg-ink/5 dark:bg-white/5" />
       <div className="h-40 rounded-2xl bg-ink/5 dark:bg-white/5" />
@@ -604,6 +579,9 @@ useEffect(() => {
       if (page === 'security') return <Security />
       if (page === 'terms') return <Terms />
       if (page === 'auth') return <AuthPage />
+      if (page === 'guide_multi_currency') return <MultiCurrencyGuide />
+      if (page === 'guide_long_term_projection') return <LongTermProjectionGuide />
+      if (page === 'guide_inflation_adjusted') return <InflationAdjustedGuide />
       return <Landing />
     }
 
@@ -614,12 +592,19 @@ useEffect(() => {
         return <Security />
       case 'terms':
         return <Terms />
+
+      case 'guide_multi_currency':
+        return <MultiCurrencyGuide />
+      case 'guide_long_term_projection':
+        return <LongTermProjectionGuide />
+      case 'guide_inflation_adjusted':
+        return <InflationAdjustedGuide />
+
+      // ✅ core pages are instant (not lazy)
       case 'home':
         return <Home />
       case 'outlook':
         return <Outlook />
-      case 'insights':
-        return <Insights />
       case 'accounts':
         return <Accounts />
       case 'settings':
@@ -629,25 +614,37 @@ useEffect(() => {
           <GoalSetup
             onComplete={(goal) => {
               setPrimaryGoal(goal || null)
-              setPage('accounts')
+              startNavTransition(() => setPage('home', { replace: true }))
             }}
           />
         )
+
+      // 💤 rare pages lazy, wrapped locally
+      case 'insights':
+        return (
+          <Suspense fallback={<LazyFallback />}>
+            <Insights />
+          </Suspense>
+        )
       case 'upgrade':
-        return <Upgrade />
+        return (
+          <Suspense fallback={<LazyFallback />}>
+            <Upgrade />
+          </Suspense>
+        )
       case 'admin':
-        return <Admin />
+        return (
+          <Suspense fallback={<LazyFallback />}>
+            <Admin />
+          </Suspense>
+        )
+
       default:
         return <Home />
     }
   }
 
-  // Page transition wrapper (keep; it’s premium)
-  const PageTransition = ({ children }) => (
-    <div key={page} className="animate-page-in">
-      {children}
-    </div>
-  )
+  const PageTransition = ({ children }) => <div className="animate-page-in">{children}</div>
 
   return (
     <ErrorBoundary>
@@ -661,9 +658,13 @@ useEffect(() => {
                 <main className="px-4 sm:px-6 lg:px-8 py-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-6">
                   <div className="mx-auto w-full max-w-6xl">
                     <PageTransition>
-                      <Suspense fallback={<PageFallback />}>
-                        {renderPage()}
-                      </Suspense>
+                      {/* Optional tiny nav hint (doesn't blank content) */}
+                      {isNavPending ? (
+                        <div className="fixed top-4 right-4 z-[950] text-[11px] font-semibold px-3 py-1.5 rounded-2xl bg-black/80 text-white">
+                          Loading…
+                        </div>
+                      ) : null}
+                      {renderPage()}
                     </PageTransition>
                   </div>
                 </main>

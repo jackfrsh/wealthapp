@@ -65,16 +65,28 @@ export const ACCOUNT_TYPE_LABELS = {
   other: 'Other',
 }
 
+import {
+  Landmark,
+  Shield,
+  Building2,
+  Coins,
+  TrendingUp,
+  Home,
+  Construction,
+  CreditCard,
+  Package,
+} from 'lucide-react'
+
 export const ACCOUNT_TYPE_ICONS = {
-  bank: '🏦',
-  isa: '🛡️',
-  sipp: '🏛️',
-  crypto: '₿',
-  investment: '📈',
-  property: '🏠',
-  mortgage: '🏗️',
-  loan: '💳',
-  other: '📦',
+  bank: Landmark,
+  isa: Shield,
+  sipp: Building2,
+  crypto: Coins,
+  investment: TrendingUp,
+  property: Home,
+  mortgage: Construction,
+  loan: CreditCard,
+  other: Package,
 }
 
 export const CURRENCIES = ['GBP', 'USD', 'EUR', 'CHF', 'AUD', 'CAD', 'JPY', 'SEK', 'NOK', 'SGD', 'NZD', 'HKD', 'INR', 'BTC', 'ETH']

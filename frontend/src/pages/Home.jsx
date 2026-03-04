@@ -21,9 +21,7 @@ import {
 /* ──────────────────────────────────────────── */
 
 const MILESTONE_LADDER = [
-  1_000, 2_500, 5_000, 10_000,
-  25_000, 50_000, 100_000, 250_000, 500_000,
-  750_000, 1_000_000,
+  1_000, 2_500, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 750_000, 1_000_000,
   1_500_000, 2_000_000, 3_000_000, 5_000_000, 10_000_000,
 ]
 
@@ -133,12 +131,9 @@ function clearPendingCelebration() {
   }
 }
 
-// Clear both keys (and any legacy variants you may have used previously)
 function clearCelebrationStorage() {
   try {
     localStorage.removeItem(CELEBRATION_PENDING_KEY)
-    // Don’t remove LAST key by default — it prevents re-firing.
-//  localStorage.removeItem(CELEBRATION_LAST_KEY)
   } catch {}
 }
 
@@ -220,16 +215,13 @@ function OnboardingPanel({ needsGoal, needsAccounts, accountsCount = 0, onGoal, 
   const doneSteps = (needsGoal ? 0 : 1) + (needsAccounts ? 0 : 1)
   const pct = Math.round((doneSteps / totalSteps) * 100)
 
-  // ✅ Only complete when BOTH are done
   const allDone = !needsGoal && !needsAccounts
 
-  // Local UI lifecycle: once complete, collapse the panel and show a tiny toast
-  const [closing, setClosing] = React.useState(false)
-  const [showDoneToast, setShowDoneToast] = React.useState(false)
+  const [closing, setClosing] = useState(false)
+  const [showDoneToast, setShowDoneToast] = useState(false)
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!allDone) return
-
     setClosing(true)
 
     const t1 = window.setTimeout(() => setShowDoneToast(true), 260)
@@ -270,7 +262,11 @@ function OnboardingPanel({ needsGoal, needsAccounts, accountsCount = 0, onGoal, 
       {!done && (
         <button
           type="button"
-          onClick={onAction}
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onAction?.()
+          }}
           className="shrink-0 px-3.5 py-2 rounded-2xl text-xs font-semibold bg-black/[.03] dark:bg-white/[.06] border border-black/[.06] dark:border-white/[.10] text-ink dark:text-white hover:bg-black/[.05] dark:hover:bg-white/[.09] transition-colors"
         >
           {actionLabel}
@@ -353,7 +349,6 @@ function OnboardingPanel({ needsGoal, needsAccounts, accountsCount = 0, onGoal, 
   )
 }
 
-
 export default function Home() {
   const {
     setBaseCurrency,
@@ -364,46 +359,63 @@ export default function Home() {
     showToast,
     baseCurrency,
     logout,
-    onboarding,
-    isPro,
     subscriptionStatus,
     trialEnd,
   } = useApp()
 
   const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
   const prevTotal = useRef(null)
   const [animatingDelta, setAnimatingDelta] = useState(false)
 
-  // milestone edit
   const [editingMilestone, setEditingMilestone] = useState(false)
   const [milestoneInput, setMilestoneInput] = useState('')
   const [savingMilestone, setSavingMilestone] = useState(false)
 
-  // celebration receipt (persistent)
   const [pendingCelebrate, setPendingCelebrate] = useState(null)
   const [celebrateVisible, setCelebrateVisible] = useState(false)
 
-  // Derived (safe even when data is null)
   const total = useMemo(() => Number(data?.current_total || 0), [data])
   const totalCents = useMemo(() => toCents(total), [total])
   const ccy = useMemo(() => data?.base_currency || 'GBP', [data])
 
+  // SWR-ish cache for instant paint after refresh
+  const DASH_CACHE_KEY = 'wealthapp:dash:3M:v1'
+  const hasMountedRef = useRef(false)
+  const inflightRef = useRef(null)
+  const lastLoadAtRef = useRef(0)
+
+  const readDashCache = useCallback(() => {
+    try {
+      const raw = sessionStorage.getItem(DASH_CACHE_KEY)
+      if (!raw) return null
+      const parsed = JSON.parse(raw)
+      if (!parsed || typeof parsed !== 'object') return null
+      if (!('current_total' in parsed)) return null
+      return parsed
+    } catch {
+      return null
+    }
+  }, [])
+
+  const writeDashCache = useCallback((d) => {
+    try {
+      sessionStorage.setItem(DASH_CACHE_KEY, JSON.stringify(d || null))
+    } catch {}
+  }, [])
+
   const clearCelebration = useCallback(() => {
     setCelebrateVisible(false)
-
     window.setTimeout(() => {
       setPendingCelebrate(null)
       setCelebrateVisible(false)
-
       clearPendingCelebration()
       clearCelebrationStorage()
     }, 220)
   }, [])
 
-  // 1) On mount: hydrate pending celebration from storage (so it survives page switching)
   useEffect(() => {
     const p = getPendingCelebration()
     if (p?.milestone) {
@@ -413,7 +425,6 @@ export default function Home() {
     }
   }, [])
 
-  // 2) While Home is open: if net worth changes vs the saved receipt value, auto-close it
   useEffect(() => {
     if (!data) return
     if (!pendingCelebrate?.milestone) return
@@ -424,86 +435,103 @@ export default function Home() {
     if (totalCents !== savedCents) {
       clearCelebration()
     }
-  }, [
-    data,
-    totalCents,
-    pendingCelebrate?.milestone,
-    pendingCelebrate?.total_at_time_cents,
-    clearCelebration,
-  ])
+  }, [data, totalCents, pendingCelebrate?.milestone, pendingCelebrate?.total_at_time_cents, clearCelebration])
 
-  const load = useCallback(async () => {
-    setError(null)
-    try {
-      const d = await api('/dashboard?range=3M')
+  const load = useCallback(
+    async ({ reason = 'load', forceOverlay = false } = {}) => {
+      setError(null)
 
-      setData(d)
-      setBaseCurrency(d.base_currency || 'GBP')
+      // StrictMode dev double-effect guard
+      const now = Date.now()
+      if (reason === 'effect' && now - lastLoadAtRef.current < 500) return null
+      lastLoadAtRef.current = now
 
-      const nextTotal = Number(d?.current_total || 0)
-      const nextTotalCents = toCents(nextTotal)
+      if (inflightRef.current) return inflightRef.current
 
-      // delta animation
-      if (prevTotal.current !== null && prevTotal.current !== nextTotal) {
-        setAnimatingDelta(true)
-        setTimeout(() => setAnimatingDelta(false), 600)
-      }
-
-      // If a pending receipt exists, keep showing it until net worth changes.
-      const existingPending = getPendingCelebration()
-      if (existingPending?.milestone) {
-        const savedCents = Number(existingPending.total_at_time_cents ?? NaN)
-
-        if (Number.isFinite(savedCents) && savedCents !== nextTotalCents) {
-          clearPendingCelebration()
-          setPendingCelebrate(null)
-          setCelebrateVisible(false)
-        } else {
-          setPendingCelebrate(existingPending)
-          setCelebrateVisible(true)
+      // seed cache on first mount (instant)
+      if (!hasMountedRef.current) {
+        hasMountedRef.current = true
+        const cached = readDashCache()
+        if (cached && !data) {
+          setData(cached)
+          setBaseCurrency(cached?.base_currency || 'GBP')
+          setLoading(false)
         }
       }
 
-      // Reliable trigger: highest milestone reached based on current total
-      const reached = getHighestReached(nextTotal)
-      if (reached) {
-        const last = getLastCelebrated()
-        if (reached > last) {
-          setLastCelebrated(reached)
+      // delayed overlay for refreshes
+      let overlayTimer = null
+      if (forceOverlay || !data) setLoading(true)
+      else overlayTimer = window.setTimeout(() => setLoading(true), 150)
 
-          const payload = {
-            milestone: reached,
-            total_at_time_cents: nextTotalCents,
-            created_at: Date.now(),
+      const run = (async () => {
+        try {
+          const d = await api('/dashboard?range=3M')
+          writeDashCache(d)
+
+          setData(d)
+          setBaseCurrency(d?.base_currency || 'GBP')
+
+          const nextTotal = Number(d?.current_total || 0)
+          const nextTotalCents = toCents(nextTotal)
+
+          if (prevTotal.current !== null && prevTotal.current !== nextTotal) {
+            setAnimatingDelta(true)
+            window.setTimeout(() => setAnimatingDelta(false), 600)
           }
-          setPendingCelebration(payload)
-          setPendingCelebrate(payload)
-          setCelebrateVisible(false)
-          setTimeout(() => setCelebrateVisible(true), 30)
-        }
-      }
 
-      prevTotal.current = nextTotal
-    } catch (e) {
-      console.error('Dashboard load error:', e)
-      setError(e?.message || 'Failed to load dashboard')
-    } finally {
-      setLoading(false)
-    }
-  }, [setBaseCurrency])
+          const existingPending = getPendingCelebration()
+          if (existingPending?.milestone) {
+            const savedCents = Number(existingPending.total_at_time_cents ?? NaN)
+
+            if (Number.isFinite(savedCents) && savedCents !== nextTotalCents) {
+              clearPendingCelebration()
+              setPendingCelebrate(null)
+              setCelebrateVisible(false)
+            } else {
+              setPendingCelebrate(existingPending)
+              setCelebrateVisible(true)
+            }
+          }
+
+          const reached = getHighestReached(nextTotal)
+          if (reached) {
+            const last = getLastCelebrated()
+            if (reached > last) {
+              setLastCelebrated(reached)
+
+              const payload = { milestone: reached, total_at_time_cents: nextTotalCents, created_at: Date.now() }
+              setPendingCelebration(payload)
+              setPendingCelebrate(payload)
+              setCelebrateVisible(false)
+              window.setTimeout(() => setCelebrateVisible(true), 30)
+            }
+          }
+
+          prevTotal.current = nextTotal
+        } catch (e) {
+          console.error('Dashboard load error:', e)
+          setError(e?.message || 'Failed to load dashboard')
+        } finally {
+          if (overlayTimer) window.clearTimeout(overlayTimer)
+          setLoading(false)
+          inflightRef.current = null
+        }
+      })()
+
+      inflightRef.current = run
+      return run
+    },
+    [data, readDashCache, setBaseCurrency, writeDashCache]
+  )
 
   useEffect(() => {
-    load()
+    load({ reason: 'effect' })
   }, [load, dataVersion])
-
-  /* ──────────────────────────────────────────── */
-  /* Early UI states                              */
-  /* ──────────────────────────────────────────── */
 
   if (loading && !data) {
     return (
       <div className="space-y-6 animate-fade-in">
-        {/* Hero card skeleton */}
         <div className="rounded-3xl p-7 sm:p-10 border border-black/[.04] dark:border-white/[.05] bg-white dark:bg-surface-dark-2">
           <div className="space-y-5">
             <div className="h-3 w-24 rounded skeleton" />
@@ -515,10 +543,12 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Stat cards skeleton */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[1, 2].map((i) => (
-            <div key={i} className="rounded-2xl p-5 border border-black/[.04] dark:border-white/[.05] bg-white dark:bg-surface-dark-2">
+            <div
+              key={i}
+              className="rounded-2xl p-5 border border-black/[.04] dark:border-white/[.05] bg-white dark:bg-surface-dark-2"
+            >
               <div className="space-y-3">
                 <div className="h-3 w-20 rounded skeleton" />
                 <div className="h-7 w-32 rounded skeleton" />
@@ -528,7 +558,6 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Chart area skeleton */}
         <div className="rounded-2xl p-5 border border-black/[.04] dark:border-white/[.05] bg-white dark:bg-surface-dark-2">
           <div className="h-3 w-28 rounded skeleton mb-4" />
           <div className="h-[180px] rounded-xl skeleton" />
@@ -545,10 +574,7 @@ export default function Home() {
           <p className="text-sm text-ink-muted dark:text-white/50 mb-2">Unable to load dashboard</p>
           <p className="text-xs text-ink-muted/50 dark:text-white/25 mb-5">{error}</p>
           <button
-            onClick={() => {
-              setLoading(true)
-              load()
-            }}
+            onClick={() => load({ forceOverlay: true, reason: 'retry' })}
             className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-colors"
             type="button"
           >
@@ -561,11 +587,6 @@ export default function Home() {
 
   if (!data) return null
 
-  /* ──────────────────────────────────────────── */
-  /* Page computations                            */
-  /* ──────────────────────────────────────────── */
-
-  // Trend
   const sparkValues = (data?.series || []).map((p) => Number(p.v)).filter(Number.isFinite)
   const firstVal = sparkValues[0]
   const lastVal = sparkValues[sparkValues.length - 1]
@@ -576,47 +597,32 @@ export default function Home() {
       : 0
   const positive = sparkValues.length >= 2 ? delta >= 0 : true
 
-  // Milestone target logic (saved goal is sticky until achieved)
   const savedMilestoneTarget = Number(data.goal || 0) || 0
   const hasSavedMilestone = savedMilestoneTarget > 0
   const milestoneAchieved = hasSavedMilestone && total >= savedMilestoneTarget
 
   const suggestedNext = getNextMilestone(total)
-  const activeMilestoneTarget =
-    hasSavedMilestone && !milestoneAchieved ? savedMilestoneTarget : suggestedNext
-
+  const activeMilestoneTarget = hasSavedMilestone && !milestoneAchieved ? savedMilestoneTarget : suggestedNext
   const hasMilestone = activeMilestoneTarget > 0
   const usingSuggested = !(hasSavedMilestone && !milestoneAchieved)
 
   const milestoneProgressPct = hasMilestone ? Math.min(100, (total / activeMilestoneTarget) * 100) : 0
   const milestoneRemaining = hasMilestone ? Math.max(activeMilestoneTarget - total, 0) : 0
 
-  // Retirement goal
   const rawGoal = primaryGoal || null
-
   const retirementGoal =
-  rawGoal &&
-  (rawGoal.id || rawGoal.name) &&
-  Number(rawGoal?.target_amount || 0) > 0
-    ? rawGoal
-    : null
-  const retirementTarget = Number(retirementGoal?.target_amount || 0)
-  const retirementProgress =
-    retirementTarget > 0 ? Math.min(100, (total / retirementTarget) * 100) : null
+    rawGoal && (rawGoal.id || rawGoal.name) && Number(rawGoal?.target_amount || 0) > 0 ? rawGoal : null
 
-  // reach-age estimate
+  const retirementTarget = Number(retirementGoal?.target_amount || 0)
+  const retirementProgress = retirementTarget > 0 ? Math.min(100, (total / retirementTarget) * 100) : null
+
   const currentAge = Number(retirementGoal?.current_age ?? NaN)
   const er = Number(retirementGoal?.expected_annual_return_pct ?? 0)
   const mc = Number(retirementGoal?.monthly_contribution ?? 0)
 
   const mToMilestone =
     hasMilestone && retirementGoal && Number.isFinite(currentAge)
-      ? monthsToTarget({
-          pv: total,
-          pmt: mc,
-          annualReturnPct: er,
-          target: activeMilestoneTarget,
-        })
+      ? monthsToTarget({ pv: total, pmt: mc, annualReturnPct: er, target: activeMilestoneTarget })
       : null
 
   const reachAge =
@@ -630,21 +636,18 @@ export default function Home() {
   const saveMilestone = async () => {
     const cleaned = Number(String(milestoneInput || '').replace(/,/g, ''))
     if (!Number.isFinite(cleaned) || cleaned <= 0) {
-      showToast('Please enter a valid target amount', 'error')
+      showToast?.('Please enter a valid target amount', 'error')
       return
     }
 
     setSavingMilestone(true)
     try {
       await api('/settings', { method: 'PUT', body: { goal: cleaned } })
-      showToast('Next target updated')
+      showToast?.('Next target updated')
       setEditingMilestone(false)
-
-      bumpData()
-      setLoading(true)
-      await load()
+      bumpData?.()
     } catch (e) {
-      showToast(e?.message || 'Failed to update target', 'error')
+      showToast?.(e?.message || 'Failed to update target', 'error')
     } finally {
       setSavingMilestone(false)
     }
@@ -657,21 +660,23 @@ export default function Home() {
       ? 'ring-2 ring-emerald-400/40 dark:ring-emerald-400/25'
       : ''
 
-  // Onboarding (truth comes from dashboard payload)
-const accountsCount = Number(data?.accounts_count ?? 0) || 0
-
-// goal: only done if dashboard actually has a goal
-const hasGoal = !!data?.primary_goal
-const needsGoal = !hasGoal
-
-// accounts: need at least 1
-const needsAccounts = accountsCount === 0
-
-const showOnboarding = needsGoal || needsAccounts
+  const accountsCount = Number(data?.accounts_count ?? 0) || 0
+  const hasGoal = !!data?.primary_goal
+  const needsGoal = !hasGoal
+  const needsAccounts = accountsCount === 0
+  const showOnboarding = needsGoal || needsAccounts
 
   return (
     <div className="space-y-6">
-      {/* Thin premium receipt (persists + fades) */}
+      {loading && data ? (
+        <div className="fixed inset-0 z-[900] pointer-events-none">
+          <div className="absolute inset-0 bg-white/15 dark:bg-black/20 backdrop-blur-[1px]" />
+          <div className="absolute top-4 right-4 text-[11px] font-semibold px-3 py-1.5 rounded-2xl bg-black/80 text-white">
+            Updating…
+          </div>
+        </div>
+      ) : null}
+
       {pendingCelebrate?.milestone ? (
         <MilestoneReceipt
           visible={celebrateVisible}
@@ -681,7 +686,7 @@ const showOnboarding = needsGoal || needsAccounts
         />
       ) : null}
 
-      {/* ═══ Hero Card ═══ */}
+      {/* Hero */}
       <div className={`hero-panel relative rounded-3xl p-7 sm:p-10 ${heroRing}`}>
         <div className="hero-glow absolute top-[-80px] right-[-40px] w-[350px] h-[350px] bg-accent/[.05] dark:bg-accent/[.07] rounded-full blur-[120px] pointer-events-none" />
 
@@ -698,19 +703,21 @@ const showOnboarding = needsGoal || needsAccounts
                 </span>
               )}
 
-              {subscriptionStatus === 'trialing' && trialEnd && (() => {
-                const daysLeft = Math.max(0, Math.ceil((new Date(trialEnd) - Date.now()) / 86400000))
-                if (daysLeft > 14) return null
-                return (
-                  <button
-                    onClick={() => setPage('upgrade')}
-                    className="inline-flex items-center gap-1 text-[10px] font-medium tracking-wider uppercase px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-500/15 transition-colors"
-                    type="button"
-                  >
-                    {daysLeft === 0 ? 'Trial ends today' : `${daysLeft}d left in trial`}
-                  </button>
-                )
-              })()}
+              {subscriptionStatus === 'trialing' &&
+                trialEnd &&
+                (() => {
+                  const daysLeft = Math.max(0, Math.ceil((new Date(trialEnd) - Date.now()) / 86400000))
+                  if (daysLeft > 14) return null
+                  return (
+                    <button
+                      onClick={() => setPage('upgrade')}
+                      className="inline-flex items-center gap-1 text-[10px] font-medium tracking-wider uppercase px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-500/15 transition-colors"
+                      type="button"
+                    >
+                      {daysLeft === 0 ? 'Trial ends today' : `${daysLeft}d left in trial`}
+                    </button>
+                  )
+                })()}
             </div>
           </div>
 
@@ -806,9 +813,7 @@ const showOnboarding = needsGoal || needsAccounts
                   <span>{milestoneProgressPct.toFixed(0)}%</span>
                   <span>
                     Remaining{' '}
-                    <span className="font-semibold text-ink dark:text-white">
-                      {fmtCurrency(milestoneRemaining, ccy)}
-                    </span>
+                    <span className="font-semibold text-ink dark:text-white">{fmtCurrency(milestoneRemaining, ccy)}</span>
                   </span>
                 </div>
               </div>
@@ -822,7 +827,6 @@ const showOnboarding = needsGoal || needsAccounts
         </div>
       </div>
 
-      {/* ═══ Premium onboarding (disappears when complete) ═══ */}
       {showOnboarding && (
         <OnboardingPanel
           needsGoal={needsGoal}
@@ -833,7 +837,6 @@ const showOnboarding = needsGoal || needsAccounts
         />
       )}
 
-      {/* ═══ Trend + Retirement ═══ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card className="p-6">
           <div className="flex items-start justify-between mb-3">
@@ -841,9 +844,7 @@ const showOnboarding = needsGoal || needsAccounts
               <div className="text-xs font-semibold tracking-[.08em] uppercase text-ink-muted dark:text-white/35">
                 Trend (90D)
               </div>
-              <div className="text-xs text-ink-muted/60 dark:text-white/25 mt-1">
-                First snapshot in range → latest
-              </div>
+              <div className="text-xs text-ink-muted/60 dark:text-white/25 mt-1">First snapshot in range → latest</div>
             </div>
 
             <div
@@ -872,11 +873,7 @@ const showOnboarding = needsGoal || needsAccounts
           </div>
 
           <div className="mt-3 text-xs text-ink-muted/55 dark:text-white/25 tabular-nums">
-            {sparkValues.length >= 2 ? (
-              <>{fmtCurrency(delta, ccy)} over 90D</>
-            ) : (
-              <>Add another snapshot to see trend</>
-            )}
+            {sparkValues.length >= 2 ? <>{fmtCurrency(delta, ccy)} over 90D</> : <>Add another snapshot to see trend</>}
           </div>
         </Card>
 
@@ -884,12 +881,10 @@ const showOnboarding = needsGoal || needsAccounts
           <div className="flex items-start justify-between mb-3">
             <div>
               <div className="text-xs font-semibold tracking-[.08em] uppercase text-ink-muted dark:text-white/35">
-                Retirement plan
+                Financial freedom plan
               </div>
               {retirementGoal?.name ? (
-                <div className="text-xs text-ink-muted/60 dark:text-white/25 mt-1">
-                  {retirementGoal.name}
-                </div>
+                <div className="text-xs text-ink-muted/60 dark:text-white/25 mt-1">{retirementGoal.name}</div>
               ) : (
                 <div className="text-xs text-ink-muted/60 dark:text-white/25 mt-1">Primary goal</div>
               )}
@@ -927,7 +922,6 @@ const showOnboarding = needsGoal || needsAccounts
         </Card>
       </div>
 
-      {/* ═══ Stats bar (Accounts + Snapshots) ═══ */}
       <Card className="px-5 py-4">
         <div className="flex items-center justify-between gap-4">
           <button
@@ -947,7 +941,7 @@ const showOnboarding = needsGoal || needsAccounts
           <div className="w-px h-10 bg-black/[.06] dark:bg-white/[.06]" />
 
           <button
-            onClick={() => setPage('snapshots')}
+            onClick={() => setPage('accounts')}
             className="text-left flex-1 min-w-0 hover:opacity-90 transition-opacity"
             type="button"
           >
@@ -962,7 +956,6 @@ const showOnboarding = needsGoal || needsAccounts
         </div>
       </Card>
 
-      {/* Mobile logout — only visible on small screens */}
       <div className="lg:hidden mt-6 pb-2">
         <button
           onClick={logout}
@@ -976,10 +969,6 @@ const showOnboarding = needsGoal || needsAccounts
     </div>
   )
 }
-
-/* ──────────────────────────────────────────── */
-/* Mini sparkline (no deps)                      */
-/* ──────────────────────────────────────────── */
 
 function MiniSparkline({ data = [] }) {
   if (!data || data.length === 0) return null

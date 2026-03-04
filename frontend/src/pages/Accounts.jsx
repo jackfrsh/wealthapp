@@ -1,5 +1,5 @@
 // frontend/src/pages/Accounts.jsx
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import { useApp } from '../App'
 import Card from '../components/Card'
@@ -9,18 +9,41 @@ import EmptyState from '../components/EmptyState'
 import ChangePill from '../components/ChangePill'
 import { track } from '../track'
 import UpgradeButton from '../components/UpgradeButton'
+import { fmtCurrency, fmtCurrencyCompact, fmtDate, ACCOUNT_TYPE_LABELS, CURRENCIES } from '../utils'
 import {
-  fmtCurrency,
-  fmtDate,
-  ACCOUNT_TYPE_LABELS,
-  ACCOUNT_TYPE_ICONS,
-  CURRENCIES,
-} from '../utils'
-import { Plus, Pencil, Trash2, Settings, Camera, ChevronDown, Clock, Crown, Sparkles } from 'lucide-react'
-
-import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+  Plus,
+  Pencil,
+  Trash2,
+  Settings,
+  Camera,
+  ChevronDown,
+  Clock,
+  Crown,
+  Sparkles,
+  Landmark,
+  Shield,
+  Building2,
+  Bitcoin,
+  TrendingUp,
+  Home as HomeIcon,
+  Hammer,
+  CreditCard,
+  Package,
+} from 'lucide-react'
 
 const TYPES = ['bank', 'isa', 'sipp', 'crypto', 'investment', 'property', 'mortgage', 'loan', 'other']
+
+const TYPE_ICON = {
+  bank: Landmark,
+  isa: Shield,
+  sipp: Building2,
+  crypto: Bitcoin,
+  investment: TrendingUp,
+  property: HomeIcon,
+  mortgage: Hammer,
+  loan: CreditCard,
+  other: Package,
+}
 
 const emptyForm = {
   name: '',
@@ -31,6 +54,29 @@ const emptyForm = {
   notes: '',
   monthly_contribution: '',
   annual_interest_rate_percent: '',
+}
+
+function accountNamePlaceholder(type) {
+  switch (type) {
+    case 'bank':
+      return 'e.g. Barclays Current Account'
+    case 'isa':
+      return 'e.g. Vanguard Stocks & Shares ISA'
+    case 'sipp':
+      return 'e.g. Pension / SIPP'
+    case 'investment':
+      return 'e.g. Trading 212 Portfolio'
+    case 'crypto':
+      return 'e.g. Coinbase'
+    case 'property':
+      return 'e.g. Home (estimated value)'
+    case 'mortgage':
+      return 'e.g. Mortgage balance'
+    case 'loan':
+      return 'e.g. Car loan'
+    default:
+      return 'e.g. Barclays Current Account'
+  }
 }
 
 function toNumber(input, fallback = 0) {
@@ -44,39 +90,120 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n))
 }
 
-/**
- * Snapshot helpers
- * Your payload example:
- *  - total_base (pounds in base currency)
- *  - base_currency
- *  - breakdown[] optional
- */
 function snapBaseTotal(s) {
   if (!s) return null
   const n = Number(s.total_base)
   return Number.isFinite(n) ? n : null
 }
 
+function asArray(v) {
+  return Array.isArray(v) ? v : []
+}
+
+/**
+ * ✅ Apple-grade chart isolation:
+ * - NO top-level recharts import (prevents vendor-charts bundle executing on page load)
+ * - dynamic import after mount
+ * - hard fallback if charts throw or fail to load
+ */
+function DonutChart({ enabled, donutData, donutFills, donutStroke }) {
+  const [lib, setLib] = useState(null)
+  const [failed, setFailed] = useState(false)
+
+  // only attempt once per mount when enabled turns true
+  useEffect(() => {
+    let cancelled = false
+    if (!enabled || failed || lib) return
+
+    ;(async () => {
+      try {
+        const mod = await import('recharts')
+        if (cancelled) return
+        setLib(mod)
+      } catch (e) {
+        if (cancelled) return
+        console.error('Charts bundle failed to load:', e)
+        setFailed(true)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [enabled, failed, lib])
+
+  // hard fallback placeholder
+  if (!enabled || failed || !lib || !donutData?.length) {
+    return (
+      <div className="w-full h-full rounded-3xl bg-black/[.02] dark:bg-white/[.04] border border-black/[.06] dark:border-white/[.08]" />
+    )
+  }
+
+  const { ResponsiveContainer, PieChart, Pie, Cell } = lib
+
+  // Extra guard: chart render can still throw in Safari with ResizeObserver/0-size timing.
+  try {
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={donutData}
+            dataKey="value"
+            nameKey="label"
+            cx="50%"
+            cy="50%"
+            innerRadius="62%"
+            outerRadius="88%"
+            paddingAngle={2}
+            stroke={donutStroke}
+            strokeWidth={1}
+            isAnimationActive={false}
+          >
+            {donutData.map((_, i) => (
+              <Cell key={i} fill={donutFills[i % donutFills.length]} />
+            ))}
+          </Pie>
+        </PieChart>
+      </ResponsiveContainer>
+    )
+  } catch (e) {
+    console.error('Charts render crashed:', e)
+    return (
+      <div className="w-full h-full rounded-3xl bg-black/[.02] dark:bg-white/[.04] border border-black/[.06] dark:border-white/[.08]" />
+    )
+  }
+}
+
 export default function Accounts() {
-  const { baseCurrency, showToast, setPage, bumpData, isPro } = useApp()
+  const { baseCurrency, showToast, setPage, bumpData, isPro, dark } = useApp()
 
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
 
   const [modal, setModal] = useState(false)
-  const [editing, setEditing] = useState(null) // id or null
+  const [editing, setEditing] = useState(null)
   const [form, setForm] = useState({ ...emptyForm })
   const [saving, setSaving] = useState(false)
 
-  // Snapshot state (minimal)
   const [snaps, setSnaps] = useState([])
   const [snapsLoading, setSnapsLoading] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [expandedSnap, setExpandedSnap] = useState(null)
 
-  // Confirm dialog state (replaces native confirm())
-  const [confirmState, setConfirmState] = useState(null) // { title, message, onConfirm }
+  const [confirmState, setConfirmState] = useState(null)
   const [confirmLoading, setConfirmLoading] = useState(false)
+
+  // ✅ only allow chart loading after first paint
+  const [chartsReady, setChartsReady] = useState(false)
+  useEffect(() => setChartsReady(true), [])
+
+  const cancelledRef = useRef(false)
+  useEffect(() => {
+    cancelledRef.current = false
+    return () => {
+      cancelledRef.current = true
+    }
+  }, [])
 
   const FREE_ACCOUNT_LIMIT = 3
   const accountCount = accounts.length
@@ -98,14 +225,18 @@ export default function Accounts() {
   }, [setPage])
 
   const load = useCallback(async () => {
+    setLoading(true)
     try {
       const res = await api('/accounts')
-      setAccounts(Array.isArray(res) ? res : [])
+      if (cancelledRef.current) return
+      setAccounts(asArray(res))
     } catch (e) {
+      if (cancelledRef.current) return
       console.error(e)
       showToast?.(e?.message || 'Failed to load accounts', 'error')
+      setAccounts([])
     } finally {
-      setLoading(false)
+      if (!cancelledRef.current) setLoading(false)
     }
   }, [showToast])
 
@@ -117,56 +248,71 @@ export default function Accounts() {
     setSnapsLoading(true)
     try {
       const res = await api('/snapshots', { method: 'GET' })
-      setSnaps(Array.isArray(res) ? res : [])
+      if (cancelledRef.current) return
+      setSnaps(asArray(res))
     } catch (e) {
+      if (cancelledRef.current) return
       console.error(e)
+      setSnaps([])
     } finally {
-      setSnapsLoading(false)
+      if (!cancelledRef.current) setSnapsLoading(false)
     }
   }, [])
 
-  // Only fetch snapshots when the user opens history OR after recording/deleting.
+  const totalMonthlyContribution = useMemo(() => {
+    return accounts.reduce((sum, a) => {
+      const v =
+        a?.monthly_contribution ??
+        a?.monthlyContribution ??
+        a?.monthly ??
+        a?.contribution_monthly ??
+        0
+      return sum + (Number(v) || 0)
+    }, 0)
+  }, [accounts])
+
   useEffect(() => {
     if (!historyOpen) return
-    // If we already have snaps, don’t refetch every toggle.
     if (snaps.length) return
     loadSnaps()
   }, [historyOpen, snaps.length, loadSnaps])
 
-  const recordSnapshot = async () => {
+  const recordSnapshot = useCallback(async () => {
     try {
       await api('/snapshots', { method: 'POST' })
       showToast?.('Net worth recorded!')
-      // After recording, refresh snaps so “Last recorded” and history are correct.
       await loadSnaps()
       bumpData?.()
     } catch (e) {
       showToast?.(e?.message || 'Failed to record', 'error')
     }
-  }
+  }, [showToast, loadSnaps, bumpData])
 
-  const deleteSnap = async (id) => {
-    setConfirmState({
-      title: 'Delete this record?',
-      message: 'This snapshot will be permanently removed.',
-      confirmLabel: 'Delete',
-      onConfirm: async () => {
-        setConfirmLoading(true)
-        try {
-          await api(`/snapshots/${id}`, { method: 'DELETE' })
-          showToast?.('Deleted')
-          setExpandedSnap((prev) => (prev === id ? null : prev))
-          setConfirmState(null)
-          await loadSnaps()
-          bumpData?.()
-        } catch (e) {
-          showToast?.(e?.message || 'Delete failed', 'error')
-        } finally {
-          setConfirmLoading(false)
-        }
-      },
-    })
-  }
+  const deleteSnap = useCallback(
+    async (id) => {
+      setConfirmState({
+        title: 'Delete this record?',
+        message: 'This snapshot will be permanently removed.',
+        confirmLabel: 'Delete',
+        onConfirm: async () => {
+          setConfirmLoading(true)
+          try {
+            await api(`/snapshots/${id}`, { method: 'DELETE' })
+            showToast?.('Deleted')
+            setExpandedSnap((prev) => (prev === id ? null : prev))
+            setConfirmState(null)
+            await loadSnaps()
+            bumpData?.()
+          } catch (e) {
+            showToast?.(e?.message || 'Delete failed', 'error')
+          } finally {
+            setConfirmLoading(false)
+          }
+        },
+      })
+    },
+    [showToast, loadSnaps, bumpData]
+  )
 
   const sortedSnaps = useMemo(() => {
     return [...snaps].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
@@ -175,19 +321,14 @@ export default function Accounts() {
   const latestSnap = sortedSnaps[0] || null
   const snapCurrency = (latestSnap?.base_currency || baseCurrency || 'GBP').toUpperCase()
 
-  // Account mix (donut)
-  const typeCounts = useMemo(() => {
+  const donutData = useMemo(() => {
     const map = new Map()
     for (const a of accounts) {
       const t = a?.type || 'other'
       map.set(t, (map.get(t) || 0) + 1)
     }
-    return map
-  }, [accounts])
-
-  const donutData = useMemo(() => {
     const total = accounts.length || 1
-    const arr = Array.from(typeCounts.entries()).map(([type, count]) => ({
+    const arr = Array.from(map.entries()).map(([type, count]) => ({
       type,
       count,
       value: count,
@@ -196,40 +337,62 @@ export default function Accounts() {
     }))
     arr.sort((a, b) => b.count - a.count)
     return arr
-  }, [typeCounts, accounts.length])
+  }, [accounts])
 
-  // Compact palette (keeps the donut “quiet”)
-  const donutFills = useMemo(
-    () => [
-      'rgba(255,255,255,0.70)',
-      'rgba(255,255,255,0.45)',
-      'rgba(255,255,255,0.28)',
-      'rgba(255,255,255,0.18)',
-      'rgba(255,255,255,0.12)',
-      'rgba(255,255,255,0.08)',
-      'rgba(255,255,255,0.06)',
-      'rgba(255,255,255,0.05)',
-    ],
-    []
-  )
+  const donutStroke = dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)'
+
+  const donutFills = useMemo(() => {
+    return dark
+      ? [
+          'rgba(255,255,255,0.70)',
+          'rgba(255,255,255,0.45)',
+          'rgba(255,255,255,0.28)',
+          'rgba(255,255,255,0.18)',
+          'rgba(255,255,255,0.12)',
+          'rgba(255,255,255,0.08)',
+          'rgba(255,255,255,0.06)',
+          'rgba(255,255,255,0.05)',
+        ]
+      : [
+          'rgba(0,0,0,0.65)',
+          'rgba(0,0,0,0.48)',
+          'rgba(0,0,0,0.36)',
+          'rgba(0,0,0,0.26)',
+          'rgba(0,0,0,0.18)',
+          'rgba(0,0,0,0.13)',
+          'rgba(0,0,0,0.10)',
+          'rgba(0,0,0,0.08)',
+        ]
+  }, [dark])
+
+  const colorByType = useMemo(() => {
+    const m = new Map()
+    donutData.forEach((d, i) => m.set(d.type, donutFills[i % donutFills.length]))
+    return m
+  }, [donutData, donutFills])
 
   const openAdd = () => {
     setEditing(null)
-    setForm({ ...emptyForm, currency: baseCurrency })
+    setForm({
+      ...emptyForm,
+      type: 'bank',                 // explicit default
+      currency: baseCurrency || 'GBP',
+    })
     setModal(true)
   }
 
   const openEdit = (a) => {
     setEditing(a.id)
     setForm({
-      name: a.name,
-      type: a.type,
-      currency: a.currency,
+      name: a.name || '',
+      type: a.type || 'bank',
+      currency: (a.currency || 'GBP').toUpperCase(),
       balance: String(a.balance ?? ''),
       include_in_net_worth: !!a.include_in_net_worth,
       notes: a.notes || '',
       monthly_contribution: String(a.monthly_contribution ?? ''),
       annual_interest_rate_percent: String(a.annual_interest_rate_percent ?? ''),
+      _nameHint: '', // ✅ prevent any add-mode hint behaviour in edit
     })
     setModal(true)
   }
@@ -327,7 +490,10 @@ export default function Accounts() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="rounded-2xl p-5 border border-black/[.04] dark:border-white/[.05] bg-white dark:bg-surface-dark-2">
+            <div
+              key={i}
+              className="rounded-2xl p-5 border border-black/[.04] dark:border-white/[.05] bg-white dark:bg-surface-dark-2"
+            >
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="h-9 w-9 rounded-xl skeleton" />
@@ -372,10 +538,7 @@ export default function Accounts() {
 
           <button
             onClick={() => {
-              if (accountLimitReached) {
-                goUpgrade()
-                return
-              }
+              if (accountLimitReached) return goUpgrade()
               openAdd()
             }}
             className={[
@@ -389,15 +552,18 @@ export default function Accounts() {
             type="button"
           >
             {accountLimitReached ? (
-              <><Crown size={16} /> Upgrade</>
+              <>
+                <Crown size={16} /> Upgrade
+              </>
             ) : (
-              <><Plus size={17} /> Add</>
+              <>
+                <Plus size={17} /> Add
+              </>
             )}
           </button>
         </div>
       </div>
 
-      {/* Usage meter (Free only, but hide when hard-blocked to avoid duplicate CTAs) */}
       {!isPro && usage && !accountLimitReached && (
         <Card className="p-5">
           <div className="flex items-start justify-between gap-4">
@@ -424,16 +590,13 @@ export default function Accounts() {
       {accounts.length === 0 ? (
         <Card>
           <EmptyState
-            icon="🏦"
+            icon={Landmark}
             title="Add your first account"
             subtitle="Add one account to generate your first net worth view and long-term outlook."
             action={
               <button
                 onClick={() => {
-                  if (accountLimitReached) {
-                    goUpgrade()
-                    return
-                  }
+                  if (accountLimitReached) return goUpgrade()
                   openAdd()
                 }}
                 className="flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-all min-h-[48px]"
@@ -446,7 +609,6 @@ export default function Accounts() {
         </Card>
       ) : (
         <>
-          {/* Upgrade card (shown when limit reached) */}
           {accountLimitReached && (
             <div className="rounded-2xl border border-accent/15 dark:border-accent/20 bg-gradient-to-br from-accent/[.04] via-transparent to-accent/[.02] dark:from-accent/[.08] dark:via-transparent dark:to-accent/[.03] p-6 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-48 h-48 bg-accent/[.04] dark:bg-accent/[.06] rounded-full blur-[80px] -translate-y-1/2 translate-x-1/4 pointer-events-none" />
@@ -458,7 +620,7 @@ export default function Accounts() {
 
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold text-ink dark:text-white">
-                    You've used all {FREE_ACCOUNT_LIMIT} free accounts
+                    You&apos;ve used all {FREE_ACCOUNT_LIMIT} free accounts
                   </div>
                   <p className="text-xs text-ink-muted dark:text-white/40 mt-1 leading-relaxed">
                     Upgrade to Pro for unlimited accounts, 40-year projections, inflation modelling, and the Optimiser.
@@ -485,22 +647,28 @@ export default function Accounts() {
             </div>
           )}
 
-          {/* Accounts grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {accounts.map((a) => {
-              const Icon = ACCOUNT_TYPE_ICONS?.[a.type] || ACCOUNT_TYPE_ICONS?.other
+              const Icon = TYPE_ICON?.[a.type] || TYPE_ICON.other
               const label = ACCOUNT_TYPE_LABELS?.[a.type] || a.type
 
               return (
                 <Card key={a.id} className="p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        {Icon ? <Icon size={16} className="opacity-70" /> : null}
-                        <div className="text-sm font-semibold text-ink dark:text-white truncate">{a.name}</div>
-                      </div>
-                      <div className="text-xs text-ink-muted dark:text-white/35 mt-1">
-                        {label} · {String(a.currency || '').toUpperCase()}
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-black/[.03] dark:bg-white/[.05] grid place-items-center shrink-0">
+                          <Icon size={16} strokeWidth={1.75} className="text-ink/70 dark:text-white/45" />
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-ink dark:text-white truncate leading-tight">
+                            {a.name}
+                          </div>
+                          <div className="text-xs text-ink-muted dark:text-white/35 mt-0.5">
+                            {label} · {String(a.currency || '').toUpperCase()}
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -509,7 +677,7 @@ export default function Accounts() {
                         type="button"
                         disabled={saving}
                         onClick={() => openEdit(a)}
-                        className="p-2 rounded-xl border border-black/[.06] dark:border-white/[.06] hover:bg-surface-2 dark:hover:bg-white/5 transition-colors"
+                        className="p-2.5 rounded-xl bg-black/[.03] dark:bg-white/[.05] hover:bg-black/[.06] dark:hover:bg-white/[.08] transition-colors"
                         title="Edit"
                         aria-label="Edit"
                       >
@@ -519,7 +687,7 @@ export default function Accounts() {
                         type="button"
                         disabled={saving}
                         onClick={() => del(a)}
-                        className="p-2 rounded-xl border border-black/[.06] dark:border-white/[.06] hover:bg-surface-2 dark:hover:bg-white/5 transition-colors"
+                        className="p-2.5 rounded-xl bg-black/[.03] dark:bg-white/[.05] hover:bg-black/[.06] dark:hover:bg-white/[.08] transition-colors"
                         title="Delete"
                         aria-label="Delete"
                       >
@@ -531,20 +699,21 @@ export default function Accounts() {
                   <div className="mt-4 flex items-end justify-between gap-3">
                     <div>
                       <div className="text-xs text-ink-muted dark:text-white/35">Balance</div>
-                      <div className="mt-1 text-xl font-semibold tracking-tight text-ink dark:text-white [font-variant-numeric:tabular-nums]">
+                      <div className="mt-1 text-[22px] font-semibold tracking-[-0.02em] text-ink dark:text-white tabular-nums">
                         {fmtCurrency(a.balance || 0, a.currency || 'GBP')}
                       </div>
                     </div>
 
-                    {a.include_in_net_worth ? (
-                      <span className="text-xs px-2.5 py-1 rounded-full bg-black/[.03] dark:bg-white/[.06] border border-black/[.06] dark:border-white/[.10] text-ink-muted dark:text-white/40">
-                        Included
-                      </span>
-                    ) : (
-                      <span className="text-xs px-2.5 py-1 rounded-full bg-black/[.02] dark:bg-white/[.04] border border-black/[.06] dark:border-white/[.10] text-ink-muted/70 dark:text-white/30">
-                        Excluded
-                      </span>
-                    )}
+                    <span
+                      className={[
+                        'text-[11px] px-2.5 py-1 rounded-full border',
+                        'bg-black/[.02] dark:bg-white/[.04]',
+                        'border-black/[.06] dark:border-white/[.10]',
+                        a.include_in_net_worth ? 'text-ink-muted dark:text-white/45' : 'text-ink-muted/60 dark:text-white/30',
+                      ].join(' ')}
+                    >
+                      {a.include_in_net_worth ? 'Included' : 'Excluded'}
+                    </span>
                   </div>
 
                   {(a.monthly_contribution || a.annual_interest_rate_percent) ? (
@@ -572,7 +741,6 @@ export default function Accounts() {
             })}
           </div>
 
-          {/* Account mix — compact donut */}
           <Card className="p-6">
             <div className="flex items-start justify-between gap-6">
               <div className="min-w-0">
@@ -581,71 +749,56 @@ export default function Accounts() {
                   A compact overview of what you’re tracking.
                 </div>
 
+                <div className="mt-3 flex items-baseline justify-between">
+                  <div className="text-xs text-ink-muted dark:text-white/50">Total monthly contributions</div>
+                  <div className="text-sm font-semibold text-ink dark:text-white">
+                    {fmtCurrencyCompact(totalMonthlyContribution, baseCurrency)}
+                    <span className="text-xs font-medium text-ink-muted dark:text-white/40">/mo</span>
+                  </div>
+                </div>
+
                 <div className="mt-4 space-y-2">
                   {donutData.slice(0, 3).map((d) => (
                     <div key={d.type} className="flex items-center justify-between gap-3">
-                      <div className="text-sm text-ink dark:text-white/80 truncate">{d.label}</div>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: colorByType.get(d.type) || donutFills[0] }} />
+                        <div className="text-sm text-ink dark:text-white/80 truncate">{d.label}</div>
+                      </div>
                       <div className="text-xs text-ink-muted dark:text-white/35 tabular-nums">
                         {d.count} · {d.pct.toFixed(0)}%
                       </div>
                     </div>
                   ))}
                   {donutData.length > 3 ? (
-                    <div className="text-xs text-ink-muted dark:text-white/35">
-                      +{donutData.length - 3} more
-                    </div>
+                    <div className="text-xs text-ink-muted dark:text-white/35">+{donutData.length - 3} more</div>
                   ) : null}
                 </div>
               </div>
 
-              <div className="shrink-0 w-[132px] h-[132px]">
-                {donutData.length ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={donutData}
-                        dataKey="value"
-                        nameKey="label"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius="62%"
-                        outerRadius="88%"
-                        paddingAngle={2}
-                        stroke="rgba(255,255,255,0.08)"
-                        strokeWidth={1}
-                        isAnimationActive={false}
-                      >
-                        {donutData.map((_, i) => (
-                          <Cell key={i} fill={donutFills[i % donutFills.length]} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="w-full h-full rounded-3xl bg-black/[.02] dark:bg-white/[.04] border border-black/[.06] dark:border-white/[.08]" />
-                )}
+              <div className="shrink-0 w-[132px] h-[132px] min-w-[132px] min-h-[132px]">
+                <DonutChart
+                  enabled={chartsReady}
+                  donutData={donutData}
+                  donutFills={donutFills}
+                  donutStroke={donutStroke}
+                />
 
-                {/* Center label */}
                 <div className="pointer-events-none -mt-[132px] w-[132px] h-[132px] grid place-items-center">
                   <div className="text-center">
                     <div className="text-xs text-ink-muted dark:text-white/35">Total</div>
-                    <div className="text-lg font-semibold text-ink dark:text-white tabular-nums">
-                      {accounts.length}
-                    </div>
+                    <div className="text-lg font-semibold text-ink dark:text-white tabular-nums">{accounts.length}</div>
                   </div>
                 </div>
               </div>
             </div>
           </Card>
 
-          {/* Snapshots — minimal (no totals; Home owns “wealth”) */}
+          {/* Snapshots */}
           <div className="pt-2 space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold text-ink dark:text-white">Snapshots</div>
-                <div className="text-xs text-ink-muted dark:text-white/35">
-                  Record net worth over time. Your total lives on Home.
-                </div>
+                <div className="text-xs text-ink-muted dark:text-white/35">Record net worth over time. Your total lives on Home.</div>
               </div>
 
               <div className="flex items-center gap-2">
@@ -668,26 +821,21 @@ export default function Accounts() {
                 >
                   <Clock size={16} className="opacity-80" />
                   History{' '}
-                  <ChevronDown
-                    size={16}
-                    className={`opacity-70 transition-transform ${historyOpen ? 'rotate-180' : ''}`}
-                  />
+                  <ChevronDown size={16} className={`opacity-70 transition-transform ${historyOpen ? 'rotate-180' : ''}`} />
                 </button>
               </div>
             </div>
 
-            {/* Minimal “status” row */}
             <Card className="p-5">
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <div className="text-xs text-ink-muted dark:text-white/35">Last recorded</div>
                   <div className="mt-1 text-sm font-semibold text-ink dark:text-white">
-                    {latestSnap ? fmtDate(latestSnap.created_at) : snaps.length ? '—' : 'Not yet'}
+                    {sortedSnaps[0] ? fmtDate(sortedSnaps[0].created_at) : snaps.length ? '—' : 'Not yet'}
                   </div>
                 </div>
-
                 <div className="text-xs text-ink-muted dark:text-white/35 tabular-nums">
-                  {latestSnap?.excluded_accounts > 0 ? `${latestSnap.excluded_accounts} excluded` : ''}
+                  {sortedSnaps[0]?.excluded_accounts > 0 ? `${sortedSnaps[0].excluded_accounts} excluded` : ''}
                 </div>
               </div>
             </Card>
@@ -718,19 +866,14 @@ export default function Accounts() {
                       const cur = (s.base_currency || snapCurrency || 'GBP').toUpperCase()
 
                       return (
-                        <div
-                          key={s.id}
-                          className="rounded-2xl border border-black/[.06] dark:border-white/[.07] overflow-hidden"
-                        >
+                        <div key={s.id} className="rounded-2xl border border-black/[.06] dark:border-white/[.07] overflow-hidden">
                           <button
                             type="button"
                             onClick={() => setExpandedSnap((prevId) => (prevId === s.id ? null : s.id))}
                             className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-black/[.02] dark:hover:bg-white/[.04] transition-colors text-left"
                           >
                             <div className="min-w-0">
-                              <div className="text-sm font-semibold text-ink dark:text-white">
-                                {fmtDate(s.created_at)}
-                              </div>
+                              <div className="text-sm font-semibold text-ink dark:text-white">{fmtDate(s.created_at)}</div>
                               <div className="text-xs text-ink-muted dark:text-white/35">
                                 {idx === sortedSnaps.length - 1 ? 'First snapshot' : 'Compared to previous'}
                               </div>
@@ -742,20 +885,14 @@ export default function Accounts() {
                               ) : (
                                 <span className="text-xs text-ink-muted dark:text-white/25 font-medium">—</span>
                               )}
-
-                              <ChevronDown
-                                size={16}
-                                className={`opacity-60 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-                              />
+                              <ChevronDown size={16} className={`opacity-60 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                             </div>
                           </button>
 
                           {isOpen && (
                             <div className="px-4 pb-4 pt-2 bg-black/[.01] dark:bg-white/[.03] border-t border-black/[.06] dark:border-white/[.07]">
                               <div className="flex items-center justify-between gap-3">
-                                <div className="text-xs text-ink-muted dark:text-white/35">
-                                  {hasBreakdown ? 'Breakdown' : 'Snapshot'}
-                                </div>
+                                <div className="text-xs text-ink-muted dark:text-white/35">{hasBreakdown ? 'Breakdown' : 'Snapshot'}</div>
                                 <button
                                   type="button"
                                   onClick={() => deleteSnap(s.id)}
@@ -768,19 +905,13 @@ export default function Accounts() {
                               {hasBreakdown ? (
                                 <div className="mt-3 space-y-2.5">
                                   {s.breakdown.map((b) => (
-                                    <div
-                                      key={b.id || `${b.name}-${b.currency}`}
-                                      className="flex justify-between items-center text-sm"
-                                    >
+                                    <div key={b.id || `${b.name}-${b.currency}`} className="flex justify-between items-center text-sm">
                                       <span className="text-ink-muted dark:text-white/45">
                                         {b.name}{' '}
                                         <span className="text-ink-muted/40 dark:text-white/20">({b.currency})</span>
                                       </span>
                                       <span className="text-ink dark:text-white font-medium tabular-nums">
-                                        {fmtCurrency(
-                                          Number.isFinite(Number(b.value_base)) ? Number(b.value_base) : 0,
-                                          cur
-                                        )}
+                                        {fmtCurrency(Number.isFinite(Number(b.value_base)) ? Number(b.value_base) : 0, cur)}
                                       </span>
                                     </div>
                                   ))}
@@ -799,12 +930,7 @@ export default function Accounts() {
         </>
       )}
 
-      {/* Modal */}
-      <Modal
-        open={modal}
-        onClose={() => (!saving ? setModal(false) : null)}
-        title={editing ? 'Edit account' : 'Add account'}
-      >
+      <Modal open={modal} onClose={() => (!saving ? setModal(false) : null)} title={editing ? 'Edit account' : 'Add account'}>
         <form
           onSubmit={(e) => {
             e.preventDefault()
@@ -815,21 +941,22 @@ export default function Accounts() {
           <div>
             <label className={lbl}>Name</label>
             <input
-              className={inp}
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="e.g., Barclays Current Account"
-            />
+  className={inp}
+  value={form.name}
+  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+  placeholder={accountNamePlaceholder(form?.type)}
+/>
+
+<p className="text-[11px] text-ink-muted/50 dark:text-white/25 mt-1">
+  Use a name you'll recognise later.
+</p>
           </div>
+          
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={lbl}>Type</label>
-              <select
-                className={inp}
-                value={form.type}
-                onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-              >
+              <select className={inp} value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
                 {TYPES.map((t) => (
                   <option key={t} value={t}>
                     {ACCOUNT_TYPE_LABELS?.[t] || t}
@@ -840,11 +967,7 @@ export default function Accounts() {
 
             <div>
               <label className={lbl}>Currency</label>
-              <select
-                className={inp}
-                value={form.currency}
-                onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
-              >
+              <select className={inp} value={form.currency} onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}>
                 {CURRENCIES.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -856,13 +979,8 @@ export default function Accounts() {
 
           <div>
             <label className={lbl}>Balance</label>
-            <input
-              className={inp}
-              value={form.balance}
-              onChange={(e) => setForm((f) => ({ ...f, balance: e.target.value }))}
-              placeholder="e.g., 12500"
-              inputMode="decimal"
-            />
+            <input className={inp} value={form.balance} onChange={(e) => setForm((f) => ({ ...f, balance: e.target.value }))} inputMode="decimal"
+            placeholder="e.g. 12,500" />
           </div>
 
           <div className="flex items-center justify-between gap-3">
@@ -877,38 +995,20 @@ export default function Accounts() {
 
           <div>
             <label className={lbl}>Notes (optional)</label>
-            <textarea
-              className={inp}
-              value={form.notes}
-              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-              placeholder="Anything you want to remember about this account…"
-              rows={3}
-            />
+            <textarea className={inp} value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={3}
+            placeholder="Optional notes about this account, e.g Emergency fund" />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className={lbl}>Monthly contribution (optional)</label>
-              <input
-                className={inp}
-                value={form.monthly_contribution}
-                onChange={(e) => setForm((f) => ({ ...f, monthly_contribution: e.target.value }))}
-                placeholder="e.g., 250"
-                inputMode="decimal"
-              />
+              <label className={lbl}>Monthly contribution (optional, per month))</label>
+              <input className={inp} value={form.monthly_contribution} onChange={(e) => setForm((f) => ({ ...f, monthly_contribution: e.target.value }))} inputMode="decimal"
+              placeholder="e.g. 500" />
             </div>
-
             <div>
-              <label className={lbl}>Interest rate % (optional)</label>
-              <input
-                className={inp}
-                value={form.annual_interest_rate_percent}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, annual_interest_rate_percent: e.target.value }))
-                }
-                placeholder="e.g., 4.5"
-                inputMode="decimal"
-              />
+              <label className={lbl}>Expected annual return % (optional)</label>
+              <input className={inp} value={form.annual_interest_rate_percent} onChange={(e) => setForm((f) => ({ ...f, annual_interest_rate_percent: e.target.value }))} inputMode="decimal"
+              placeholder="e.g. 5.2" />
             </div>
           </div>
 
@@ -926,7 +1026,7 @@ export default function Accounts() {
               className="px-5 py-3 rounded-2xl text-sm font-semibold bg-accent text-white hover:bg-accent-dark transition-colors disabled:opacity-60"
               disabled={saving}
             >
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? 'Saving…' : editing ? 'Update account' : 'Add account'}
             </button>
           </div>
         </form>
@@ -940,7 +1040,10 @@ export default function Accounts() {
         destructive
         loading={confirmLoading}
         onConfirm={confirmState?.onConfirm}
-        onCancel={() => { setConfirmState(null); setConfirmLoading(false) }}
+        onCancel={() => {
+          setConfirmState(null)
+          setConfirmLoading(false)
+        }}
       />
     </div>
   )

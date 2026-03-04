@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import time
+import os
 from collections import defaultdict
 from typing import Callable, Tuple
 
@@ -196,9 +197,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         # HSTS (only effective over HTTPS).
         # NOTE: preload/includeSubDomains are hard to roll back once preloaded.
-        response.headers["Strict-Transport-Security"] = (
-            "max-age=63072000; includeSubDomains; preload"
-        )
+        hsts = "max-age=63072000"
+        if os.getenv("HSTS_PRELOAD") == "1":
+         hsts += "; includeSubDomains; preload"
+
+        response.headers["Strict-Transport-Security"] = hsts
 
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["X-Permitted-Cross-Domain-Policies"] = "none"

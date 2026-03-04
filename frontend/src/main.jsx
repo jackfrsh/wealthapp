@@ -31,3 +31,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>
 )
+// After your app is mounted:
+requestAnimationFrame(() => {
+  // Let layout settle, then signal prerender tools.
+  window.document.dispatchEvent(new Event('paddock-rendered'))
+})

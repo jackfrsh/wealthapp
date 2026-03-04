@@ -3,9 +3,16 @@ import React from 'react'
 import { useApp } from '../App'
 import Card from '../components/Card'
 import { ArrowLeft } from 'lucide-react'
+import { useSEO } from '../useSEO'
 
 export default function Terms() {
   const { setPage } = useApp()
+
+  useSEO({
+    title: 'Terms — Paddock',
+    description: 'Terms of Service for Paddock. We offer a free tier with limited features and a paid Pro subscription.',
+    canonicalPath: '/terms',
+  })
 
   const goBack = () => {
     try {

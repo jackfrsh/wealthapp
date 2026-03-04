@@ -163,10 +163,13 @@ export default function Upgrade() {
   const proBullets = [
     'Unlimited accounts (no cap)',
     '5–40 year projections + milestones',
+    'Net-worth trajectory modelling',
+    'One-off deposit modelling',
     'Real-terms modelling (inflation-adjusted view)',
     'Scenario peeks (+£100/+£250 per month)',
     'Optimiser: contribution required to hit your target',
     'One-tap “Set & update” from the Optimiser',
+    'Deeper insights',
   ]
 
   return (

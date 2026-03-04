@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://paddock.money/</loc></url>
-  <url><loc>https://paddock.money/auth</loc></url>
-  <url><loc>https://paddock.money/privacy</loc></url>
-  <url><loc>https://paddock.money/security</loc></url>
-  <url><loc>https://paddock.money/terms</loc></url>
-  <url><loc>https://paddock.money/upgrade</loc></url>
+  <url><loc>https://getpaddock.com/</loc></url>
+  <url><loc>https://getpaddock.com/privacy</loc></url>
+  <url><loc>https://getpaddock.com/security</loc></url>
+  <url><loc>https://getpaddock.com/terms</loc></url>
+
+  <url><loc>https://getpaddock.com/guides/multi-currency-net-worth-tracker</loc></url>
+  <url><loc>https://getpaddock.com/guides/long-term-wealth-projection</loc></url>
+  <url><loc>https://getpaddock.com/guides/inflation-adjusted-net-worth</loc></url>
 </urlset>

@@ -54,18 +54,34 @@ def _add_column_if_missing(table: str, column: str, col_type: str) -> None:
 
     with engine.connect() as conn:
         try:
-            result = conn.execute(text(
-                f"SELECT column_name FROM information_schema.columns "
-                f"WHERE table_name = :table AND column_name = :column"
-            ), {"table": table, "column": column})
-            if result.fetchone() is None:
-                conn.execute(text(f'ALTER TABLE "{table}" ADD COLUMN "{column}" {col_type}'))
-                conn.commit()
-                logger.info("Added column %s.%s (%s)", table, column, col_type)
+            result = conn.execute(
+                text(
+                    "SELECT 1 FROM information_schema.columns "
+                    "WHERE table_name = :table AND column_name = :column"
+                ),
+                {"table": table, "column": column},
+            )
+
+            if result.fetchone() is not None:
+                return
+
+            logger.info("Adding missing column %s.%s (%s)", table, column, col_type)
+
+            # DDL should be executed in an explicit transaction.
+            with conn.begin():
+                conn.execute(
+                    text(f'ALTER TABLE "{table}" ADD COLUMN "{column}" {col_type}')
+                )
+
         except Exception as e:
+            # In production we fail fast: schema drift causes random 500s later.
+            is_prod = (os.getenv("RAILWAY_ENVIRONMENT") == "production") or (os.getenv("ENV") == "production")
+            if is_prod:
+                raise RuntimeError(f"Column migration failed for {table}.{column}: {e}") from e
+
             logger.warning("Column migration %s.%s skipped: %s", table, column, e)
 
 def get_session():
     """FastAPI dependency providing a DB session with proper cleanup."""
     with Session(engine) as session:
-        yield session
+     yield session

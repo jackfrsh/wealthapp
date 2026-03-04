@@ -1,5 +1,5 @@
 // frontend/src/pages/Insights.jsx
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../api'
 import { useApp } from '../App'
 import Card from '../components/Card'
@@ -51,7 +51,9 @@ function fmtGBP(n) {
 }
 
 export default function Insights() {
-  const { setPage, isPro, primaryGoal } = useApp()
+  const { setPage, isPro, primaryGoal, showToast } = useApp()
+
+  const recordingRef = useRef(false)
 
   const [data, setData] = useState(null)
   const [accounts, setAccounts] = useState([])
@@ -229,12 +231,19 @@ export default function Insights() {
 
                     {ins.action === 'record' && (
                       <button
-                        onClick={async () => {
-                          try {
-                            await api('/snapshots')
-                            load()
-                          } catch {}
-                        }}
+                      onClick={async () => {
+                        if (recordingRef.current) return
+                        recordingRef.current = true
+                        try {
+                          await api('/snapshots', { method: 'POST' })
+                          showToast?.('Snapshot recorded')
+                          load()
+                        } catch (e) {
+                          showToast?.(e?.message || 'Failed to record snapshot', 'error')
+                        } finally {
+                          recordingRef.current = false
+                        }
+                      }}
                         className="flex items-center gap-1 text-xs font-semibold text-accent hover:text-accent-dark transition-colors whitespace-nowrap mt-1"
                         type="button"
                       >

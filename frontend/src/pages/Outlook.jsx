@@ -361,10 +361,14 @@ export default function Outlook() {
     feedbackTimer.current = setTimeout(() => setFeedback(null), 2600)
   }
 
-  const retryForecast = () => {
+  const retryForecast = async () => {
     setLoading(true)
     setError(null)
-    loadForecast(localContrib, localReturn)
+    try {
+      await loadForecast(localContrib, localReturn)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const applyAssumptions = useCallback(

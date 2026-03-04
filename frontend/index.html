@@ -9,24 +9,21 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="mobile-web-app-capable" content="yes" />
 
-    <title>Paddock — Private Net Worth Tracker & Wealth Dashboard</title>
-    <meta
-      name="description"
-      content="Paddock is a private net worth tracker and wealth dashboard. Track accounts, measure monthly progress, and model long-term projections — without ads or noise."
-    />
+    <title>Multi Currency Net Worth Tracker & Long-Term Wealth Projection | Paddock</title>
+    <meta name="description" content="Track net worth across currencies and model long-term wealth projections. Inflation-adjusted views, manual control, no bank linking, no ads." />
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="canonical" href="https://paddock.money/" />
+    <link rel="canonical" href="https://getpaddock.com/" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://paddock.money/" />
+    <meta property="og:url" content="https://getpaddock.com/" />
     <meta property="og:title" content="Paddock — Private Net Worth Tracker & Wealth Dashboard" />
     <meta
       property="og:description"
       content="Track net worth, understand monthly change, and plan with long-term projections in a calm, private dashboard."
     />
-    <meta property="og:image" content="https://paddock.money/og-image.png" />
+    <meta property="og:image" content="https://getpaddock.com/public/og-image.png" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
@@ -35,7 +32,7 @@
       name="twitter:description"
       content="A calm wealth dashboard for net worth tracking, monthly progress, and long-term planning."
     />
-    <meta name="twitter:image" content="https://paddock.money/og-image.png" />
+    <meta name="twitter:image" content="https://getpaddock.com/og-image.png" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -46,6 +43,18 @@
   </head>
   <body class="antialiased">
     <div id="root"></div>
+    <style>
+      html, body {
+        background: #0b0b0c;
+      }
+    </style>
+    
+    <script>
+      const theme = localStorage.getItem("theme")
+      if (theme === "dark") {
+        document.documentElement.classList.add("dark")
+      }
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
