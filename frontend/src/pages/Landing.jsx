@@ -110,9 +110,9 @@ export default function Landing() {
   const { setPage } = useApp()
 
   useSEO({
-    title: 'Paddock — Private Net Worth Tracker & Wealth Dashboard',
+    title: 'Paddock — Personal Wealth Dashboard (Multi-Currency Net Worth)',
     description:
-      'Track net worth across currencies, record snapshots, hit milestones, and model projections — without ads or noise.',
+      'Track multi-currency net worth with daily FX, record snapshots, hit milestones, and model long-term wealth projections — without ads or noise.',
     canonicalPath: '/',
   })
 
@@ -182,18 +182,24 @@ export default function Landing() {
       {/* HERO */}
       <section className="mx-auto max-w-6xl px-5 sm:px-6 pt-24 sm:pt-32 lg:pt-40 pb-12 sm:pb-16">
         <div className="max-w-[820px]">
-          <h1 className="font-display text-[2.85rem] sm:text-6xl lg:text-[4.35rem] font-semibold tracking-[-0.03em] leading-[1.06] text-ink dark:text-white">
-            Track net worth.
+          {/* Category label (clear, premium) */}
+          <div className="text-sm font-semibold tracking-[.12em] uppercase text-ink-muted/60 dark:text-white/30 mb-4">
+            Personal wealth dashboard
+          </div>
+
+          <h1 className="font-display text-[2.85rem] sm:text-6xl lg:text-[4.35rem] font-semibold tracking-[-0.03em] leading-[1.03] text-ink dark:text-white">
+            Know your number.
             <br />
-            Build wealth deliberately.
+            Build your future.
           </h1>
 
-          <p className="mt-5 sm:mt-6 text-lg sm:text-xl text-ink-3/80 dark:text-white/35 tracking-[-0.01em] max-w-[46rem]">
-            A structured net worth model around one goal — with visible assumptions and tools to close the gap.
+          <p className="mt-5 sm:mt-6 text-lg sm:text-xl text-ink-3/90 dark:text-white/50 tracking-[-0.01em] max-w-[46rem]">
+            A clear model of your wealth, built around one long-term goal — with visible assumptions and projections that
+            show the path ahead.
           </p>
 
           <p className="mt-6 text-sm text-ink-muted/60 dark:text-white/30 max-w-2xl">
-            Multi-currency tracking with daily FX. Visible assumptions. No ads. No bank connections.
+            Multi-currency net worth tracking with daily FX. Visible assumptions. No ads. No bank connections.
           </p>
 
           <div className="mt-8 sm:mt-10 flex flex-wrap items-center gap-3">
@@ -211,17 +217,21 @@ export default function Landing() {
           </div>
 
           <p className="mt-4 text-xs text-ink-muted/55 dark:text-white/20">
-            Start with one account — setup takes under 2 minutes.
+            Free to start • No credit card required • Setup takes under 2 minutes
           </p>
 
           <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-ink-muted/55 dark:text-white/20">
-            <span>Multi-currency</span>
+            <span>Multi-currency portfolios</span>
             <span>Snapshots</span>
             <span>Manual input (no bank linking)</span>
             <span>No ads</span>
             <span>No tracking cookies</span>
             <span>Stripe billing</span>
           </div>
+
+          <p className="mt-4 text-xs text-ink-muted/55 dark:text-white/20">
+            For people building wealth deliberately.
+          </p>
         </div>
       </section>
 
@@ -244,10 +254,10 @@ export default function Landing() {
         <Reveal>
           <SectionLabel>Product</SectionLabel>
           <h2 className="mt-3 font-display text-3xl sm:text-4xl font-semibold text-ink dark:text-white tracking-tight">
-            Everything important, kept visible.
+            Everything that matters, in one place.
           </h2>
           <p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-xl leading-relaxed">
-            Paddock is built for clarity: a single goal, clear assumptions, and a dashboard you’ll actually check.
+            Built for clarity: one long-term goal, visible assumptions, and a dashboard you’ll actually check.
           </p>
 
           <div className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-10 lg:gap-14">
@@ -257,8 +267,8 @@ export default function Landing() {
                 body: 'A single long-term goal anchors the model. Your projection updates as your net worth evolves.',
               },
               {
-                title: 'Track across currencies.',
-                body: 'ISAs, SIPPs, property, crypto, cash — in multiple currencies with daily FX checking. Manual input by design.',
+                title: 'Multi-currency portfolios.',
+                body: 'ISAs, SIPPs, property, crypto and cash — across currencies with daily FX updates. Designed for global portfolios.',
               },
               {
                 title: 'Assumptions in plain sight.',
@@ -283,7 +293,7 @@ export default function Landing() {
           <Reveal>
             <SectionLabel>Projection</SectionLabel>
             <h2 className="mt-3 font-display text-3xl sm:text-4xl font-semibold text-ink dark:text-white tracking-tight">
-              A future you can see.
+              See where your wealth is heading.
             </h2>
             <p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-xl leading-relaxed">
               A long-horizon projection that makes the gap visible — and the path measurable.
@@ -347,7 +357,7 @@ export default function Landing() {
               Private by default.
             </h2>
             <p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-xl leading-relaxed">
-              No ads. No tracking cookies. No bank linking. You enter the data you want to track.
+              No ads. No trackers. No bank linking. You enter the data you want to track.
             </p>
 
             <div className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-10 lg:gap-14">
@@ -456,7 +466,7 @@ export default function Landing() {
                 or £60/year (2 months free) · Annual includes a 7-day trial
               </p>
               <p className="mt-1.5 text-sm text-ink-muted/55 dark:text-white/25">
-                For serious planning — decades, not months.
+                For serious wealth planning — decades, not months.
               </p>
 
               <div className="mt-6 space-y-2 text-sm text-ink-muted/65 dark:text-white/35">
@@ -489,7 +499,7 @@ export default function Landing() {
               Wealth isn’t built by accident.
             </h2>
             <p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-xl leading-relaxed mx-auto">
-              It’s built by clarity, consistency, and time. Paddock gives you the structure to see it through.
+              It’s built with clarity, consistency, and time. Paddock gives you the structure to see it through.
             </p>
 
             <div className="mt-8 flex items-center justify-center gap-3">
@@ -504,6 +514,10 @@ export default function Landing() {
                 Sign in
               </button>
             </div>
+
+            <p className="mt-4 text-xs text-ink-muted/55 dark:text-white/20">
+              Free to start • No credit card required
+            </p>
           </Reveal>
         </div>
       </section>

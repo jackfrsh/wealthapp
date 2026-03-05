@@ -225,7 +225,10 @@ export default function Accounts() {
   }, [setPage])
 
   const load = useCallback(async () => {
-    setLoading(true)
+    // Only show the full-page loading state on the first load
+    const isFirstLoad = accounts.length === 0
+    if (isFirstLoad) setLoading(true)
+  
     try {
       const res = await api('/accounts')
       if (cancelledRef.current) return
@@ -234,11 +237,12 @@ export default function Accounts() {
       if (cancelledRef.current) return
       console.error(e)
       showToast?.(e?.message || 'Failed to load accounts', 'error')
-      setAccounts([])
+      // Only wipe accounts if we had none; otherwise keep the last known good UI
+      if (accounts.length === 0) setAccounts([])
     } finally {
-      if (!cancelledRef.current) setLoading(false)
+      if (!cancelledRef.current && isFirstLoad) setLoading(false)
     }
-  }, [showToast])
+  }, [showToast, accounts.length])
 
   useEffect(() => {
     load()
@@ -420,7 +424,7 @@ export default function Accounts() {
         await api(`/accounts/${editing}`, { method: 'PUT', body })
         showToast?.('Account updated')
         setModal(false)
-        await load()
+        await load({ silent: true })
         bumpData?.()
         return
       }
