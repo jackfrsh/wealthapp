@@ -2,30 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { supabase } from '../supabase'
 import UpgradeButton from '../components/UpgradeButton'
 import { useApp } from '../App'
-import { Shield, Globe, BarChart2, ChevronDown, Crown, Lock } from 'lucide-react'
-
-const FEATURES = [
-  {
-    icon: BarChart2,
-    title: 'Net worth dashboard',
-    desc: 'See accounts, assets, and liabilities in one calm, consistent view.',
-  },
-  {
-    icon: BarChart2,
-    title: 'Long-term projections',
-    desc: 'Model your outlook across 5, 10, and 30 years with clear assumptions.',
-  },
-  {
-    icon: Globe,
-    title: 'Multi-currency tracking',
-    desc: 'Track GBP, USD, EUR and more with automatic conversion.',
-  },
-  {
-    icon: Shield,
-    title: 'Private by design',
-    desc: 'No ads. No trackers. Built for calm financial planning.',
-  },
-]
+import { Shield, Globe, BarChart2, Lock } from 'lucide-react'
 
 function parseRecoveryFromHash() {
   const raw = window.location.hash || ''
@@ -279,12 +256,24 @@ export default function AuthPage({ onLogin }) {
   const lbl =
     'block text-xs font-semibold text-ink-3 dark:text-white/50 mb-2 tracking-[0.02em]'
 
+  const headline = recovery
+    ? 'Reset your password.'
+    : mode === 'register'
+      ? 'Welcome to Paddock.'
+      : 'Welcome back.'
+
+  const subcopy = recovery
+    ? 'Choose a new password to regain access to your account.'
+    : mode === 'register'
+      ? 'Create your account to track net worth, understand progress, and build your future with more clarity.'
+      : 'Sign in to continue to your dashboard and pick up where you left off.'
+
   return (
-    <div className="min-h-screen bg-surface dark:bg-surface-dark overflow-x-hidden">
+    <div className="min-h-screen overflow-x-hidden brand-auth-bg text-ink dark:text-white">
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-18%] right-[-10%] w-[560px] h-[560px] bg-accent/[.05] dark:bg-accent/[.08] rounded-full blur-[160px]" />
-        <div className="absolute bottom-[-16%] left-[-14%] w-[520px] h-[520px] bg-accent/[.025] dark:bg-accent/[.05] rounded-full blur-[180px]" />
-      </div>
+  <div className="absolute top-[-18%] right-[-10%] w-[560px] h-[560px] bg-accent/[.035] rounded-full blur-[160px]" />
+  <div className="absolute bottom-[-16%] left-[-14%] w-[520px] h-[520px] bg-white/[.02] rounded-full blur-[180px]" />
+</div>
 
       <div className="relative min-h-screen flex flex-col">
         <header className="relative z-10 flex items-center justify-between px-6 sm:px-10 py-5">
@@ -315,51 +304,82 @@ export default function AuthPage({ onLogin }) {
           </div>
         </header>
 
-        <div className="relative flex-1 flex items-center justify-center px-5 pb-16 sm:pb-20">
+        <div className="relative flex-1 flex items-center justify-center px-5 py-10 sm:py-16">
           <div className="w-full max-w-[1080px] grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             <div
               className={`space-y-6 transition-all duration-700 ${
                 mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
               }`}
             >
+              <p className="text-sm font-semibold tracking-[.12em] uppercase text-ink-muted/55 dark:text-white/25">
+                Personal wealth dashboard
+              </p>
+
               <h1 className="font-display text-[2.75rem] sm:text-[3.5rem] lg:text-[4rem] leading-[1.05] text-ink dark:text-white tracking-tighterish">
-                Know your number.
-                <br />
-                <span className="text-accent">Build your future.</span>
+                {headline}
               </h1>
 
               <p className="text-lg sm:text-xl text-ink-muted dark:text-white/45 leading-relaxed max-w-[560px]">
-                Track net worth, understand monthly change, and plan long term in a calm,
-                private dashboard built for serious wealth building.
+                {subcopy}
               </p>
 
-              <div className="flex flex-wrap items-center gap-4 pt-2">
-                <UpgradeButton
-                  onClick={scrollToForm}
-                  className="min-h-[52px] px-7"
-                  size="md"
-                  variant="primary"
-                  disabled={loading}
-                >
-                  {mode === 'register' ? 'Create free account' : 'Continue securely'}
-                </UpgradeButton>
+              {!recovery ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-4 pt-2">
+                    <UpgradeButton
+                      onClick={scrollToForm}
+                      className="min-h-[52px] px-7"
+                      size="md"
+                      variant="primary"
+                      disabled={loading}
+                    >
+                      {mode === 'register' ? 'Create account' : 'Continue securely'}
+                    </UpgradeButton>
 
-                <span className="text-sm text-ink-muted/60 dark:text-white/25">
-                  Secure sign-in • No ads • No card required
-                </span>
-              </div>
+                    <span className="text-sm text-ink-muted/60 dark:text-white/25">
+                      Secure sign-in • No ads • No card required
+                    </span>
+                  </div>
 
-              <div className="flex items-center gap-5 pt-4 text-xs text-ink-muted/50 dark:text-white/20">
-                <span className="flex items-center gap-1.5">
-                  <Lock size={13} /> Secure sign-in
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Globe size={13} /> Multi-currency
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Shield size={13} /> Private by design
-                </span>
-              </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+                    <div className="rounded-3xl border border-black/[.05] dark:border-white/[.07] bg-white/60 dark:bg-white/[.03] p-5">
+                      <div className="w-10 h-10 rounded-2xl bg-accent/10 flex items-center justify-center mb-4">
+                        <BarChart2 size={18} className="text-accent" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-ink dark:text-white mb-1">
+                        See everything clearly
+                      </h3>
+                      <p className="text-sm text-ink-muted dark:text-white/35 leading-relaxed">
+                        Track accounts, assets and liabilities in one calm dashboard.
+                      </p>
+                    </div>
+
+                    <div className="rounded-3xl border border-black/[.05] dark:border-white/[.07] bg-white/60 dark:bg-white/[.03] p-5">
+                      <div className="w-10 h-10 rounded-2xl bg-accent/10 flex items-center justify-center mb-4">
+                        <Globe size={18} className="text-accent" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-ink dark:text-white mb-1">
+                        Plan with confidence
+                      </h3>
+                      <p className="text-sm text-ink-muted dark:text-white/35 leading-relaxed">
+                        Follow progress over time with long-term thinking and multi-currency support.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-5 pt-2 text-xs text-ink-muted/50 dark:text-white/20">
+                    <span className="flex items-center gap-1.5">
+                      <Lock size={13} /> Secure sign-in
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Globe size={13} /> Multi-currency
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Shield size={13} /> Private by design
+                    </span>
+                  </div>
+                </>
+              ) : null}
             </div>
 
             <div
@@ -482,21 +502,16 @@ export default function AuthPage({ onLogin }) {
                     </form>
 
                     {mode === 'register' && (
-                      <>
-                        <p className="text-xs text-ink-muted/50 dark:text-white/20 text-center mt-4 leading-relaxed">
-                          Start free. Upgrade only when you need deeper modelling.
-                        </p>
-                        <p className="text-xs text-ink-muted/50 dark:text-white/20 text-center mt-3 leading-relaxed">
-                          By creating an account, you agree to our{' '}
-                          <button
-                            type="button"
-                            onClick={() => setPage('terms')}
-                            className="text-accent hover:underline font-medium"
-                          >
-                            Terms of Service
-                          </button>.
-                        </p>
-                      </>
+                      <p className="text-xs text-ink-muted/50 dark:text-white/20 text-center mt-4 leading-relaxed">
+                        By creating an account, you agree to our{' '}
+                        <button
+                          type="button"
+                          onClick={() => setPage('terms')}
+                          className="text-accent hover:underline font-medium"
+                        >
+                          Terms of Service
+                        </button>.
+                      </p>
                     )}
                   </>
                 ) : (
@@ -567,106 +582,42 @@ export default function AuthPage({ onLogin }) {
           </div>
         </div>
 
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 opacity-70">
-          <ChevronDown size={20} className="text-ink-muted/30 dark:text-white/15" />
-        </div>
-      </div>
+        <footer className="relative py-8 px-5 border-t border-black/[.04] dark:border-white/[.04]">
+          <div className="max-w-[1080px] mx-auto flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setPage?.('landing')}
+              className="font-display text-lg text-ink dark:text-white tracking-tightish"
+            >
+              Paddock<span className="text-accent">.</span>
+            </button>
 
-      <section className="relative py-20 sm:py-28 px-5 border-t border-black/[.04] dark:border-white/[.04]">
-        <div className="max-w-[1080px] mx-auto">
-          <div className="text-center mb-14 sm:mb-20">
-            <h2 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tighterish">
-              Replace spreadsheets with clarity
-            </h2>
-            <p className="text-base sm:text-lg text-ink-muted dark:text-white/40 mt-3 max-w-[560px] mx-auto">
-              A calmer wealth dashboard for net worth tracking, long-term planning, and real progress.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {FEATURES.map((f, i) => {
-              const Icon = f.icon
-              return (
-                <div
-                  key={i}
-                  className="group relative bg-white dark:bg-surface-dark-2 rounded-3xl border border-black/[.05] dark:border-white/[.07] p-7 sm:p-8 shadow-card hover:shadow-card-hover transition-all duration-280 ease-smooth"
-                >
-                  <div className="w-11 h-11 rounded-2xl bg-accent/10 dark:bg-accent/10 flex items-center justify-center mb-5 transition-transform duration-220 ease-smooth group-hover:translate-y-[-1px]">
-                    <Icon size={20} className="text-accent" />
-                  </div>
-                  <h3 className="text-base font-semibold tracking-tightish text-ink dark:text-white mb-2">
-                    {f.title}
-                  </h3>
-                  <p className="text-sm text-ink-muted dark:text-white/40 leading-relaxed">
-                    {f.desc}
-                  </p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </section>
-
-      <section className="relative py-16 sm:py-24 px-5 border-t border-black/[.04] dark:border-white/[.04]">
-        <div className="max-w-[640px] mx-auto">
-          <div className="bg-white dark:bg-surface-dark-2 rounded-3xl border border-black/[.06] dark:border-white/[.08] shadow-card p-8 sm:p-10 text-center relative overflow-hidden">
-            <div className="absolute top-[-12px] right-[-10px] opacity-[.03] pointer-events-none">
-              <Crown size={160} className="text-ink dark:text-white" />
-            </div>
-
-            <div className="relative">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/[.03] dark:bg-white/[.06] border border-black/[.06] dark:border-white/[.10] mb-5">
-                <Crown size={14} className="opacity-80 text-ink dark:text-white" />
-                <span className="text-sm font-semibold tracking-tightish text-ink dark:text-white">
-                  Paddock Pro
-                </span>
-              </div>
-
-              <h3 className="font-display text-2xl sm:text-3xl text-ink dark:text-white tracking-tighterish mb-3">
-                Deeper modelling. Longer horizons.
-              </h3>
-              <p className="text-sm text-ink-muted dark:text-white/40 leading-relaxed mb-6 max-w-[460px] mx-auto">
-                Unlimited accounts, extended projections, and planning tools built for the long game.
-              </p>
-
-              <UpgradeButton
-                onClick={() => {
-                  try { localStorage.setItem('upgrade_reason', 'auth_pro_teaser') } catch {}
-                  setPage?.('upgrade')
-                }}
-                size="md"
-                variant="pro"
+            <div className="flex items-center gap-5 text-xs text-ink-muted/40 dark:text-white/15">
+              <button
+                type="button"
+                onClick={() => setPage?.('terms')}
+                className="hover:text-ink dark:hover:text-white/50 transition-colors"
               >
-                Explore Pro
-              </UpgradeButton>
+                Terms
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage?.('privacy')}
+                className="hover:text-ink dark:hover:text-white/50 transition-colors"
+              >
+                Privacy
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage?.('security')}
+                className="hover:text-ink dark:hover:text-white/50 transition-colors"
+              >
+                Security
+              </button>
             </div>
           </div>
-        </div>
-      </section>
-
-      <footer className="relative py-10 px-5 border-t border-black/[.04] dark:border-white/[.04]">
-        <div className="max-w-[1080px] mx-auto flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => setPage?.('landing')}
-            className="font-display text-lg text-ink dark:text-white tracking-tightish"
-          >
-            Paddock<span className="text-accent">.</span>
-          </button>
-
-          <div className="flex items-center gap-5 text-xs text-ink-muted/40 dark:text-white/15">
-            <button type="button" onClick={() => setPage?.('terms')} className="hover:text-ink dark:hover:text-white/50 transition-colors">
-              Terms
-            </button>
-            <button type="button" onClick={() => setPage?.('privacy')} className="hover:text-ink dark:hover:text-white/50 transition-colors">
-              Privacy
-            </button>
-            <button type="button" onClick={() => setPage?.('security')} className="hover:text-ink dark:hover:text-white/50 transition-colors">
-              Security
-            </button>
-          </div>
-        </div>
-      </footer>
+        </footer>
+      </div>
     </div>
   )
 }

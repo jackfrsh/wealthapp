@@ -41,14 +41,15 @@ export default function ProPreview({ children, title, subtitle, className = '' }
           </div>
         )}
         <button
-          onClick={() => setPage('upgrade')}
-          className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-2xl
-                     bg-ink text-white dark:bg-white dark:text-ink
-                     hover:opacity-90 transition-opacity"
-          type="button"
-        >
-          Unlock with Pro
-        </button>
+  onClick={() => setPage('upgrade')}
+  className="inline-flex items-center justify-center gap-2 min-h-[50px] px-5 rounded-[18px]
+             text-sm font-semibold
+             bg-accent text-white hover:bg-accent-dark
+             transition-all duration-180"
+  type="button"
+>
+  Unlock with Pro
+</button>
       </div>
     </div>
   )
