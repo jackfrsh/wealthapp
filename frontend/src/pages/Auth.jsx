@@ -44,7 +44,6 @@ function getAuthModeFromUrl() {
   try {
     const params = new URLSearchParams(window.location.search)
     const mode = (params.get('mode') || '').toLowerCase()
-
     if (mode === 'signup' || mode === 'register') return 'register'
     return 'login'
   } catch {
@@ -55,7 +54,7 @@ function getAuthModeFromUrl() {
 export default function AuthPage({ onLogin }) {
   const { showToast, setPage } = useApp()
 
-  const [mode, setMode] = useState(getAuthModeFromUrl) // 'login' | 'register'
+  const [mode, setMode] = useState(getAuthModeFromUrl)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
 
@@ -111,9 +110,7 @@ export default function AuthPage({ onLogin }) {
         setNotice('')
 
         if (code) {
-          const { error: exErr } = await supabase.auth.exchangeCodeForSession(
-            window.location.href
-          )
+          const { error: exErr } = await supabase.auth.exchangeCodeForSession(window.location.href)
           if (exErr) throw exErr
 
           url.searchParams.delete('code')
@@ -222,12 +219,10 @@ export default function AuthPage({ onLogin }) {
       if (!supabase) throw new Error('Supabase is not configured. Check your env vars.')
 
       const redirectTo = `${window.location.origin}/auth?mode=recovery`
-      const { error } = await supabase.auth.resetPasswordForEmail(emailToUse, {
-        redirectTo,
-      })
+      const { error } = await supabase.auth.resetPasswordForEmail(emailToUse, { redirectTo })
       if (error) throw error
 
-      setNotice('Password reset email sent. Check your inbox (and spam).')
+      setNotice('Password reset email sent. Check your inbox and spam folder.')
       showToast?.('Password reset email sent.', 'success')
     } catch (e) {
       setError(e?.message || 'Could not send password reset email.')
@@ -255,7 +250,7 @@ export default function AuthPage({ onLogin }) {
 
       const { data: sess } = await supabase.auth.getSession()
       if (!sess?.session) {
-        throw new Error('Auth session missing. Please reopen the reset link (or request a new one).')
+        throw new Error('Auth session missing. Please reopen the reset link or request a new one.')
       }
 
       const { error } = await supabase.auth.updateUser({ password: newPassword })
@@ -328,12 +323,14 @@ export default function AuthPage({ onLogin }) {
               }`}
             >
               <h1 className="font-display text-[2.75rem] sm:text-[3.5rem] lg:text-[4rem] leading-[1.05] text-ink dark:text-white tracking-tighterish">
-                A private <span className="text-accent">net worth tracker</span>.
+                Know your number.
+                <br />
+                <span className="text-accent">Build your future.</span>
               </h1>
 
-              <p className="text-lg sm:text-xl text-ink-muted dark:text-white/45 leading-relaxed max-w-[520px]">
-                Track net worth, understand monthly change, and plan with long-term projections —
-                without ads or noise.
+              <p className="text-lg sm:text-xl text-ink-muted dark:text-white/45 leading-relaxed max-w-[560px]">
+                Track net worth, understand monthly change, and plan long term in a calm,
+                private dashboard built for serious wealth building.
               </p>
 
               <div className="flex flex-wrap items-center gap-4 pt-2">
@@ -344,11 +341,11 @@ export default function AuthPage({ onLogin }) {
                   variant="primary"
                   disabled={loading}
                 >
-                  Create free account
+                  {mode === 'register' ? 'Create free account' : 'Continue securely'}
                 </UpgradeButton>
 
                 <span className="text-sm text-ink-muted/60 dark:text-white/25">
-                  No card required
+                  Secure sign-in • No ads • No card required
                 </span>
               </div>
 
@@ -485,82 +482,85 @@ export default function AuthPage({ onLogin }) {
                     </form>
 
                     {mode === 'register' && (
-                      <p className="text-xs text-ink-muted/50 dark:text-white/20 text-center mt-4 leading-relaxed">
-                        By creating an account, you agree to our{' '}
-                        <button
-                          type="button"
-                          onClick={() => setPage('terms')}
-                          className="text-accent hover:underline font-medium"
-                        >
-                          Terms of Service
-                        </button>.
-                      </p>
+                      <>
+                        <p className="text-xs text-ink-muted/50 dark:text-white/20 text-center mt-4 leading-relaxed">
+                          Start free. Upgrade only when you need deeper modelling.
+                        </p>
+                        <p className="text-xs text-ink-muted/50 dark:text-white/20 text-center mt-3 leading-relaxed">
+                          By creating an account, you agree to our{' '}
+                          <button
+                            type="button"
+                            onClick={() => setPage('terms')}
+                            className="text-accent hover:underline font-medium"
+                          >
+                            Terms of Service
+                          </button>.
+                        </p>
+                      </>
                     )}
                   </>
                 ) : (
-                  <>
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault()
-                        handleSetNewPassword()
-                      }}
-                      className="space-y-5"
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      handleSetNewPassword()
+                    }}
+                    className="space-y-5"
+                  >
+                    <div>
+                      <label className={lbl}>New password</label>
+                      <input
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className={inp}
+                        placeholder="At least 8 characters"
+                        autoComplete="new-password"
+                        name="new-password"
+                        enterKeyHint="next"
+                      />
+                    </div>
+
+                    <div>
+                      <label className={lbl}>Confirm password</label>
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className={inp}
+                        placeholder="Repeat password"
+                        autoComplete="new-password"
+                        name="confirm-password"
+                        enterKeyHint="go"
+                      />
+                    </div>
+
+                    <UpgradeButton
+                      type="submit"
+                      disabled={loading}
+                      className="w-full min-h-[52px]"
+                      size="md"
+                      variant="primary"
                     >
-                      <div>
-                        <label className={lbl}>New password</label>
-                        <input
-                          type="password"
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          className={inp}
-                          placeholder="At least 8 characters"
-                          autoComplete="new-password"
-                          name="new-password"
-                          enterKeyHint="next"
-                        />
-                      </div>
+                      {loading ? '…' : 'Set new password'}
+                    </UpgradeButton>
 
-                      <div>
-                        <label className={lbl}>Confirm password</label>
-                        <input
-                          type="password"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          className={inp}
-                          placeholder="Repeat password"
-                          autoComplete="new-password"
-                          name="confirm-password"
-                          enterKeyHint="go"
-                        />
-                      </div>
-
-                      <UpgradeButton
-                        type="submit"
-                        disabled={loading}
-                        className="w-full min-h-[52px]"
-                        size="md"
-                        variant="primary"
-                      >
-                        {loading ? '…' : 'Set new password'}
-                      </UpgradeButton>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRecovery(false)
-                          setNewPassword('')
-                          setConfirmPassword('')
-                          setError('')
-                          setNotice('')
-                          window.history.replaceState({}, '', `${window.location.pathname}?mode=signin`)
-                        }}
-                        disabled={loading}
-                        className="w-full text-xs font-semibold text-ink-muted dark:text-white/35 hover:text-ink dark:hover:text-white/60 transition-colors"
-                      >
-                        Back to sign in
-                      </button>
-                    </form>
-                  </>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRecovery(false)
+                        setNewPassword('')
+                        setConfirmPassword('')
+                        setError('')
+                        setNotice('')
+                        window.history.replaceState({}, '', `${window.location.pathname}?mode=signin`)
+                      }}
+                      disabled={loading}
+                      className="w-full text-xs font-semibold text-ink-muted dark:text-white/35 hover:text-ink dark:hover:text-white/60 transition-colors"
+                    >
+                      Back to sign in
+                    </button>
+                  </form>
                 )}
               </div>
             </div>
@@ -579,7 +579,7 @@ export default function AuthPage({ onLogin }) {
               Replace spreadsheets with clarity
             </h2>
             <p className="text-base sm:text-lg text-ink-muted dark:text-white/40 mt-3 max-w-[560px] mx-auto">
-              A calm wealth dashboard for net worth tracking, monthly progress, and long-term planning.
+              A calmer wealth dashboard for net worth tracking, long-term planning, and real progress.
             </p>
           </div>
 
@@ -626,7 +626,7 @@ export default function AuthPage({ onLogin }) {
                 Deeper modelling. Longer horizons.
               </h3>
               <p className="text-sm text-ink-muted dark:text-white/40 leading-relaxed mb-6 max-w-[460px] mx-auto">
-                Unlimited accounts, extended projections, and advanced planning tools — when you’re ready.
+                Unlimited accounts, extended projections, and planning tools built for the long game.
               </p>
 
               <UpgradeButton
