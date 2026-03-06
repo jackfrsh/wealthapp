@@ -418,7 +418,20 @@ export default function App() {
         setAccountsCount(undefined)
         setSettingsReady(true)
         setChecking(false)
-        startNavTransition(() => setPage('landing', { replace: true }))
+      
+        const fromPath = pageFromPath(window.location.pathname)
+        const publicPage =
+          fromPath === 'auth' ||
+          fromPath === 'privacy' ||
+          fromPath === 'security' ||
+          fromPath === 'terms' ||
+          fromPath === 'guide_multi_currency' ||
+          fromPath === 'guide_long_term_projection' ||
+          fromPath === 'guide_inflation_adjusted'
+            ? fromPath
+            : 'landing'
+      
+        startNavTransition(() => setPage(publicPage, { replace: true }))
         return
       }
 
@@ -478,7 +491,20 @@ export default function App() {
         setAuthed(false)
         setSettingsReady(true)
         setChecking(false)
-        startNavTransition(() => setPage('landing', { replace: true }))
+      
+        const fromPath = pageFromPath(window.location.pathname)
+        const publicPage =
+          fromPath === 'auth' ||
+          fromPath === 'privacy' ||
+          fromPath === 'security' ||
+          fromPath === 'terms' ||
+          fromPath === 'guide_multi_currency' ||
+          fromPath === 'guide_long_term_projection' ||
+          fromPath === 'guide_inflation_adjusted'
+            ? fromPath
+            : 'landing'
+      
+        startNavTransition(() => setPage(publicPage, { replace: true }))
       })
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
