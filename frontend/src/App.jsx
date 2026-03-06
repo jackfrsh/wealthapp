@@ -644,8 +644,6 @@ export default function App() {
     }
   }
 
-  const PageTransition = ({ children }) => <div className="animate-page-in">{children}</div>
-
   return (
     <ErrorBoundary>
       <AppContext.Provider value={ctx}>
@@ -657,15 +655,14 @@ export default function App() {
                 <MobileNav />
                 <main className="px-4 sm:px-6 lg:px-8 py-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-6">
                   <div className="mx-auto w-full max-w-6xl">
-                    <PageTransition>
-                      {/* Optional tiny nav hint (doesn't blank content) */}
-                      {isNavPending ? (
-                        <div className="fixed top-4 right-4 z-[950] text-[11px] font-semibold px-3 py-1.5 rounded-2xl bg-black/80 text-white">
-                          Loading…
-                        </div>
-                      ) : null}
-                      {renderPage()}
-                    </PageTransition>
+                  <div className="animate-page-in">
+  {isNavPending ? (
+    <div className="fixed top-4 right-4 z-[950] text-[11px] font-semibold px-3 py-1.5 rounded-2xl bg-black/80 text-white">
+      Loading…
+    </div>
+  ) : null}
+  {renderPage()}
+</div>
                   </div>
                 </main>
                 <BottomNav />

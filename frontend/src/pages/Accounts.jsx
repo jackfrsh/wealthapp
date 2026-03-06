@@ -102,7 +102,7 @@ function asArray(v) {
 
 /**
  * ✅ Apple-grade chart isolation:
- * - NO top-level recharts import (prevents vendor-charts bundle executing on page load)
+ * - NO top-level recharts import
  * - dynamic import after mount
  * - hard fallback if charts throw or fail to load
  */
@@ -110,7 +110,6 @@ function DonutChart({ enabled, donutData, donutFills, donutStroke }) {
   const [lib, setLib] = useState(null)
   const [failed, setFailed] = useState(false)
 
-  // only attempt once per mount when enabled turns true
   useEffect(() => {
     let cancelled = false
     if (!enabled || failed || lib) return
@@ -132,7 +131,6 @@ function DonutChart({ enabled, donutData, donutFills, donutStroke }) {
     }
   }, [enabled, failed, lib])
 
-  // hard fallback placeholder
   if (!enabled || failed || !lib || !donutData?.length) {
     return (
       <div className="w-full h-full rounded-3xl bg-black/[.02] dark:bg-white/[.04] border border-black/[.06] dark:border-white/[.08]" />
@@ -141,7 +139,6 @@ function DonutChart({ enabled, donutData, donutFills, donutStroke }) {
 
   const { ResponsiveContainer, PieChart, Pie, Cell } = lib
 
-  // Extra guard: chart render can still throw in Safari with ResizeObserver/0-size timing.
   try {
     return (
       <ResponsiveContainer width="100%" height="100%">
@@ -193,7 +190,6 @@ export default function Accounts() {
   const [confirmState, setConfirmState] = useState(null)
   const [confirmLoading, setConfirmLoading] = useState(false)
 
-  // ✅ only allow chart loading after first paint
   const [chartsReady, setChartsReady] = useState(false)
   useEffect(() => setChartsReady(true), [])
 
@@ -224,29 +220,29 @@ export default function Accounts() {
     setPage('upgrade')
   }, [setPage])
 
-  const load = useCallback(async () => {
-    // Only show the full-page loading state on the first load
-    const isFirstLoad = accounts.length === 0
-    if (isFirstLoad) setLoading(true)
-  
-    try {
-      const res = await api('/accounts')
-      if (cancelledRef.current) return
-      setAccounts(asArray(res))
-    } catch (e) {
-      if (cancelledRef.current) return
-      console.error(e)
-      showToast?.(e?.message || 'Failed to load accounts', 'error')
-      // Only wipe accounts if we had none; otherwise keep the last known good UI
-      if (accounts.length === 0) setAccounts([])
-    } finally {
-      if (!cancelledRef.current && isFirstLoad) setLoading(false)
-    }
-  }, [showToast, accounts.length])
-
   useEffect(() => {
-    load()
-  }, [load])
+    let cancelled = false
+    setLoading(true)
+  
+    ;(async () => {
+      try {
+        const raw = asArray(await api('/accounts'))
+        if (cancelled) return
+        setAccounts(raw)
+      } catch (e) {
+        if (cancelled) return
+        console.error(e)
+        showToast?.(e?.message || 'Failed to load accounts', 'error')
+        setAccounts([])
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+  
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const loadSnaps = useCallback(async () => {
     setSnapsLoading(true)
@@ -379,7 +375,7 @@ export default function Accounts() {
     setEditing(null)
     setForm({
       ...emptyForm,
-      type: 'bank',                 // explicit default
+      type: 'bank',
       currency: baseCurrency || 'GBP',
     })
     setModal(true)
@@ -396,17 +392,18 @@ export default function Accounts() {
       notes: a.notes || '',
       monthly_contribution: String(a.monthly_contribution ?? ''),
       annual_interest_rate_percent: String(a.annual_interest_rate_percent ?? ''),
-      _nameHint: '', // ✅ prevent any add-mode hint behaviour in edit
+      _nameHint: '',
     })
     setModal(true)
   }
+
 
   const save = async () => {
     if (!form.name.trim()) {
       showToast?.('Name is required', 'error')
       return
     }
-
+  
     const body = {
       name: form.name.trim(),
       type: form.type,
@@ -417,31 +414,52 @@ export default function Accounts() {
       monthly_contribution: toNumber(form.monthly_contribution, 0),
       annual_interest_rate_percent: toNumber(form.annual_interest_rate_percent, 0),
     }
-
+  
     setSaving(true)
     try {
       if (editing) {
-        await api(`/accounts/${editing}`, { method: 'PUT', body })
+        const editingId = editing
+  
+        await api(`/accounts/${editingId}`, { method: 'PUT', body })
+  
+        setAccounts((prev) =>
+          prev.map((a) =>
+            a.id === editingId
+              ? {
+                  ...a,
+                  ...body,
+                }
+              : a
+          )
+        )
+  
         showToast?.('Account updated')
         setModal(false)
-        await load({ silent: true })
-        bumpData?.()
+        setEditing(null)
         return
       }
-
+  
       if (accountLimitReached) {
         setModal(false)
         goUpgrade()
         return
       }
-
-      await api('/accounts', { method: 'POST', body })
+  
+      const created = await api('/accounts', { method: 'POST', body })
+  
+      const createdAccount = {
+        ...body,
+        ...(created || {}),
+        id: created?.id ?? crypto.randomUUID(),
+      }
+  
+      setAccounts((prev) => [createdAccount, ...prev])
+  
       showToast?.('Account added')
       track?.('account_added', { source: 'accounts_create' })
-
+  
       setModal(false)
-      await load()
-      bumpData?.()
+      setEditing(null)
     } catch (e) {
       if (e?.status === 403) {
         setModal(false)
@@ -464,10 +482,11 @@ export default function Accounts() {
         setSaving(true)
         try {
           await api(`/accounts/${a.id}`, { method: 'DELETE' })
+  
+          setAccounts((prev) => prev.filter((x) => x.id !== a.id))
+  
           showToast?.('Deleted')
           setConfirmState(null)
-          await load()
-          bumpData?.()
         } catch (e) {
           showToast?.(e?.message || 'Delete failed', 'error')
         } finally {
@@ -517,7 +536,6 @@ export default function Accounts() {
 
   return (
     <div className="space-y-7">
-      {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-[2rem] sm:text-4xl text-ink dark:text-white tracking-tight">
@@ -652,12 +670,15 @@ export default function Accounts() {
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {accounts.map((a) => {
+          {accounts.map((a) => {
               const Icon = TYPE_ICON?.[a.type] || TYPE_ICON.other
               const label = ACCOUNT_TYPE_LABELS?.[a.type] || a.type
 
               return (
-                <Card key={a.id} className="p-5">
+                <Card
+                  key={a.id}
+                  className='p-5'
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2.5">
@@ -720,7 +741,7 @@ export default function Accounts() {
                     </span>
                   </div>
 
-                  {(a.monthly_contribution || a.annual_interest_rate_percent) ? (
+                  {a.monthly_contribution || a.annual_interest_rate_percent ? (
                     <div className="mt-4 pt-4 border-t border-black/[.06] dark:border-white/[.07] text-xs text-ink-muted dark:text-white/35 space-y-1">
                       {!!a.monthly_contribution && (
                         <div className="flex justify-between">
@@ -765,7 +786,10 @@ export default function Accounts() {
                   {donutData.slice(0, 3).map((d) => (
                     <div key={d.type} className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: colorByType.get(d.type) || donutFills[0] }} />
+                        <span
+                          className="inline-block w-2.5 h-2.5 rounded-full"
+                          style={{ background: colorByType.get(d.type) || donutFills[0] }}
+                        />
                         <div className="text-sm text-ink dark:text-white/80 truncate">{d.label}</div>
                       </div>
                       <div className="text-xs text-ink-muted dark:text-white/35 tabular-nums">
@@ -797,12 +821,13 @@ export default function Accounts() {
             </div>
           </Card>
 
-          {/* Snapshots */}
           <div className="pt-2 space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold text-ink dark:text-white">Snapshots</div>
-                <div className="text-xs text-ink-muted dark:text-white/35">Record net worth over time. Your total lives on Home.</div>
+                <div className="text-xs text-ink-muted dark:text-white/35">
+                  Record net worth over time. Your total lives on Home.
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
@@ -896,7 +921,9 @@ export default function Accounts() {
                           {isOpen && (
                             <div className="px-4 pb-4 pt-2 bg-black/[.01] dark:bg-white/[.03] border-t border-black/[.06] dark:border-white/[.07]">
                               <div className="flex items-center justify-between gap-3">
-                                <div className="text-xs text-ink-muted dark:text-white/35">{hasBreakdown ? 'Breakdown' : 'Snapshot'}</div>
+                                <div className="text-xs text-ink-muted dark:text-white/35">
+                                  {hasBreakdown ? 'Breakdown' : 'Snapshot'}
+                                </div>
                                 <button
                                   type="button"
                                   onClick={() => deleteSnap(s.id)}
@@ -909,7 +936,10 @@ export default function Accounts() {
                               {hasBreakdown ? (
                                 <div className="mt-3 space-y-2.5">
                                   {s.breakdown.map((b) => (
-                                    <div key={b.id || `${b.name}-${b.currency}`} className="flex justify-between items-center text-sm">
+                                    <div
+                                      key={b.id || `${b.name}-${b.currency}`}
+                                      className="flex justify-between items-center text-sm"
+                                    >
                                       <span className="text-ink-muted dark:text-white/45">
                                         {b.name}{' '}
                                         <span className="text-ink-muted/40 dark:text-white/20">({b.currency})</span>
@@ -945,17 +975,15 @@ export default function Accounts() {
           <div>
             <label className={lbl}>Name</label>
             <input
-  className={inp}
-  value={form.name}
-  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-  placeholder={accountNamePlaceholder(form?.type)}
-/>
-
-<p className="text-[11px] text-ink-muted/50 dark:text-white/25 mt-1">
-  Use a name you'll recognise later.
-</p>
+              className={inp}
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder={accountNamePlaceholder(form?.type)}
+            />
+            <p className="text-[11px] text-ink-muted/50 dark:text-white/25 mt-1">
+              Use a name you'll recognise later.
+            </p>
           </div>
-          
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -971,7 +999,11 @@ export default function Accounts() {
 
             <div>
               <label className={lbl}>Currency</label>
-              <select className={inp} value={form.currency} onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}>
+              <select
+                className={inp}
+                value={form.currency}
+                onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
+              >
                 {CURRENCIES.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -983,8 +1015,13 @@ export default function Accounts() {
 
           <div>
             <label className={lbl}>Balance</label>
-            <input className={inp} value={form.balance} onChange={(e) => setForm((f) => ({ ...f, balance: e.target.value }))} inputMode="decimal"
-            placeholder="e.g. 12,500" />
+            <input
+              className={inp}
+              value={form.balance}
+              onChange={(e) => setForm((f) => ({ ...f, balance: e.target.value }))}
+              inputMode="decimal"
+              placeholder="e.g. 12,500"
+            />
           </div>
 
           <div className="flex items-center justify-between gap-3">
@@ -999,20 +1036,35 @@ export default function Accounts() {
 
           <div>
             <label className={lbl}>Notes (optional)</label>
-            <textarea className={inp} value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={3}
-            placeholder="Optional notes about this account, e.g Emergency fund" />
+            <textarea
+              className={inp}
+              value={form.notes}
+              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+              rows={3}
+              placeholder="Optional notes about this account, e.g Emergency fund"
+            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={lbl}>Monthly contribution (optional, per month))</label>
-              <input className={inp} value={form.monthly_contribution} onChange={(e) => setForm((f) => ({ ...f, monthly_contribution: e.target.value }))} inputMode="decimal"
-              placeholder="e.g. 500" />
+              <input
+                className={inp}
+                value={form.monthly_contribution}
+                onChange={(e) => setForm((f) => ({ ...f, monthly_contribution: e.target.value }))}
+                inputMode="decimal"
+                placeholder="e.g. 500"
+              />
             </div>
             <div>
               <label className={lbl}>Expected annual return % (optional)</label>
-              <input className={inp} value={form.annual_interest_rate_percent} onChange={(e) => setForm((f) => ({ ...f, annual_interest_rate_percent: e.target.value }))} inputMode="decimal"
-              placeholder="e.g. 5.2" />
+              <input
+                className={inp}
+                value={form.annual_interest_rate_percent}
+                onChange={(e) => setForm((f) => ({ ...f, annual_interest_rate_percent: e.target.value }))}
+                inputMode="decimal"
+                placeholder="e.g. 5.2"
+              />
             </div>
           </div>
 
