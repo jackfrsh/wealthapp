@@ -40,10 +40,22 @@ function parseRecoveryFromHash() {
   return null
 }
 
+function getAuthModeFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const mode = (params.get('mode') || '').toLowerCase()
+
+    if (mode === 'signup' || mode === 'register') return 'register'
+    return 'login'
+  } catch {
+    return 'login'
+  }
+}
+
 export default function AuthPage({ onLogin }) {
   const { showToast, setPage } = useApp()
 
-  const [mode, setMode] = useState('login') // 'login' | 'register'
+  const [mode, setMode] = useState(getAuthModeFromUrl) // 'login' | 'register'
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
 
@@ -62,6 +74,16 @@ export default function AuthPage({ onLogin }) {
     requestAnimationFrame(() => setMounted(true))
   }, [])
 
+  useEffect(() => {
+    const syncModeFromUrl = () => {
+      setMode(getAuthModeFromUrl())
+    }
+
+    syncModeFromUrl()
+    window.addEventListener('popstate', syncModeFromUrl)
+    return () => window.removeEventListener('popstate', syncModeFromUrl)
+  }, [])
+
   const scrollToForm = () => {
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
@@ -78,7 +100,10 @@ export default function AuthPage({ onLogin }) {
         const implicit = parseRecoveryFromHash()
         const modeParam = url.searchParams.get('mode')
 
-        if (!code && !implicit && modeParam !== 'recovery') return
+        if (!code && !implicit && modeParam !== 'recovery') {
+          setMode(getAuthModeFromUrl())
+          return
+        }
 
         setRecovery(true)
         setMode('login')
@@ -145,7 +170,6 @@ export default function AuthPage({ onLogin }) {
 
         showToast?.('Account created.', 'success')
 
-        // If confirmations are off, you might have a session immediately.
         if (data?.session) {
           const token = data.session.access_token
           if (typeof onLogin === 'function') {
@@ -157,6 +181,11 @@ export default function AuthPage({ onLogin }) {
 
         setNotice('Check your email to confirm your account, then sign in.')
         setMode('login')
+        try {
+          const url = new URL(window.location.href)
+          url.searchParams.set('mode', 'signin')
+          window.history.replaceState({}, '', `${url.pathname}?${url.searchParams.toString()}`)
+        } catch {}
         return
       }
 
@@ -192,7 +221,6 @@ export default function AuthPage({ onLogin }) {
       setLoading(true)
       if (!supabase) throw new Error('Supabase is not configured. Check your env vars.')
 
-      // IMPORTANT: match your /auth route
       const redirectTo = `${window.location.origin}/auth?mode=recovery`
       const { error } = await supabase.auth.resetPasswordForEmail(emailToUse, {
         redirectTo,
@@ -236,7 +264,7 @@ export default function AuthPage({ onLogin }) {
       setRecovery(false)
       setNewPassword('')
       setConfirmPassword('')
-      window.history.replaceState({}, '', window.location.pathname)
+      window.history.replaceState({}, '', `${window.location.pathname}?mode=signin`)
 
       setNotice('Password updated. Please sign in.')
       showToast?.('Password updated.', 'success')
@@ -258,14 +286,12 @@ export default function AuthPage({ onLogin }) {
 
   return (
     <div className="min-h-screen bg-surface dark:bg-surface-dark overflow-x-hidden">
-      {/* Ambient background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-[-18%] right-[-10%] w-[560px] h-[560px] bg-accent/[.05] dark:bg-accent/[.08] rounded-full blur-[160px]" />
         <div className="absolute bottom-[-16%] left-[-14%] w-[520px] h-[520px] bg-accent/[.025] dark:bg-accent/[.05] rounded-full blur-[180px]" />
       </div>
 
       <div className="relative min-h-screen flex flex-col">
-        {/* Top bar */}
         <header className="relative z-10 flex items-center justify-between px-6 sm:px-10 py-5">
           <button
             type="button"
@@ -294,10 +320,8 @@ export default function AuthPage({ onLogin }) {
           </div>
         </header>
 
-        {/* Hero */}
         <div className="relative flex-1 flex items-center justify-center px-5 pb-16 sm:pb-20">
           <div className="w-full max-w-[1080px] grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-            {/* Left */}
             <div
               className={`space-y-6 transition-all duration-700 ${
                 mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
@@ -341,7 +365,6 @@ export default function AuthPage({ onLogin }) {
               </div>
             </div>
 
-            {/* Right — form */}
             <div
               ref={formRef}
               className={`transition-all duration-700 delay-150 ${
@@ -359,6 +382,12 @@ export default function AuthPage({ onLogin }) {
                           setMode(m)
                           setError('')
                           setNotice('')
+
+                          try {
+                            const url = new URL(window.location.href)
+                            url.searchParams.set('mode', m === 'register' ? 'signup' : 'signin')
+                            window.history.replaceState({}, '', `${url.pathname}?${url.searchParams.toString()}`)
+                          } catch {}
                         }}
                         className={`pb-3.5 px-5 text-sm font-semibold border-b-2 transition-colors -mb-px min-h-[44px] ${
                           mode === m
@@ -523,7 +552,7 @@ export default function AuthPage({ onLogin }) {
                           setConfirmPassword('')
                           setError('')
                           setNotice('')
-                          window.history.replaceState({}, '', window.location.pathname)
+                          window.history.replaceState({}, '', `${window.location.pathname}?mode=signin`)
                         }}
                         disabled={loading}
                         className="w-full text-xs font-semibold text-ink-muted dark:text-white/35 hover:text-ink dark:hover:text-white/60 transition-colors"
@@ -538,13 +567,11 @@ export default function AuthPage({ onLogin }) {
           </div>
         </div>
 
-        {/* Scroll hint */}
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 opacity-70">
           <ChevronDown size={20} className="text-ink-muted/30 dark:text-white/15" />
         </div>
       </div>
 
-      {/* Features */}
       <section className="relative py-20 sm:py-28 px-5 border-t border-black/[.04] dark:border-white/[.04]">
         <div className="max-w-[1080px] mx-auto">
           <div className="text-center mb-14 sm:mb-20">
@@ -580,7 +607,6 @@ export default function AuthPage({ onLogin }) {
         </div>
       </section>
 
-      {/* Pro teaser */}
       <section className="relative py-16 sm:py-24 px-5 border-t border-black/[.04] dark:border-white/[.04]">
         <div className="max-w-[640px] mx-auto">
           <div className="bg-white dark:bg-surface-dark-2 rounded-3xl border border-black/[.06] dark:border-white/[.08] shadow-card p-8 sm:p-10 text-center relative overflow-hidden">

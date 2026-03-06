@@ -262,12 +262,21 @@ export async function api(path, options = {}) {
         if (retryToken) retryHeaders.set('Authorization', `Bearer ${retryToken}`)
         else retryHeaders.delete('Authorization')
 
-        const retryRes = await fetch(url, {
-          method,
-          headers: retryHeaders,
-          body: finalBody,
-          signal: controller.signal, // ✅ match our abort behavior
-        })
+        // --- Retry fetch with its own timeout (do NOT reuse the original controller/timeout) ---
+        const retryController = new AbortController()
+        const retryTimeoutId = setTimeout(() => retryController.abort(), REQUEST_TIMEOUT_MS)
+
+        let retryRes
+        try {
+          retryRes = await fetch(url, {
+            method,
+            headers: retryHeaders,
+            body: finalBody,
+            signal: retryController.signal,
+          })
+        } finally {
+          clearTimeout(retryTimeoutId)
+        }
 
         // Handle expected 404 on retry too
         if (retryRes.status === 404 && nullOn404) return null
