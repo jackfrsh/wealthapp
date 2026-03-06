@@ -239,19 +239,25 @@ export default function App() {
   useEffect(() => {
     const initialRaw = pageFromPath(window.location.pathname)
     const initial = initialRaw || 'landing'
-    setPage(initial, { replace: true })
+    startNavTransition(() => _setPage(initial))
+  
     try {
-      window.history.replaceState({}, '', PAGE_TO_PATH[initial] || '/')
+      const path = PAGE_TO_PATH[initial] || '/'
+      const search = window.location.search || ''
+      if (window.location.pathname !== path) {
+        window.history.replaceState({}, '', `${path}${search}`)
+      }
     } catch {}
-
+  
     const onPop = () => {
       const pRaw = pageFromPath(window.location.pathname)
       const p = pRaw || (authed ? 'home' : 'landing')
-      setPage(p, { replace: true })
+      startNavTransition(() => _setPage(p))
     }
+  
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
-  }, [setPage, authed])
+  }, [authed, startNavTransition])
 
   const PAGE_TITLES = {
     landing: 'Paddock — Private Net Worth Tracker & Wealth Dashboard',
