@@ -13,7 +13,7 @@ function toNumber(input, fallback = null) {
 }
 
 export default function GoalSetup({ onComplete }) {
-  const { baseCurrency, showToast, setPage, bumpData } = useApp()
+  const { baseCurrency, showToast, bumpData } = useApp()
 
   const [form, setForm] = useState({
     name: 'Independence',
@@ -72,9 +72,7 @@ export default function GoalSetup({ onComplete }) {
       track('goal_created', { source: 'goal_setup' })
       showToast('Goal created')
 
-      // Update parent/app state first, then route home and let Home decide what's next.
       onComplete?.(goal)
-      setPage('home')
     } catch (e) {
       const msg =
         e?.detail ||
@@ -273,7 +271,6 @@ export default function GoalSetup({ onComplete }) {
         onClick={() => {
           track('goal_setup_skipped')
           onComplete?.(null)
-          setPage('home')
         }}
         className="block mx-auto mt-4 text-sm text-ink-muted/50 dark:text-white/25 hover:text-ink-muted dark:hover:text-white/40 transition-colors"
       >

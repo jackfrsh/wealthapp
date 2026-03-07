@@ -353,6 +353,8 @@ export default function Home() {
   const {
     setBaseCurrency,
     primaryGoal,
+    onboarding,
+    accountsCount: appAccountsCount,
     setPage,
     dataVersion,
     bumpData,
@@ -672,10 +674,13 @@ export default function Home() {
       ? 'ring-2 ring-emerald-400/40 dark:ring-emerald-400/25'
       : ''
 
-  const accountsCount = Number(data?.accounts_count ?? 0) || 0
-  const hasGoal = !!retirementGoal
-  const needsGoal = !hasGoal
-  const needsAccounts = accountsCount === 0
+  const accountsCount =
+    typeof appAccountsCount === 'number' ? appAccountsCount : Number(data?.accounts_count ?? 0) || 0
+
+  const needsGoal = typeof onboarding?.needsGoal === 'boolean' ? onboarding.needsGoal : !retirementGoal
+  const needsAccounts =
+    typeof onboarding?.needsAccounts === 'boolean' ? onboarding.needsAccounts : accountsCount === 0
+
   const showOnboarding = needsGoal || needsAccounts
 
   return (
