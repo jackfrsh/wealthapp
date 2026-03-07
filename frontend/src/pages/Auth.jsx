@@ -28,6 +28,18 @@ function getAuthModeFromUrl() {
   }
 }
 
+function FeatureCard({ icon: Icon, title, body }) {
+  return (
+    <div className="rounded-3xl border border-black/[.05] dark:border-white/[.07] bg-white/72 dark:bg-white/[.04] backdrop-blur-xl p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)] dark:shadow-none">
+      <div className="w-10 h-10 rounded-2xl bg-accent/10 flex items-center justify-center mb-4">
+        <Icon size={18} className="text-accent" />
+      </div>
+      <h3 className="text-sm font-semibold text-ink dark:text-white mb-1">{title}</h3>
+      <p className="text-sm text-ink-muted dark:text-white/35 leading-relaxed">{body}</p>
+    </div>
+  )
+}
+
 export default function AuthPage({ onLogin }) {
   const { showToast, setPage } = useApp()
 
@@ -248,8 +260,8 @@ export default function AuthPage({ onLogin }) {
   }
 
   const inp =
-    'w-full px-4 py-3.5 rounded-2xl border border-black/[.08] dark:border-white/[.08] ' +
-    'bg-white dark:bg-surface-dark-2 text-ink dark:text-white text-base ' +
+    'w-full px-4 py-3 sm:py-3.5 rounded-2xl border border-black/[.08] dark:border-white/[.08] ' +
+    'bg-white/92 dark:bg-surface-dark-2 text-ink dark:text-white text-base ' +
     'focus:outline-none focus:ring-4 focus:ring-accent/15 focus:border-accent/60 ' +
     'transition-all duration-180 ease-smooth'
 
@@ -271,9 +283,9 @@ export default function AuthPage({ onLogin }) {
   return (
     <div className="min-h-screen overflow-x-hidden brand-auth-bg text-ink dark:text-white">
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-  <div className="absolute top-[-18%] right-[-10%] w-[560px] h-[560px] bg-accent/[.035] rounded-full blur-[160px]" />
-  <div className="absolute bottom-[-16%] left-[-14%] w-[520px] h-[520px] bg-white/[.02] rounded-full blur-[180px]" />
-</div>
+        <div className="absolute top-[-18%] right-[-10%] w-[560px] h-[560px] bg-accent/[.05] dark:bg-accent/[.08] rounded-full blur-[160px]" />
+        <div className="absolute bottom-[-16%] left-[-14%] w-[520px] h-[520px] bg-black/[.02] dark:bg-white/[.02] rounded-full blur-[180px]" />
+      </div>
 
       <div className="relative min-h-screen flex flex-col">
         <header className="relative z-10 flex items-center justify-between px-6 sm:px-10 py-5">
@@ -304,10 +316,10 @@ export default function AuthPage({ onLogin }) {
           </div>
         </header>
 
-        <div className="relative flex-1 flex items-center justify-center px-5 py-10 sm:py-16">
-          <div className="w-full max-w-[1080px] grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+        <div className="relative flex-1 flex items-center justify-center px-4 sm:px-5 py-8 sm:py-16"></div><div className="relative flex-1 flex items-center justify-center px-5 py-10 sm:py-16">
+          <div className="w-full max-w-[1080px] grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-start lg:items-center">
             <div
-              className={`space-y-6 transition-all duration-700 ${
+              className={`space-y-6 transition-all duration-700 order-1 ${
                 mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
               }`}
             >
@@ -315,7 +327,7 @@ export default function AuthPage({ onLogin }) {
                 Personal wealth dashboard
               </p>
 
-              <h1 className="font-display text-[2.75rem] sm:text-[3.5rem] lg:text-[4rem] leading-[1.05] text-ink dark:text-white tracking-tighterish">
+              <h1 className="font-display text-[2.35rem] sm:text-[3.5rem] lg:text-[4rem] leading-[1.04] text-ink dark:text-white tracking-tighterish">
                 {headline}
               </h1>
 
@@ -325,7 +337,7 @@ export default function AuthPage({ onLogin }) {
 
               {!recovery ? (
                 <>
-                  <div className="flex flex-wrap items-center gap-4 pt-2">
+                  <div className="hidden lg:flex flex-wrap items-center gap-4 pt-2">
                     <UpgradeButton
                       onClick={scrollToForm}
                       className="min-h-[52px] px-7"
@@ -341,33 +353,20 @@ export default function AuthPage({ onLogin }) {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-                    <div className="rounded-3xl border border-black/[.05] dark:border-white/[.07] bg-white/60 dark:bg-white/[.03] p-5">
-                      <div className="w-10 h-10 rounded-2xl bg-accent/10 flex items-center justify-center mb-4">
-                        <BarChart2 size={18} className="text-accent" />
-                      </div>
-                      <h3 className="text-sm font-semibold text-ink dark:text-white mb-1">
-                        See everything clearly
-                      </h3>
-                      <p className="text-sm text-ink-muted dark:text-white/35 leading-relaxed">
-                        Track accounts, assets and liabilities in one calm dashboard.
-                      </p>
-                    </div>
-
-                    <div className="rounded-3xl border border-black/[.05] dark:border-white/[.07] bg-white/60 dark:bg-white/[.03] p-5">
-                      <div className="w-10 h-10 rounded-2xl bg-accent/10 flex items-center justify-center mb-4">
-                        <Globe size={18} className="text-accent" />
-                      </div>
-                      <h3 className="text-sm font-semibold text-ink dark:text-white mb-1">
-                        Plan with confidence
-                      </h3>
-                      <p className="text-sm text-ink-muted dark:text-white/35 leading-relaxed">
-                        Follow progress over time with long-term thinking and multi-currency support.
-                      </p>
-                    </div>
+                  <div className="hidden lg:grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+                    <FeatureCard
+                      icon={BarChart2}
+                      title="See everything clearly"
+                      body="Track accounts, assets and liabilities in one calm dashboard."
+                    />
+                    <FeatureCard
+                      icon={Globe}
+                      title="Plan with confidence"
+                      body="Follow progress over time with long-term thinking and multi-currency support."
+                    />
                   </div>
 
-                  <div className="flex items-center gap-5 pt-2 text-xs text-ink-muted/50 dark:text-white/20">
+                  <div className="hidden lg:flex items-center gap-5 pt-2 text-xs text-ink-muted/50 dark:text-white/20">
                     <span className="flex items-center gap-1.5">
                       <Lock size={13} /> Secure sign-in
                     </span>
@@ -384,11 +383,11 @@ export default function AuthPage({ onLogin }) {
 
             <div
               ref={formRef}
-              className={`transition-all duration-700 delay-150 ${
+              className={`transition-all duration-700 delay-150 order-2 ${
                 mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
               }`}
             >
-              <div className="bg-white dark:bg-surface-dark-2 rounded-3xl shadow-card-lg border border-black/[.05] dark:border-white/[.07] p-7 sm:p-9 max-w-[440px] mx-auto lg:mx-0 lg:ml-auto">
+              <div className="bg-white/88 dark:bg-surface-dark-2/92 backdrop-blur-xl rounded-[28px] sm:rounded-3xl shadow-card-lg border border-black/[.05] dark:border-white/[.07] p-5 sm:p-7 lg:p-9 max-w-[440px] mx-auto lg:mx-0 lg:ml-auto">
                 {!recovery && (
                   <div className="flex border-b border-black/[.06] dark:border-white/[.07] mb-7">
                     {['login', 'register'].map((m) => (
@@ -482,7 +481,7 @@ export default function AuthPage({ onLogin }) {
                       <UpgradeButton
                         type="submit"
                         disabled={loading}
-                        className="w-full min-h-[52px]"
+                        className="w-full min-h-[50px] sm:min-h-[52px]"
                         size="md"
                         variant="primary"
                       >
@@ -513,6 +512,30 @@ export default function AuthPage({ onLogin }) {
                         </button>.
                       </p>
                     )}
+
+                    <div className="lg:hidden pt-6 space-y-4">
+                      <div className="flex items-center justify-center gap-4 text-xs text-ink-muted/55 dark:text-white/22">
+                        <span className="flex items-center gap-1.5">
+                          <Lock size={13} /> Secure sign-in
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <Shield size={13} /> Private
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <FeatureCard
+                          icon={BarChart2}
+                          title="See everything clearly"
+                          body="Track accounts, assets and liabilities in one calm dashboard."
+                        />
+                        <FeatureCard
+                          icon={Globe}
+                          title="Plan with confidence"
+                          body="Follow progress over time with long-term thinking and multi-currency support."
+                        />
+                      </div>
+                    </div>
                   </>
                 ) : (
                   <form
@@ -553,7 +576,7 @@ export default function AuthPage({ onLogin }) {
                     <UpgradeButton
                       type="submit"
                       disabled={loading}
-                      className="w-full min-h-[52px]"
+                      className="w-full min-h-[50px] sm:min-h-[52px]"
                       size="md"
                       variant="primary"
                     >
@@ -579,6 +602,10 @@ export default function AuthPage({ onLogin }) {
                 )}
               </div>
             </div>
+
+            {!recovery ? (
+              <div className="lg:hidden order-3 pt-1" />
+            ) : null}
           </div>
         </div>
 

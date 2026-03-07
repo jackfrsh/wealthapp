@@ -334,9 +334,18 @@ input, select, textarea { font-size: 1rem; }
 }
 
 .brand-auth-bg {
+  position: relative;
   background:
-    radial-gradient(1200px 700px at 15% 0%, rgba(75, 121, 168, 0.16), transparent 55%),
-    radial-gradient(900px 500px at 85% 10%, rgba(255, 255, 255, 0.04), transparent 60%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 50%),
-    #171a1f;
+    radial-gradient(1200px 620px at 20% 8%, rgba(var(--accent-rgb), 0.08), transparent 55%),
+    radial-gradient(900px 480px at 80% 0%, rgba(0, 0, 0, 0.035), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.60), rgba(255,255,255,0.20)),
+    rgb(var(--bg-rgb));
+}
+
+.dark .brand-auth-bg {
+  background:
+    radial-gradient(1200px 620px at 20% 8%, rgba(var(--accent-rgb), 0.10), transparent 55%),
+    radial-gradient(900px 480px at 80% 0%, rgba(255,255,255,0.04), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.03), transparent 55%),
+    rgb(var(--bg-rgb));
 }
