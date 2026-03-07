@@ -1,6 +1,6 @@
 // frontend/src/pages/Accounts.jsx
 import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react'
-import { api } from '../api'
+import { api, invalidatePath } from '../api'
 import { useApp } from '../App'
 import Card from '../components/Card'
 import Modal from '../components/Modal'
@@ -421,22 +421,27 @@ export default function Accounts() {
         const editingId = editing
   
         await api(`/accounts/${editingId}`, { method: 'PUT', body })
-  
-        setAccounts((prev) =>
-          prev.map((a) =>
-            a.id === editingId
-              ? {
-                  ...a,
-                  ...body,
-                }
-              : a
-          )
-        )
-  
-        showToast?.('Account updated')
-        setModal(false)
-        setEditing(null)
-        return
+
+setAccounts((prev) =>
+  prev.map((a) =>
+    a.id === editingId
+      ? {
+          ...a,
+          ...body,
+        }
+      : a
+  )
+)
+
+invalidatePath('/accounts')
+invalidatePath('/dashboard')
+invalidatePath('/dashboard?range=3M')
+bumpData?.()
+
+showToast?.('Account updated')
+setModal(false)
+setEditing(null)
+return
       }
   
       if (accountLimitReached) {
@@ -446,20 +451,25 @@ export default function Accounts() {
       }
   
       const created = await api('/accounts', { method: 'POST', body })
-  
-      const createdAccount = {
-        ...body,
-        ...(created || {}),
-        id: created?.id ?? crypto.randomUUID(),
-      }
-  
-      setAccounts((prev) => [createdAccount, ...prev])
-  
-      showToast?.('Account added')
-      track?.('account_added', { source: 'accounts_create' })
-  
-      setModal(false)
-      setEditing(null)
+
+const createdAccount = {
+  ...body,
+  ...(created || {}),
+  id: created?.id ?? crypto.randomUUID(),
+}
+
+setAccounts((prev) => [createdAccount, ...prev])
+
+invalidatePath('/accounts')
+invalidatePath('/dashboard')
+invalidatePath('/dashboard?range=3M')
+bumpData?.()
+
+showToast?.('Account added')
+track?.('account_added', { source: 'accounts_create' })
+
+setModal(false)
+setEditing(null)
     } catch (e) {
       if (e?.status === 403) {
         setModal(false)
@@ -482,11 +492,16 @@ export default function Accounts() {
         setSaving(true)
         try {
           await api(`/accounts/${a.id}`, { method: 'DELETE' })
-  
-          setAccounts((prev) => prev.filter((x) => x.id !== a.id))
-  
-          showToast?.('Deleted')
-          setConfirmState(null)
+
+setAccounts((prev) => prev.filter((x) => x.id !== a.id))
+
+invalidatePath('/accounts')
+invalidatePath('/dashboard')
+invalidatePath('/dashboard?range=3M')
+bumpData?.()
+
+showToast?.('Deleted')
+setConfirmState(null)
         } catch (e) {
           showToast?.(e?.message || 'Delete failed', 'error')
         } finally {
