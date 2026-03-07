@@ -465,18 +465,23 @@ export default function AuthPage({ onLogin }) {
                       </div>
 
                       <div>
-                        <label className={lbl}>Password</label>
-                        <input
-                          type="password"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          className={inp}
-                          placeholder="••••••••"
-                          autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                          name="password"
-                          enterKeyHint="go"
-                        />
-                      </div>
+  <label className={lbl}>Password</label>
+  <input
+    type="password"
+    value={password}
+    onChange={(e) => setPassword(e.target.value)}
+    className={inp}
+    placeholder="••••••••"
+    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+    name="password"
+    enterKeyHint="go"
+  />
+  {mode !== 'login' && (
+    <p className="mt-2 text-[12px] leading-relaxed text-ink-muted/60 dark:text-white/40">
+      Use 8+ characters with an uppercase letter, lowercase letter, and number.
+    </p>
+  )}
+</div>
 
                       <UpgradeButton
                         type="submit"

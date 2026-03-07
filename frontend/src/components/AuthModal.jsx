@@ -391,19 +391,24 @@ export default function AuthModal({
                     </div>
 
                     <div>
-                      <div className="text-xs font-semibold text-ink-3 dark:text-white/50 mb-2">
-                        Password
-                      </div>
-                      <input
-                        className={inp}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="At least 8 characters"
-                        type="password"
-                        autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                        onKeyDown={(e) => e.key === 'Enter' && submitAuth()}
-                      />
-                    </div>
+  <div className="text-xs font-semibold text-ink-3 dark:text-white/50 mb-2">
+    Password
+  </div>
+  <input
+    className={inp}
+    value={password}
+    onChange={(e) => setPassword(e.target.value)}
+    placeholder="At least 8 characters"
+    type="password"
+    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+    onKeyDown={(e) => e.key === 'Enter' && submitAuth()}
+  />
+  {mode !== 'login' && (
+    <p className="mt-2 text-[12px] leading-relaxed text-ink-3/70 dark:text-white/40">
+      Use 8+ characters with an uppercase letter, lowercase letter, and number.
+    </p>
+  )}
+</div>
 
                     <UpgradeButton
                       onClick={submitAuth}

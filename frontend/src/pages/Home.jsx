@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 
 /* ──────────────────────────────────────────── */
-/* Milestone ladder + reach-age math             */
+/* Milestone ladder + reach-age math           */
 /* ──────────────────────────────────────────── */
 
 const MILESTONE_LADDER = [
@@ -79,7 +79,7 @@ function monthsToTarget({ pv, pmt, annualReturnPct, target }) {
 }
 
 /* ──────────────────────────────────────────── */
-/* Celebration persistence (receipt-style)       */
+/* Celebration persistence                      */
 /* ──────────────────────────────────────────── */
 
 const CELEBRATION_LAST_KEY = 'wealthapp:last-celebrated-milestone-v1'
@@ -143,7 +143,7 @@ function toCents(n) {
 }
 
 /* ──────────────────────────────────────────── */
-/* Premium milestone receipt banner              */
+/* Premium milestone receipt banner             */
 /* ──────────────────────────────────────────── */
 
 function MilestoneReceipt({ visible, milestone, ccy, onDismiss }) {
@@ -207,7 +207,7 @@ function MilestoneReceipt({ visible, milestone, ccy, onDismiss }) {
 }
 
 /* ──────────────────────────────────────────── */
-/* Premium onboarding module                     */
+/* Premium onboarding module                    */
 /* ──────────────────────────────────────────── */
 
 function OnboardingPanel({ needsGoal, needsAccounts, accountsCount = 0, onGoal, onAccounts }) {
@@ -381,7 +381,6 @@ export default function Home() {
   const totalCents = useMemo(() => toCents(total), [total])
   const ccy = useMemo(() => data?.base_currency || 'GBP', [data])
 
-  // SWR-ish cache for instant paint after refresh
   const DASH_CACHE_KEY = 'wealthapp:dash:3M:v1'
   const hasMountedRef = useRef(false)
   const inflightRef = useRef(null)
@@ -441,14 +440,12 @@ export default function Home() {
     async ({ reason = 'load', forceOverlay = false } = {}) => {
       setError(null)
 
-      // StrictMode dev double-effect guard
       const now = Date.now()
       if (reason === 'effect' && now - lastLoadAtRef.current < 500) return null
       lastLoadAtRef.current = now
 
       if (inflightRef.current) return inflightRef.current
 
-      // seed cache on first mount (instant)
       if (!hasMountedRef.current) {
         hasMountedRef.current = true
         const cached = readDashCache()
@@ -459,7 +456,6 @@ export default function Home() {
         }
       }
 
-      // delayed overlay for refreshes
       let overlayTimer = null
       if (forceOverlay || !data) setLoading(true)
       else overlayTimer = window.setTimeout(() => setLoading(true), 150)
@@ -500,7 +496,11 @@ export default function Home() {
             if (reached > last) {
               setLastCelebrated(reached)
 
-              const payload = { milestone: reached, total_at_time_cents: nextTotalCents, created_at: Date.now() }
+              const payload = {
+                milestone: reached,
+                total_at_time_cents: nextTotalCents,
+                created_at: Date.now(),
+              }
               setPendingCelebration(payload)
               setPendingCelebrate(payload)
               setCelebrateVisible(false)
@@ -597,6 +597,22 @@ export default function Home() {
       : 0
   const positive = sparkValues.length >= 2 ? delta >= 0 : true
 
+  const dashboardGoal =
+    data?.primary_goal &&
+    (data.primary_goal.id || data.primary_goal.name) &&
+    Number(data.primary_goal?.target_amount || 0) > 0
+      ? data.primary_goal
+      : null
+
+  const appGoal =
+    primaryGoal &&
+    (primaryGoal.id || primaryGoal.name) &&
+    Number(primaryGoal?.target_amount || 0) > 0
+      ? primaryGoal
+      : null
+
+  const retirementGoal = appGoal || dashboardGoal
+
   const savedMilestoneTarget = Number(data.goal || 0) || 0
   const hasSavedMilestone = savedMilestoneTarget > 0
   const milestoneAchieved = hasSavedMilestone && total >= savedMilestoneTarget
@@ -608,10 +624,6 @@ export default function Home() {
 
   const milestoneProgressPct = hasMilestone ? Math.min(100, (total / activeMilestoneTarget) * 100) : 0
   const milestoneRemaining = hasMilestone ? Math.max(activeMilestoneTarget - total, 0) : 0
-
-  const rawGoal = primaryGoal || null
-  const retirementGoal =
-    rawGoal && (rawGoal.id || rawGoal.name) && Number(rawGoal?.target_amount || 0) > 0 ? rawGoal : null
 
   const retirementTarget = Number(retirementGoal?.target_amount || 0)
   const retirementProgress = retirementTarget > 0 ? Math.min(100, (total / retirementTarget) * 100) : null
@@ -661,7 +673,7 @@ export default function Home() {
       : ''
 
   const accountsCount = Number(data?.accounts_count ?? 0) || 0
-  const hasGoal = !!data?.primary_goal
+  const hasGoal = !!retirementGoal
   const needsGoal = !hasGoal
   const needsAccounts = accountsCount === 0
   const showOnboarding = needsGoal || needsAccounts
@@ -686,7 +698,6 @@ export default function Home() {
         />
       ) : null}
 
-      {/* Hero */}
       <div className={`hero-panel relative rounded-3xl p-7 sm:p-10 ${heroRing}`}>
         <div className="hero-glow absolute top-[-80px] right-[-40px] w-[350px] h-[350px] bg-accent/[.05] dark:bg-accent/[.07] rounded-full blur-[120px] pointer-events-none" />
 

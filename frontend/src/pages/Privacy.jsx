@@ -129,7 +129,7 @@ export default function Privacy() {
               <h2 className="text-sm font-semibold text-ink dark:text-white">Contact</h2>
               <p className="mt-2 text-ink-muted dark:text-white/60">
                 For privacy questions or requests, contact us at:{' '}
-                <span className="text-ink dark:text-white/80">support@yourdomain.com</span>
+                <span className="text-ink dark:text-white/80">support@getpaddock.com</span>
               </p>
             </section>
           </div>

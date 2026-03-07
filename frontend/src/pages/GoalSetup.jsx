@@ -1,6 +1,6 @@
 // frontend/src/pages/GoalSetup.jsx
 import React, { useState } from 'react'
-import { api } from '../api'
+import { api, invalidatePath } from '../api'
 import { useApp } from '../App'
 import { track } from '../track'
 import { Target } from 'lucide-react'
@@ -13,7 +13,7 @@ function toNumber(input, fallback = null) {
 }
 
 export default function GoalSetup({ onComplete }) {
-  const { baseCurrency, showToast, setPage } = useApp()
+  const { baseCurrency, showToast, setPage, bumpData } = useApp()
 
   const [form, setForm] = useState({
     name: 'Independence',
@@ -58,22 +58,23 @@ export default function GoalSetup({ onComplete }) {
         is_primary: true,
       }
 
-      // Create goal (no premature navigation)
       const goal = await api('/goals', {
         method: 'POST',
         body: payload,
       })
 
-      // Track only after success (fire-and-forget)
-      track('goal_created', { source: 'goal_setup' })
+      invalidatePath('/goals')
+      invalidatePath('/dashboard')
+      invalidatePath('/forecast')
+      invalidatePath('/settings')
+      bumpData?.()
 
+      track('goal_created', { source: 'goal_setup' })
       showToast('Goal created')
 
-      // Next step: add first account
-      setPage('accounts')
-
-      // Let parent lock state immediately for routing
+      // Update parent/app state first, then route home and let Home decide what's next.
       onComplete?.(goal)
+      setPage('home')
     } catch (e) {
       const msg =
         e?.detail ||
@@ -102,8 +103,8 @@ export default function GoalSetup({ onComplete }) {
           Set your primary goal
         </h1>
         <p className="text-sm text-ink-muted dark:text-white/40 mt-3 leading-relaxed max-w-sm mx-auto">
-Set a target that makes work optional. We’ll use it to shape your projections and scenarios.
-</p>
+          Set a target that makes work optional. We’ll use it to shape your projections and scenarios.
+        </p>
       </div>
 
       <div className="bg-white dark:bg-surface-dark-2 rounded-3xl shadow-card border border-black/[.05] dark:border-white/[.06] p-7 sm:p-9">
@@ -148,93 +149,94 @@ Set a target that makes work optional. We’ll use it to shape your projections 
           </div>
 
           <div>
-  <label className={lbl}>Target amount ({baseCurrency})</label>
+            <label className={lbl}>Target amount ({baseCurrency})</label>
 
-  <input
-    value={form.target_amount}
-    onChange={(e) => update('target_amount', e.target.value)}
-    className={inp}
-    placeholder="1,000,000"
-    inputMode="decimal"
-  />
+            <input
+              value={form.target_amount}
+              onChange={(e) => update('target_amount', e.target.value)}
+              className={inp}
+              placeholder="1,000,000"
+              inputMode="decimal"
+            />
 
-<p className="text-xs text-ink-muted/50 dark:text-white/25 mt-2">
-  The amount you’d like to reach by your target age.
-</p>
+            <p className="text-xs text-ink-muted/50 dark:text-white/25 mt-2">
+              The amount you’d like to reach by your target age.
+            </p>
 
-<div className="mt-3 rounded-2xl border border-black/[.06] dark:border-white/[.08] bg-black/[.02] dark:bg-white/[.03] p-4">
-  <div className="flex items-start justify-between gap-3">
-    <div>
-      <div className="text-xs font-semibold text-ink-3 dark:text-white/50 tracking-wide">
-        Estimate
-      </div>
-      <div className="text-xs text-ink-muted/60 dark:text-white/30 mt-1">
-        A common rule of thumb is <span className="font-medium">25× annual spending</span>.
-      </div>
-    </div>
+            <div className="mt-3 rounded-2xl border border-black/[.06] dark:border-white/[.08] bg-black/[.02] dark:bg-white/[.03] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs font-semibold text-ink-3 dark:text-white/50 tracking-wide">
+                    Estimate
+                  </div>
+                  <div className="text-xs text-ink-muted/60 dark:text-white/30 mt-1">
+                    A common rule of thumb is <span className="font-medium">25× annual spending</span>.
+                  </div>
+                </div>
 
-    <button
-      type="button"
-      onClick={() => setShow25x((v) => !v)}
-      className="text-xs font-semibold text-accent hover:underline whitespace-nowrap"
-    >
-      {show25x ? 'Hide' : 'Use 25×'}
-    </button>
-  </div>
+                <button
+                  type="button"
+                  onClick={() => setShow25x((v) => !v)}
+                  className="text-xs font-semibold text-accent hover:underline whitespace-nowrap"
+                >
+                  {show25x ? 'Hide' : 'Use 25×'}
+                </button>
+              </div>
 
-  {show25x && (
-    <div className="mt-4 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
-      <div>
-        <label className="block text-xs text-ink-muted/50 dark:text-white/25 mb-1">
-          Annual spending
-        </label>
-        <input
-          value={annualSpend}
-          onChange={(e) => {
-            const v = e.target.value
-            setAnnualSpend(v)
-            const clean = Number(String(v).replace(/,/g, ''))
-            if (!isNaN(clean) && clean > 0) {
-              update('target_amount', String(Math.round(clean * 25)))
-            }
-          }}
-          className={inp}
-          placeholder="40,000"
-          inputMode="decimal"
-        />
-      </div>
+              {show25x && (
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+                  <div>
+                    <label className="block text-xs text-ink-muted/50 dark:text-white/25 mb-1">
+                      Annual spending
+                    </label>
+                    <input
+                      value={annualSpend}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setAnnualSpend(v)
+                        const clean = Number(String(v).replace(/,/g, ''))
+                        if (!isNaN(clean) && clean > 0) {
+                          update('target_amount', String(Math.round(clean * 25)))
+                        }
+                      }}
+                      className={inp}
+                      placeholder="40,000"
+                      inputMode="decimal"
+                    />
+                  </div>
 
-      <div className="text-xs text-ink-muted/60 dark:text-white/30 sm:pb-3">
-        ={' '}
-        <span className="font-medium text-ink dark:text-white">
-          {(() => {
-            const clean = Number(String(annualSpend).replace(/,/g, ''))
-            if (!Number.isFinite(clean) || clean <= 0) return '—'
-            return (Math.round(clean * 25)).toLocaleString()
-          })()}
-        </span>{' '}
-        {baseCurrency}
-      </div>
+                  <div className="text-xs text-ink-muted/60 dark:text-white/30 sm:pb-3">
+                    ={' '}
+                    <span className="font-medium text-ink dark:text-white">
+                      {(() => {
+                        const clean = Number(String(annualSpend).replace(/,/g, ''))
+                        if (!Number.isFinite(clean) || clean <= 0) return '—'
+                        return Math.round(clean * 25).toLocaleString()
+                      })()}
+                    </span>{' '}
+                    {baseCurrency}
+                  </div>
 
-      <div className="sm:col-span-2 flex items-center justify-between">
-        <div className="text-[11px] text-ink-muted/50 dark:text-white/25">
-          This is a rough planning shortcut — you can refine assumptions later.
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setAnnualSpend('')
-            setShow25x(false)
-          }}
-          className="text-[11px] font-semibold text-ink-muted/60 dark:text-white/30 hover:underline"
-        >
-          Reset
-        </button>
-      </div>
-    </div>
-  )}
-</div>
-</div>
+                  <div className="sm:col-span-2 flex items-center justify-between">
+                    <div className="text-[11px] text-ink-muted/50 dark:text-white/25">
+                      This is a rough planning shortcut — you can refine assumptions later.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAnnualSpend('')
+                        setShow25x(false)
+                      }}
+                      className="text-[11px] font-semibold text-ink-muted/60 dark:text-white/30 hover:underline"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           <div>
             <label className={lbl}>Expected annual return (%)</label>
             <input
@@ -245,11 +247,11 @@ Set a target that makes work optional. We’ll use it to shape your projections 
               inputMode="decimal"
             />
             <p className="text-xs text-ink-muted/50 dark:text-white/25 mt-2">
-  A long-term assumption used for projections. You can change this anytime.
-</p>
-<p className="text-xs text-ink-muted/50 dark:text-white/25 mt-1">
-  Many people use 4–7% for long-term planning.
-</p>
+              A long-term assumption used for projections. You can change this anytime.
+            </p>
+            <p className="text-xs text-ink-muted/50 dark:text-white/25 mt-1">
+              Many people use 4–7% for long-term planning.
+            </p>
           </div>
 
           <button
@@ -271,10 +273,11 @@ Set a target that makes work optional. We’ll use it to shape your projections 
         onClick={() => {
           track('goal_setup_skipped')
           onComplete?.(null)
+          setPage('home')
         }}
         className="block mx-auto mt-4 text-sm text-ink-muted/50 dark:text-white/25 hover:text-ink-muted dark:hover:text-white/40 transition-colors"
       >
-        Skip for now — I'll set a goal later
+        Skip for now — I&apos;ll set a goal later
       </button>
     </div>
   )
