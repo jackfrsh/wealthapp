@@ -1,27 +1,30 @@
 // frontend/src/pages/Terms.jsx
-import React from 'react'
+import React, { useCallback } from 'react'
 import { useApp } from '../App'
 import Card from '../components/Card'
 import { ArrowLeft } from 'lucide-react'
 import { useSEO } from '../useSEO'
 
 export default function Terms() {
-  const { setPage } = useApp()
+  const { setPage, authed } = useApp()
 
   useSEO({
     title: 'Terms — Paddock',
-    description: 'Terms of Service for Paddock. We offer a free tier with limited features and a paid Pro subscription.',
+    description:
+      'Terms of Service for Paddock. We offer a free tier with limited features and a paid Pro subscription.',
     canonicalPath: '/terms',
   })
 
-  const goBack = () => {
+  const handleClose = useCallback(() => {
     try {
-      if (window.history.length > 1) window.history.back()
-      else setPage('landing', { replace: true })
-    } catch {
-      setPage('landing', { replace: true })
-    }
-  }
+      if (window.history.length > 1) {
+        window.history.back()
+        return
+      }
+    } catch {}
+
+    setPage(authed ? 'home' : 'landing')
+  }, [authed, setPage])
 
   const Section = ({ title, children }) => (
     <div className="mt-8 first:mt-0">
@@ -33,11 +36,11 @@ export default function Terms() {
   )
 
   return (
-    <div className="min-h-screen px-4 sm:px-6 lg:px-8 py-10">
+    <div className="min-h-screen px-4 sm:px-6 lg:px-8 py-10 bg-surface dark:bg-surface-dark">
       <div className="mx-auto max-w-3xl space-y-6">
         <button
           type="button"
-          onClick={goBack}
+          onClick={handleClose}
           className="inline-flex items-center gap-2 text-sm font-semibold text-ink-muted dark:text-white/40 hover:text-ink dark:hover:text-white transition-colors"
         >
           <ArrowLeft size={16} /> Back
@@ -95,8 +98,8 @@ export default function Terms() {
               <p>You must be at least 18 years old to use Paddock.</p>
               <p>
                 You must not use automated tools to create accounts, attempt to access
-                other users&apos; data, or otherwise abuse the Service (including trials,
-                limits, or pricing).
+                other users&apos; data, or otherwise abuse the Service, including trials,
+                limits, or pricing.
               </p>
             </Section>
 
@@ -144,13 +147,13 @@ export default function Terms() {
                 You can request deletion of your account and associated personal data at
                 any time by contacting us. We aim to delete or anonymise your data within
                 30 days, except where we need to keep certain records for legal,
-                accounting, or security reasons (for example, billing records).
+                accounting, or security reasons, for example billing records.
               </p>
             </Section>
 
             <Section title="5. Acceptable use">
               <p>
-                You agree not to: reverse-engineer or scrape the Service, use automated
+                You agree not to reverse-engineer or scrape the Service, use automated
                 tools to create accounts or submit data, attempt to access other users&apos;
                 data, or use Paddock for any illegal purpose.
               </p>

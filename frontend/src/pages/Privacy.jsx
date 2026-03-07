@@ -1,12 +1,12 @@
 // frontend/src/pages/Privacy.jsx
-import React from 'react'
+import React, { useCallback } from 'react'
 import { X } from 'lucide-react'
 import { useApp } from '../App'
 import Card from '../components/Card'
 import { useSEO } from '../useSEO'
 
 export default function Privacy() {
-  const { setPage } = useApp()
+  const { setPage, authed } = useApp()
 
   useSEO({
     title: 'Privacy — Paddock',
@@ -15,16 +15,26 @@ export default function Privacy() {
     canonicalPath: '/privacy',
   })
 
+  const handleClose = useCallback(() => {
+    try {
+      if (window.history.length > 1) {
+        window.history.back()
+        return
+      }
+    } catch {}
+
+    setPage(authed ? 'home' : 'landing')
+  }, [authed, setPage])
+
   return (
     <div className="min-h-screen bg-surface dark:bg-surface-dark">
-      {/* Top bar (Apple-style) */}
       <div className="sticky top-0 z-20 bg-white/70 dark:bg-surface-dark/70 backdrop-blur-xl border-b border-black/[.05] dark:border-white/[.06]">
         <div className="mx-auto max-w-3xl px-5 sm:px-6 h-14 flex items-center justify-between">
           <div className="w-10" />
           <div className="text-sm font-semibold text-ink dark:text-white">Privacy</div>
           <button
             type="button"
-            onClick={() => setPage('landing')}
+            onClick={handleClose}
             className="w-10 h-10 grid place-items-center rounded-2xl border border-black/[.06] dark:border-white/[.08] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors"
             aria-label="Close"
             title="Close"
@@ -34,7 +44,6 @@ export default function Privacy() {
         </div>
       </div>
 
-      {/* Content */}
       <div className="mx-auto max-w-3xl px-5 sm:px-6 py-8 sm:py-10">
         <Card className="p-7 sm:p-8">
           <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-ink dark:text-white">
@@ -61,7 +70,7 @@ export default function Privacy() {
                 </li>
                 <li>
                   <span className="text-ink dark:text-white/80">Usage & diagnostics:</span> basic logs needed to operate
-                  and secure the service (e.g. error logs, performance telemetry).
+                  and secure the service, for example error logs and performance telemetry.
                 </li>
               </ul>
             </section>
@@ -77,25 +86,25 @@ export default function Privacy() {
             <section>
               <h2 className="text-sm font-semibold text-ink dark:text-white">How we use your data</h2>
               <ul className="mt-2 list-disc pl-5 space-y-1 text-ink-muted dark:text-white/60">
-                <li>To provide core app functionality (dashboards, projections, totals).</li>
-                <li>To secure the service and prevent abuse (e.g. rate-limiting, fraud prevention).</li>
-                <li>To improve reliability (debugging and performance monitoring).</li>
+                <li>To provide core app functionality, including dashboards, projections, and totals.</li>
+                <li>To secure the service and prevent abuse, including rate-limiting and fraud prevention.</li>
+                <li>To improve reliability through debugging and performance monitoring.</li>
               </ul>
             </section>
 
             <section>
               <h2 className="text-sm font-semibold text-ink dark:text-white">Legal basis</h2>
               <p className="mt-2 text-ink-muted dark:text-white/60">
-                Where applicable under UK GDPR, we process data to provide the service (contract), to meet legitimate
-                interests such as keeping the service secure, and where required, with your consent.
+                Where applicable under UK GDPR, we process data to provide the service, to meet legitimate interests
+                such as keeping the service secure, and where required, with your consent.
               </p>
             </section>
 
             <section>
               <h2 className="text-sm font-semibold text-ink dark:text-white">Data storage & processors</h2>
               <p className="mt-2 text-ink-muted dark:text-white/60">
-                We use third-party infrastructure providers to host and operate the service (for example authentication
-                and hosting). These providers process data only to provide their services to us.
+                We use third-party infrastructure providers to host and operate the service, for example authentication
+                and hosting. These providers process data only to provide their services to us.
               </p>
             </section>
 
@@ -126,11 +135,10 @@ export default function Privacy() {
           </div>
         </Card>
 
-        {/* Bottom close (nice on mobile) */}
         <div className="mt-6 flex justify-center">
           <button
             type="button"
-            onClick={() => setPage('landing')}
+            onClick={handleClose}
             className="h-11 px-6 rounded-2xl text-sm font-semibold border border-black/[.08] dark:border-white/[.10] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors text-ink dark:text-white"
           >
             Done
