@@ -129,6 +129,7 @@ def create_checkout(
         "client_reference_id": str(current_user.id),
         "metadata": metadata,
         "subscription_data": subscription_data,
+        "allow_promotion_codes": True,
     }
 
     if customer_id:
@@ -151,10 +152,11 @@ def create_checkout(
 
 @router.post("/checkout-session")
 def checkout_session_alias(
+    body: CheckoutBody = CheckoutBody(),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_session),
 ):
-    return create_checkout(current_user=current_user, db=db)
+    return create_checkout(body=body, current_user=current_user, db=db)
 
 
 # ─────────────────────────────────────────────
