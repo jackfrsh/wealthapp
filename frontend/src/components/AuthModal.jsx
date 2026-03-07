@@ -1,6 +1,5 @@
-// frontend/src/components/AuthModal.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { X } from 'lucide-react'
+import { Check, X as XIcon } from 'lucide-react'
 import { supabase } from '../supabase'
 import UpgradeButton from './UpgradeButton'
 import Card from './Card'
@@ -18,16 +17,111 @@ function parseRecoveryFromHash() {
   return null
 }
 
+function getPasswordChecks(value) {
+  return {
+    length: value.length >= 8,
+    lower: /[a-z]/.test(value),
+    upper: /[A-Z]/.test(value),
+    number: /[0-9]/.test(value),
+  }
+}
+
+function isStrongPassword(value) {
+  const checks = getPasswordChecks(value)
+  return checks.length && checks.lower && checks.upper && checks.number
+}
+
+function mapAuthErrorMessage(message, fallback = 'Could not complete sign in.') {
+  const msg = String(message || '').toLowerCase()
+
+  if (!msg) return fallback
+
+  if (msg.includes('already registered') || msg.includes('already exists')) {
+    return 'Account already exists — please sign in.'
+  }
+
+  if (msg.includes('invalid login credentials')) {
+    return 'Email or password is incorrect.'
+  }
+
+  if (msg.includes('email not confirmed')) {
+    return 'Please confirm your email before signing in.'
+  }
+
+  if (
+    msg.includes('password should') ||
+    msg.includes('password must') ||
+    msg.includes('uppercase') ||
+    msg.includes('lowercase')
+  ) {
+    return 'Use at least 8 characters, including uppercase and lowercase letters and a number.'
+  }
+
+  if (msg.includes('expired') && msg.includes('link')) {
+    return 'This link has expired. Please request a new one.'
+  }
+
+  return fallback
+}
+
+function PasswordChecklist({ value, className = '' }) {
+  const checks = getPasswordChecks(value)
+
+  const itemClass = (ok) =>
+    [
+      'flex items-center gap-2 text-[12px] leading-relaxed transition-colors',
+      ok
+  ? 'text-ink dark:text-white'
+  : 'text-ink-muted/70 dark:text-white/38'
+    ].join(' ')
+
+  const Icon = ({ ok }) =>
+    ok ? <Check size={13} className="shrink-0" /> : <div className="h-[13px] w-[13px] rounded-full border border-current/35 shrink-0" />
+
+  return (
+    <div
+      className={[
+        'mt-3 rounded-2xl border border-black/[.06] dark:border-white/[.08] bg-black/[.02] dark:bg-white/[.04] px-3.5 py-3 space-y-2',
+        className,
+      ].join(' ')}
+    >
+      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-muted/55 dark:text-white/28">
+        Password requirements
+      </div>
+
+      <div className={itemClass(checks.length)}>
+        <Icon ok={checks.length} />
+        <span>At least 8 characters</span>
+      </div>
+
+      <div className={itemClass(checks.upper)}>
+        <Icon ok={checks.upper} />
+        <span>One uppercase letter</span>
+      </div>
+
+      <div className={itemClass(checks.lower)}>
+        <Icon ok={checks.lower} />
+        <span>One lowercase letter</span>
+      </div>
+
+      <div className={itemClass(checks.number)}>
+        <Icon ok={checks.number} />
+        <span>One number</span>
+      </div>
+    </div>
+  )
+}
+
 export default function AuthModal({
   open,
   onClose,
-  initial = 'register', // 'login' | 'register'
-  forceMode = null, // 'recovery' | null
+  initial = 'register',
+  forceMode = null,
 }) {
   const panelRef = useRef(null)
   const firstFieldRef = useRef(null)
 
-  const [mode, setMode] = useState(initial) // 'login' | 'register'
+  const [mode, setMode] = useState(initial)
   const [recovery, setRecovery] = useState(forceMode === 'recovery')
 
   const [email, setEmail] = useState('')
@@ -40,7 +134,6 @@ export default function AuthModal({
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
 
-  // Keep modal state in sync when opened
   useEffect(() => {
     if (!open) return
     setMode(initial)
@@ -51,7 +144,6 @@ export default function AuthModal({
     requestAnimationFrame(() => firstFieldRef.current?.focus?.())
   }, [open, initial, forceMode])
 
-  // Smooth open/close: lock scroll + escape + focus trap (simple)
   useEffect(() => {
     if (!open) return
 
@@ -86,7 +178,6 @@ export default function AuthModal({
     }
   }, [open, onClose])
 
-  // Handle recovery links when modal is open
   useEffect(() => {
     if (!open) return
     if (!supabase) return
@@ -129,7 +220,7 @@ export default function AuthModal({
         if (cancelled) return
         setRecovery(true)
         setMode('login')
-        setError(e?.message || 'Password recovery link is invalid or expired.')
+        setError(mapAuthErrorMessage(e?.message, 'Password recovery link is invalid or expired.'))
       }
     }
 
@@ -141,12 +232,14 @@ export default function AuthModal({
 
   const canAuth = useMemo(() => {
     const e = email.trim()
-    return e.length > 3 && e.includes('@') && password.length >= 8 && !loading
-  }, [email, password, loading])
+    if (!e || !e.includes('@') || loading) return false
+    if (mode === 'login') return password.length >= 8
+    return isStrongPassword(password)
+  }, [email, password, loading, mode])
 
   const canSetPassword = useMemo(() => {
     return (
-      newPassword.length >= 8 &&
+      isStrongPassword(newPassword) &&
       confirmPassword.length >= 8 &&
       newPassword === confirmPassword &&
       !loading
@@ -161,27 +254,38 @@ export default function AuthModal({
   const submitAuth = async () => {
     setError('')
     setNotice('')
+
     if (!supabase) {
       setError('Auth is not configured. Check VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY.')
       return
     }
+
     const clean = email.trim()
+
     if (!clean || !password) {
       setError('Enter your email and password.')
       return
     }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.')
+
+    if (mode === 'register' && !isStrongPassword(password)) {
+      setError('Use at least 8 characters, including uppercase and lowercase letters and a number.')
+      return
+    }
+
+    if (mode === 'login' && password.length < 8) {
+      setError('Enter your password to continue.')
       return
     }
 
     setLoading(true)
+
     try {
       if (mode === 'register') {
         const { error: signUpError } = await supabase.auth.signUp({
           email: clean,
           password,
         })
+
         if (signUpError) {
           const msg = String(signUpError.message || '').toLowerCase()
           if (msg.includes('already registered') || msg.includes('already exists')) {
@@ -191,6 +295,7 @@ export default function AuthModal({
           }
           throw signUpError
         }
+
         setMode('login')
         setNotice('Check your email to confirm your account, then sign in.')
         return
@@ -204,7 +309,7 @@ export default function AuthModal({
 
       close()
     } catch (e) {
-      setError(e?.message || 'Sign in failed.')
+      setError(mapAuthErrorMessage(e?.message, mode === 'login' ? 'Could not sign in.' : 'Could not create your account.'))
     } finally {
       setLoading(false)
     }
@@ -213,23 +318,26 @@ export default function AuthModal({
   const sendResetEmail = async () => {
     setError('')
     setNotice('')
+
     const clean = email.trim()
     if (!clean) {
-      setNotice('Enter your email first, then tap “Forgot password?”.')
+      setNotice('Enter your email first, then select “Forgot password?”.')
       return
     }
+
     if (!supabase) {
       setError('Auth is not configured. Check your env vars.')
       return
     }
+
     setLoading(true)
     try {
       const redirectTo = `${window.location.origin}/?mode=recovery`
       const { error } = await supabase.auth.resetPasswordForEmail(clean, { redirectTo })
       if (error) throw error
-      setNotice('Password reset email sent. Check your inbox (and spam).')
+      setNotice('Password reset email sent. Check your inbox and spam folder.')
     } catch (e) {
-      setError(e?.message || 'Could not send password reset email.')
+      setError(mapAuthErrorMessage(e?.message, 'Could not send password reset email.'))
     } finally {
       setLoading(false)
     }
@@ -238,14 +346,17 @@ export default function AuthModal({
   const submitNewPassword = async () => {
     setError('')
     setNotice('')
+
     if (!supabase) {
       setError('Auth is not configured. Check your env vars.')
       return
     }
-    if (newPassword.length < 8) {
-      setError('Password must be at least 8 characters.')
+
+    if (!isStrongPassword(newPassword)) {
+      setError('Use at least 8 characters, including uppercase and lowercase letters and a number.')
       return
     }
+
     if (newPassword !== confirmPassword) {
       setError('Passwords do not match.')
       return
@@ -257,6 +368,7 @@ export default function AuthModal({
       if (!sess?.session) {
         throw new Error('Reset session missing. Please reopen the reset link or request a new one.')
       }
+
       const { error } = await supabase.auth.updateUser({ password: newPassword })
       if (error) throw error
 
@@ -270,7 +382,7 @@ export default function AuthModal({
       setMode('login')
       setNotice('Password updated. Please sign in.')
     } catch (e) {
-      setError(e?.message || 'Could not update password.')
+      setError(mapAuthErrorMessage(e?.message, 'Could not update password.'))
     } finally {
       setLoading(false)
     }
@@ -294,13 +406,11 @@ export default function AuthModal({
 
   return (
     <div className="fixed inset-0 z-[1000]" aria-modal="true" role="dialog" aria-label="Sign in">
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/35 dark:bg-black/55 backdrop-blur-sm animate-[fadeIn_.18s_ease-out]"
         onMouseDown={close}
       />
 
-      {/* Panel wrapper */}
       <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-6">
         <div
           ref={panelRef}
@@ -308,7 +418,6 @@ export default function AuthModal({
           className="w-full max-w-[520px] animate-[modalIn_.22s_cubic-bezier(.2,.8,.2,1)]"
         >
           <Card className="p-0 overflow-hidden bg-white/90 dark:bg-surface-dark-2 border border-black/[.08] dark:border-white/[.10] shadow-[0_24px_60px_rgba(0,0,0,.18)]">
-            {/* Header */}
             <div className="px-6 sm:px-7 py-5 border-b border-black/[.06] dark:border-white/[.07] flex items-center justify-between">
               <div className="min-w-0">
                 <div className="font-display text-xl text-ink dark:text-white tracking-tight">
@@ -327,15 +436,13 @@ export default function AuthModal({
                            grid place-items-center"
                 aria-label="Close"
               >
-                <X size={16} className="opacity-80" />
+                <XIcon size={16} className="opacity-80" />
               </button>
             </div>
 
-            {/* Body */}
             <div className="p-6 sm:p-7">
               {!recovery ? (
                 <>
-                  {/* Tabs */}
                   <div className="flex border-b border-black/[.06] dark:border-white/[.07] mb-6">
                     <button
                       type="button"
@@ -361,12 +468,12 @@ export default function AuthModal({
                     </button>
                   </div>
 
-                  {/* Notices */}
                   {notice && !error && (
                     <div className="text-sm text-ink bg-black/[.03] dark:bg-white/[.06] px-4 py-3 rounded-2xl mb-4 animate-[fadeIn_.18s_ease-out]">
                       {notice}
                     </div>
                   )}
+
                   {error && (
                     <div className="text-sm text-danger bg-danger-light dark:bg-danger/10 px-4 py-3 rounded-2xl mb-4 animate-[fadeIn_.18s_ease-out]">
                       {error}
@@ -391,24 +498,29 @@ export default function AuthModal({
                     </div>
 
                     <div>
-  <div className="text-xs font-semibold text-ink-3 dark:text-white/50 mb-2">
-    Password
-  </div>
-  <input
-    className={inp}
-    value={password}
-    onChange={(e) => setPassword(e.target.value)}
-    placeholder="At least 8 characters"
-    type="password"
-    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-    onKeyDown={(e) => e.key === 'Enter' && submitAuth()}
-  />
-  {mode !== 'login' && (
-    <p className="mt-2 text-[12px] leading-relaxed text-ink-3/70 dark:text-white/40">
-      Use 8+ characters with an uppercase letter, lowercase letter, and number.
-    </p>
-  )}
-</div>
+                      <div className="text-xs font-semibold text-ink-3 dark:text-white/50 mb-2">
+                        Password
+                      </div>
+
+                      <input
+                        className={inp}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder={mode === 'login' ? 'Enter your password' : 'Create a strong password'}
+                        type="password"
+                        autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                        onKeyDown={(e) => e.key === 'Enter' && submitAuth()}
+                      />
+
+                      {mode !== 'login' ? (
+                        <>
+                          <p className="mt-2 text-[12px] leading-relaxed text-ink-3/70 dark:text-white/40">
+                            Use a strong password to protect your account.
+                          </p>
+                          <PasswordChecklist value={password} />
+                        </>
+                      ) : null}
+                    </div>
 
                     <UpgradeButton
                       onClick={submitAuth}
@@ -443,7 +555,7 @@ export default function AuthModal({
                   <div className="mb-5">
                     <div className="text-sm font-semibold text-ink dark:text-white">Reset password</div>
                     <div className="text-xs text-ink-muted/60 dark:text-white/30 mt-1">
-                      Choose a new password for your account.
+                      Choose a strong new password for your account.
                     </div>
                   </div>
 
@@ -452,6 +564,7 @@ export default function AuthModal({
                       {notice}
                     </div>
                   )}
+
                   {error && (
                     <div className="text-sm text-danger bg-danger-light dark:bg-danger/10 px-4 py-3 rounded-2xl mb-4 animate-[fadeIn_.18s_ease-out]">
                       {error}
@@ -468,11 +581,13 @@ export default function AuthModal({
                         className={inp}
                         value={newPassword}
                         onChange={(e) => setNewPasswordValue(e.target.value)}
-                        placeholder="At least 8 characters"
+                        placeholder="Create a strong password"
                         type="password"
                         autoComplete="new-password"
                         onKeyDown={(e) => e.key === 'Enter' && submitNewPassword()}
                       />
+
+                      <PasswordChecklist value={newPassword} />
                     </div>
 
                     <div>
@@ -488,6 +603,19 @@ export default function AuthModal({
                         autoComplete="new-password"
                         onKeyDown={(e) => e.key === 'Enter' && submitNewPassword()}
                       />
+
+                      {confirmPassword.length > 0 && (
+                        <div
+                          className={[
+                            'mt-2 text-[12px]',
+                            newPassword === confirmPassword
+                              ? 'text-ink dark:text-white'
+                              : 'text-ink-muted/70 dark:text-white/38'
+                          ].join(' ')}
+                        >
+                          {newPassword === confirmPassword ? 'Passwords match.' : 'Passwords must match.'}
+                        </div>
+                      )}
                     </div>
 
                     <UpgradeButton

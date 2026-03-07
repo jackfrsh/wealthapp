@@ -1,8 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { supabase } from '../supabase'
 import UpgradeButton from '../components/UpgradeButton'
 import { useApp } from '../App'
-import { Shield, Globe, BarChart2, Lock } from 'lucide-react'
+import { Shield, Globe, BarChart2, Lock, Check } from 'lucide-react'
 
 function parseRecoveryFromHash() {
   const raw = window.location.hash || ''
@@ -28,6 +28,53 @@ function getAuthModeFromUrl() {
   }
 }
 
+function getPasswordChecks(value) {
+  return {
+    length: value.length >= 8,
+    lower: /[a-z]/.test(value),
+    upper: /[A-Z]/.test(value),
+    number: /[0-9]/.test(value),
+  }
+}
+
+function isStrongPassword(value) {
+  const checks = getPasswordChecks(value)
+  return checks.length && checks.lower && checks.upper && checks.number
+}
+
+function mapAuthErrorMessage(message, fallback = 'Could not complete sign in.') {
+  const msg = String(message || '').toLowerCase()
+
+  if (!msg) return fallback
+
+  if (msg.includes('already registered') || msg.includes('already exists')) {
+    return 'Account already exists — please sign in.'
+  }
+
+  if (msg.includes('invalid login credentials')) {
+    return 'Email or password is incorrect.'
+  }
+
+  if (msg.includes('email not confirmed')) {
+    return 'Please confirm your email before signing in.'
+  }
+
+  if (
+    msg.includes('password should') ||
+    msg.includes('password must') ||
+    msg.includes('uppercase') ||
+    msg.includes('lowercase')
+  ) {
+    return 'Use at least 8 characters, including uppercase and lowercase letters and a number.'
+  }
+
+  if (msg.includes('expired') && msg.includes('link')) {
+    return 'This link has expired. Please request a new one.'
+  }
+
+  return fallback
+}
+
 function FeatureCard({ icon: Icon, title, body }) {
   return (
     <div className="rounded-3xl border border-black/[.05] dark:border-white/[.07] bg-white/72 dark:bg-white/[.04] backdrop-blur-xl p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)] dark:shadow-none">
@@ -36,6 +83,58 @@ function FeatureCard({ icon: Icon, title, body }) {
       </div>
       <h3 className="text-sm font-semibold text-ink dark:text-white mb-1">{title}</h3>
       <p className="text-sm text-ink-muted dark:text-white/35 leading-relaxed">{body}</p>
+    </div>
+  )
+}
+
+function PasswordChecklist({ value, className = '' }) {
+  const checks = getPasswordChecks(value)
+
+  const itemClass = (ok) =>
+    [
+      'flex items-center gap-2 text-[12px] leading-relaxed transition-colors',
+      ok
+  ? 'text-ink dark:text-white'
+  : 'text-ink-muted/70 dark:text-white/38'
+    ].join(' ')
+
+  const Icon = ({ ok }) =>
+    ok ? (
+      <Check size={13} className="shrink-0" />
+    ) : (
+      <div className="h-[13px] w-[13px] rounded-full border border-current/35 shrink-0" />
+    )
+
+  return (
+    <div
+      className={[
+        'mt-3 rounded-2xl border border-black/[.06] dark:border-white/[.08] bg-black/[.02] dark:bg-white/[.04] px-3.5 py-3 space-y-2',
+        className,
+      ].join(' ')}
+    >
+      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-muted/55 dark:text-white/28">
+        Password requirements
+      </div>
+
+      <div className={itemClass(checks.length)}>
+        <Icon ok={checks.length} />
+        <span>At least 8 characters</span>
+      </div>
+
+      <div className={itemClass(checks.upper)}>
+        <Icon ok={checks.upper} />
+        <span>One uppercase letter</span>
+      </div>
+
+      <div className={itemClass(checks.lower)}>
+        <Icon ok={checks.lower} />
+        <span>One lowercase letter</span>
+      </div>
+
+      <div className={itemClass(checks.number)}>
+        <Icon ok={checks.number} />
+        <span>One number</span>
+      </div>
     </div>
   )
 }
@@ -120,7 +219,7 @@ export default function AuthPage({ onLogin }) {
         if (cancelled) return
         setRecovery(true)
         setMode('login')
-        setError(e?.message || 'Password recovery link is invalid or expired.')
+        setError(mapAuthErrorMessage(e?.message, 'Password recovery link is invalid or expired.'))
       }
     }
 
@@ -129,6 +228,22 @@ export default function AuthPage({ onLogin }) {
       cancelled = true
     }
   }, [])
+
+  const canSubmit = useMemo(() => {
+    const email = username.trim()
+    if (!email || !email.includes('@') || loading) return false
+    if (mode === 'login') return password.length > 0
+    return isStrongPassword(password)
+  }, [username, password, loading, mode])
+
+  const canSetPassword = useMemo(() => {
+    return (
+      isStrongPassword(newPassword) &&
+      confirmPassword.length > 0 &&
+      newPassword === confirmPassword &&
+      !loading
+    )
+  }, [newPassword, confirmPassword, loading])
 
   const submit = async () => {
     setError('')
@@ -143,10 +258,15 @@ export default function AuthPage({ onLogin }) {
       return
     }
 
+    const email = username.trim()
+
+    if (mode === 'register' && !isStrongPassword(password)) {
+      setError('Use at least 8 characters, including uppercase and lowercase letters and a number.')
+      return
+    }
+
     setLoading(true)
     try {
-      const email = username.trim()
-
       if (mode === 'register') {
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
@@ -187,7 +307,12 @@ export default function AuthPage({ onLogin }) {
         else onLogin(email)
       }
     } catch (e) {
-      setError(e?.message || 'Sign in failed.')
+      setError(
+        mapAuthErrorMessage(
+          e?.message,
+          mode === 'login' ? 'Could not sign in.' : 'Could not create your account.'
+        )
+      )
     } finally {
       setLoading(false)
     }
@@ -214,7 +339,7 @@ export default function AuthPage({ onLogin }) {
       setNotice('Password reset email sent. Check your inbox and spam folder.')
       showToast?.('Password reset email sent.', 'success')
     } catch (e) {
-      setError(e?.message || 'Could not send password reset email.')
+      setError(mapAuthErrorMessage(e?.message, 'Could not send password reset email.'))
     } finally {
       setLoading(false)
     }
@@ -224,8 +349,8 @@ export default function AuthPage({ onLogin }) {
     setError('')
     setNotice('')
 
-    if (!newPassword || newPassword.length < 8) {
-      setError('Password must be at least 8 characters.')
+    if (!isStrongPassword(newPassword)) {
+      setError('Use at least 8 characters, including uppercase and lowercase letters and a number.')
       return
     }
     if (newPassword !== confirmPassword) {
@@ -253,7 +378,7 @@ export default function AuthPage({ onLogin }) {
       setNotice('Password updated. Please sign in.')
       showToast?.('Password updated.', 'success')
     } catch (e) {
-      setError(e?.message || 'Could not update password.')
+      setError(mapAuthErrorMessage(e?.message, 'Could not update password.'))
     } finally {
       setLoading(false)
     }
@@ -316,7 +441,7 @@ export default function AuthPage({ onLogin }) {
           </div>
         </header>
 
-        <div className="relative flex-1 flex items-center justify-center px-4 sm:px-5 py-8 sm:py-16"></div><div className="relative flex-1 flex items-center justify-center px-5 py-10 sm:py-16">
+        <div className="relative flex-1 flex items-center justify-center px-5 py-10 sm:py-16">
           <div className="w-full max-w-[1080px] grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-start lg:items-center">
             <div
               className={`space-y-6 transition-all duration-700 order-1 ${
@@ -423,7 +548,7 @@ export default function AuthPage({ onLogin }) {
                       Reset password
                     </div>
                     <div className="text-xs text-ink-muted/60 dark:text-white/30 mt-1">
-                      Enter a new password for your account.
+                      Enter a strong new password for your account.
                     </div>
                   </div>
                 )}
@@ -465,27 +590,31 @@ export default function AuthPage({ onLogin }) {
                       </div>
 
                       <div>
-  <label className={lbl}>Password</label>
-  <input
-    type="password"
-    value={password}
-    onChange={(e) => setPassword(e.target.value)}
-    className={inp}
-    placeholder="••••••••"
-    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-    name="password"
-    enterKeyHint="go"
-  />
-  {mode !== 'login' && (
-    <p className="mt-2 text-[12px] leading-relaxed text-ink-muted/60 dark:text-white/40">
-      Use 8+ characters with an uppercase letter, lowercase letter, and number.
-    </p>
-  )}
-</div>
+                        <label className={lbl}>Password</label>
+                        <input
+                          type="password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className={inp}
+                          placeholder={mode === 'login' ? 'Enter your password' : 'Create a strong password'}
+                          autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                          name="password"
+                          enterKeyHint="go"
+                        />
+
+                        {mode !== 'login' && (
+                          <>
+                            <p className="mt-2 text-[12px] leading-relaxed text-ink-muted/60 dark:text-white/40">
+                              Use a strong password to protect your account.
+                            </p>
+                            <PasswordChecklist value={password} />
+                          </>
+                        )}
+                      </div>
 
                       <UpgradeButton
                         type="submit"
-                        disabled={loading}
+                        disabled={!canSubmit}
                         className="w-full min-h-[50px] sm:min-h-[52px]"
                         size="md"
                         variant="primary"
@@ -557,11 +686,13 @@ export default function AuthPage({ onLogin }) {
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         className={inp}
-                        placeholder="At least 8 characters"
+                        placeholder="Create a strong password"
                         autoComplete="new-password"
                         name="new-password"
                         enterKeyHint="next"
                       />
+
+                      <PasswordChecklist value={newPassword} />
                     </div>
 
                     <div>
@@ -576,11 +707,24 @@ export default function AuthPage({ onLogin }) {
                         name="confirm-password"
                         enterKeyHint="go"
                       />
+
+                      {confirmPassword.length > 0 && (
+                        <div
+                          className={[
+                            'mt-2 text-[12px]',
+                            newPassword === confirmPassword
+                              ? 'text-ink dark:text-white'
+                              : 'text-ink-muted/70 dark:text-white/38'
+                          ].join(' ')}
+                        >
+                          {newPassword === confirmPassword ? 'Passwords match.' : 'Passwords must match.'}
+                        </div>
+                      )}
                     </div>
 
                     <UpgradeButton
                       type="submit"
-                      disabled={loading}
+                      disabled={!canSetPassword}
                       className="w-full min-h-[50px] sm:min-h-[52px]"
                       size="md"
                       variant="primary"
@@ -608,9 +752,7 @@ export default function AuthPage({ onLogin }) {
               </div>
             </div>
 
-            {!recovery ? (
-              <div className="lg:hidden order-3 pt-1" />
-            ) : null}
+            {!recovery ? <div className="lg:hidden order-3 pt-1" /> : null}
           </div>
         </div>
 
