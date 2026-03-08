@@ -161,15 +161,15 @@ export default function Upgrade() {
 
   // Pro features: concrete + outcome-led
   const proBullets = [
-    'Unlimited accounts (no cap)',
+    'Unlimited accounts',
     '5–40 year projections + milestones',
     'Net-worth trajectory modelling',
     'One-off deposit modelling',
-    'Real-terms modelling (inflation-adjusted view)',
+    'Inflation-adjusted (real terms) view',
     'Scenario peeks (+£100/+£250 per month)',
-    'Optimiser: contribution required to hit your target',
+    'Optimiser: calculates required monthly contribution',
     'One-tap “Set & update” from the Optimiser',
-    'Deeper insights',
+    'What-if scenario comparisons',
   ]
 
   return (
