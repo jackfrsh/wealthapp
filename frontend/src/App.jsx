@@ -31,10 +31,10 @@ import Outlook from './pages/Outlook'
 import Accounts from './pages/Accounts'
 import Settings from './pages/Settings'
 import GoalSetup from './pages/GoalSetup'
+import Upgrade from './pages/Upgrade'
 
 // 💤 Keep rarely-visited pages lazy
 const Insights = React.lazy(() => import('./pages/Insights'))
-const Upgrade = React.lazy(() => import('./pages/Upgrade'))
 const Admin = React.lazy(() => import('./pages/Admin'))
 
 import Toast from './components/Toast'
@@ -54,31 +54,69 @@ class ErrorBoundary extends React.Component {
   static getDerivedStateFromError(error) {
     return { hasError: true, error }
   }
+
   componentDidCatch(error, info) {
     try {
       console.error('ErrorBoundary caught:', error)
       console.error('Component stack:', info?.componentStack)
     } catch {}
+
+    const msg = String(error?.message || '')
+    const isChunkError =
+      msg.includes('Failed to fetch dynamically imported module') ||
+      msg.includes('Importing a module script failed') ||
+      msg.includes('Loading chunk') ||
+      msg.includes('ChunkLoadError')
+
+    if (isChunkError) {
+      try {
+        const reloadKey = 'paddock:chunk-reload-once'
+        const alreadyReloaded = sessionStorage.getItem(reloadKey) === '1'
+
+        if (!alreadyReloaded) {
+          sessionStorage.setItem(reloadKey, '1')
+          window.location.reload()
+          return
+        }
+      } catch {}
+    }
   }
 
   render() {
     if (this.state.hasError) {
+      const msg = String(this.state.error?.message || '')
+      const isChunkError =
+        msg.includes('Failed to fetch dynamically imported module') ||
+        msg.includes('Importing a module script failed') ||
+        msg.includes('Loading chunk') ||
+        msg.includes('ChunkLoadError')
+
       return (
         <div className="min-h-screen flex items-center justify-center bg-surface dark:bg-surface-dark px-6">
           <div className="text-center max-w-md space-y-4">
-            <div className="font-display text-3xl text-ink dark:text-white">Something went wrong</div>
+            <div className="font-display text-3xl text-ink dark:text-white">
+              {isChunkError ? 'Paddock has been updated' : 'Something went wrong'}
+            </div>
+
             <p className="text-sm text-ink-muted dark:text-white/60">
-              An unexpected error occurred. Please refresh the page to continue.
+              {isChunkError
+                ? 'Please refresh to load the latest version and continue.'
+                : 'An unexpected error occurred. Please refresh the page to continue.'}
             </p>
 
-            {this.state.error ? (
+            {!isChunkError && this.state.error ? (
               <pre className="mt-3 text-left text-xs bg-black/5 dark:bg-white/5 p-3 rounded-xl overflow-auto max-h-[40vh]">
                 {String(this.state.error?.stack || this.state.error?.message || this.state.error)}
               </pre>
             ) : null}
 
             <button
-              onClick={() => window.location.reload()}
+              onClick={() => {
+                try {
+                  sessionStorage.removeItem('paddock:chunk-reload-once')
+                } catch {}
+                window.location.reload()
+              }}
               className="mt-4 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors"
               type="button"
             >
@@ -88,6 +126,7 @@ class ErrorBoundary extends React.Component {
         </div>
       )
     }
+
     return this.props.children
   }
 }
@@ -639,6 +678,8 @@ export default function App() {
         return <Outlook />
       case 'accounts':
         return <Accounts />
+        case 'upgrade':
+  return <Upgrade />
       case 'settings':
         return <Settings />
       case 'goal_setup':
@@ -656,12 +697,6 @@ export default function App() {
         return (
           <Suspense fallback={<LazyFallback />}>
             <Insights />
-          </Suspense>
-        )
-      case 'upgrade':
-        return (
-          <Suspense fallback={<LazyFallback />}>
-            <Upgrade />
           </Suspense>
         )
       case 'admin':
