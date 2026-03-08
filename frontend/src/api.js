@@ -34,6 +34,17 @@ export function setAccessTokenProvider(fn) {
   tokenInFlight = null
 }
 
+// Cache scope is user-aware so cached GETs never bleed across accounts.
+let cacheScope = 'anon'
+
+export function setApiCacheScope(scope) {
+  const next = scope || 'anon'
+  if (cacheScope !== next) {
+    cacheScope = next
+    invalidateCache()
+  }
+}
+
 // Optional legacy helpers
 export function getToken() {
   try {
@@ -55,6 +66,10 @@ export function clearToken() {
 
 function isPlainObject(x) {
   return Object.prototype.toString.call(x) === '[object Object]'
+}
+
+function scopedCacheKey(path) {
+  return `${cacheScope}:${path}`
 }
 
 async function readBody(res) {
@@ -173,8 +188,10 @@ export async function api(path, options = {}) {
       : `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`
 
   const isGet = method.toUpperCase() === 'GET'
+  const cacheKey = scopedCacheKey(path)
+
   if (isGet && !skipCache) {
-    const cached = getCached(path)
+    const cached = getCached(cacheKey)
     if (cached !== null) return cached
   }
 
@@ -207,7 +224,6 @@ export async function api(path, options = {}) {
     finalHeaders.set('Authorization', `Bearer ${token}`)
   }
 
-  // ── Timeout: AbortController wrapping any user-provided signal ──
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
@@ -237,19 +253,15 @@ export async function api(path, options = {}) {
     clearTimeout(timeoutId)
   }
 
-  // ✅ Handle “expected 404 means empty state”
   if (res.status === 404 && nullOn404) {
-    // do not cache “not found” unless you intentionally want to
     return null
   }
 
   const data = await readBody(res)
-
-  // ✅ Allow extra “OK-like” statuses
   const okish = res.ok || (Array.isArray(okStatuses) && okStatuses.includes(res.status))
+
   if (!okish) {
     if (res.status === 401) {
-      // Force token refresh + retry once before declaring session expired.
       cachedToken = null
       cachedAt = 0
 
@@ -262,7 +274,6 @@ export async function api(path, options = {}) {
         if (retryToken) retryHeaders.set('Authorization', `Bearer ${retryToken}`)
         else retryHeaders.delete('Authorization')
 
-        // --- Retry fetch with its own timeout (do NOT reuse the original controller/timeout) ---
         const retryController = new AbortController()
         const retryTimeoutId = setTimeout(() => retryController.abort(), REQUEST_TIMEOUT_MS)
 
@@ -278,7 +289,6 @@ export async function api(path, options = {}) {
           clearTimeout(retryTimeoutId)
         }
 
-        // Handle expected 404 on retry too
         if (retryRes.status === 404 && nullOn404) return null
 
         const retryData = await readBody(retryRes)
@@ -287,7 +297,7 @@ export async function api(path, options = {}) {
           (Array.isArray(okStatuses) && okStatuses.includes(retryRes.status))
 
         if (retryOkish) {
-          if (isGet) setCache(path, retryData)
+          if (isGet) setCache(cacheKey, retryData)
           return retryData
         }
 
@@ -297,16 +307,14 @@ export async function api(path, options = {}) {
 
         throw makeError(retryRes, retryData)
       } catch (e) {
-        // Network errors etc. shouldn't force logout
         throw e
       }
     }
 
-    // ✅ 403 is forbidden (e.g. role/RLS/admin). Do NOT logout.
     throw makeError(res, data)
   }
 
-  if (isGet) setCache(path, data)
+  if (isGet) setCache(cacheKey, data)
   return data
 }
 

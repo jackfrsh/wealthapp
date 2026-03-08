@@ -1,4 +1,3 @@
-// frontend/src/App.jsx
 import React, {
   useState,
   useEffect,
@@ -14,6 +13,7 @@ import { supabase } from './supabase'
 import {
   api,
   setAccessTokenProvider,
+  setApiCacheScope,
   SESSION_EXPIRED_EVENT,
   invalidateCache,
   invalidatePath,
@@ -279,7 +279,7 @@ export default function App() {
     const initialRaw = pageFromPath(window.location.pathname)
     const initial = initialRaw || 'landing'
     startNavTransition(() => _setPage(initial))
-  
+
     try {
       const path = PAGE_TO_PATH[initial] || '/'
       const search = window.location.search || ''
@@ -287,13 +287,13 @@ export default function App() {
         window.history.replaceState({}, '', `${path}${search}`)
       }
     } catch {}
-  
+
     const onPop = () => {
       const pRaw = pageFromPath(window.location.pathname)
       const p = pRaw || (authed ? 'home' : 'landing')
       startNavTransition(() => _setPage(p))
     }
-  
+
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [authed, startNavTransition])
@@ -396,6 +396,21 @@ export default function App() {
   const bootIdRef = useRef(0)
   const tokenRef = useRef(null)
   const bootTokenRef = useRef(null)
+  const currentUserIdRef = useRef(null)
+
+  const resetUserScopedState = useCallback(() => {
+    entitlementsCheckedAtRef.current = 0
+    invalidateCache()
+
+    setUsername('')
+    setBaseCurrency('GBP')
+    setIsPro(false)
+    setSubscriptionStatus(null)
+    setTrialEnd(null)
+
+    setPrimaryGoal(undefined)
+    setAccountsCount(undefined)
+  }, [])
 
   const logout = useCallback(async () => {
     try {
@@ -404,13 +419,12 @@ export default function App() {
 
     bootTokenRef.current = null
     tokenRef.current = null
+    currentUserIdRef.current = null
+    setApiCacheScope('anon')
+
+    resetUserScopedState()
 
     setAuthed(false)
-    setUsername('')
-    setIsPro(false)
-    setPrimaryGoal(undefined)
-    setAccountsCount(undefined)
-
     setSettingsReady(true)
     setChecking(false)
 
@@ -419,8 +433,8 @@ export default function App() {
       localStorage.removeItem('upgrade_reason')
     } catch {}
 
-    startNavTransition(() => setPage('landing', { replace: true }))
-  }, [setPage, startNavTransition])
+    setPage('landing', { replace: true })
+  }, [resetUserScopedState, setPage])
 
   useEffect(() => {
     const onExpired = () => {
@@ -433,10 +447,11 @@ export default function App() {
 
   useEffect(() => {
     if (!supabase) {
+      setApiCacheScope('anon')
       setChecking(false)
       setAuthed(false)
       setSettingsReady(true)
-      startNavTransition(() => setPage('landing', { replace: true }))
+      setPage('landing', { replace: true })
       return
     }
 
@@ -448,16 +463,19 @@ export default function App() {
       const myId = ++bootIdRef.current
 
       const token = session?.access_token || null
+      const nextUserId = session?.user?.id || null
       tokenRef.current = token
 
-      if (!token) {
+      if (!token || !nextUserId) {
         bootTokenRef.current = null
+        currentUserIdRef.current = null
+        setApiCacheScope('anon')
+
+        resetUserScopedState()
         setAuthed(false)
-        setPrimaryGoal(undefined)
-        setAccountsCount(undefined)
         setSettingsReady(true)
         setChecking(false)
-      
+
         const fromPath = pageFromPath(window.location.pathname)
         const publicPage =
           fromPath === 'auth' ||
@@ -469,27 +487,35 @@ export default function App() {
           fromPath === 'guide_inflation_adjusted'
             ? fromPath
             : 'landing'
-      
-        startNavTransition(() => setPage(publicPage, { replace: true }))
+
+        setPage(publicPage, { replace: true })
         return
       }
 
-      if (bootTokenRef.current === token) return
+      setApiCacheScope(nextUserId)
+
+      const identityChanged = currentUserIdRef.current !== nextUserId
+
+      if (identityChanged) {
+        currentUserIdRef.current = nextUserId
+        bootTokenRef.current = null
+        resetUserScopedState()
+      }
+
+      if (bootTokenRef.current === token && !identityChanged) return
       bootTokenRef.current = token
 
       try {
         setChecking(true)
         setSettingsReady(false)
-
         setAuthed(true)
-        setPrimaryGoal(undefined)
-        setAccountsCount(undefined)
 
-        const results = await Promise.allSettled([
+        await Promise.allSettled([
           refreshSettings({ force: true }),
           fetchPrimaryGoal(),
           fetchAccountsCount(),
         ])
+
         if (cancelled || myId !== bootIdRef.current) return
 
         const fromPath = pageFromPath(window.location.pathname)
@@ -508,9 +534,9 @@ export default function App() {
         const isBlocked = resolvedFromPath === 'upgrade'
 
         if (resolvedFromPath && !isPublic && !isBlocked) {
-          startNavTransition(() => setPage(resolvedFromPath, { replace: true }))
+          setPage(resolvedFromPath, { replace: true })
         } else {
-          startNavTransition(() => setPage('home', { replace: true }))
+          setPage('home', { replace: true })
         }
       } catch (e) {
         console.error('Bootstrap failed:', e)
@@ -525,12 +551,17 @@ export default function App() {
       .then(({ data }) => bootstrap(data?.session || null))
       .catch(() => {
         if (cancelled) return
+
         tokenRef.current = null
         bootTokenRef.current = null
+        currentUserIdRef.current = null
+        setApiCacheScope('anon')
+
+        resetUserScopedState()
         setAuthed(false)
         setSettingsReady(true)
         setChecking(false)
-      
+
         const fromPath = pageFromPath(window.location.pathname)
         const publicPage =
           fromPath === 'auth' ||
@@ -542,8 +573,8 @@ export default function App() {
           fromPath === 'guide_inflation_adjusted'
             ? fromPath
             : 'landing'
-      
-        startNavTransition(() => setPage(publicPage, { replace: true }))
+
+        setPage(publicPage, { replace: true })
       })
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -556,7 +587,7 @@ export default function App() {
       cancelled = true
       data?.subscription?.unsubscribe?.()
     }
-  }, [fetchAccountsCount, fetchPrimaryGoal, refreshSettings, setPage, showToast, logout, startNavTransition])
+  }, [fetchAccountsCount, fetchPrimaryGoal, refreshSettings, showToast, logout, setPage, resetUserScopedState])
 
   // Loading gate
   if (checking || (authed && !settingsReady)) {
@@ -671,15 +702,14 @@ export default function App() {
       case 'guide_inflation_adjusted':
         return <InflationAdjustedGuide />
 
-      // ✅ core pages are instant (not lazy)
       case 'home':
         return <Home />
       case 'outlook':
         return <Outlook />
       case 'accounts':
         return <Accounts />
-        case 'upgrade':
-  return <Upgrade />
+      case 'upgrade':
+        return <Upgrade />
       case 'settings':
         return <Settings />
       case 'goal_setup':
@@ -687,12 +717,11 @@ export default function App() {
           <GoalSetup
             onComplete={(goal) => {
               setPrimaryGoal(goal || null)
-              startNavTransition(() => setPage('home', { replace: true }))
+              setPage('home', { replace: true })
             }}
           />
         )
 
-      // 💤 rare pages lazy, wrapped locally
       case 'insights':
         return (
           <Suspense fallback={<LazyFallback />}>
@@ -722,14 +751,14 @@ export default function App() {
                 <MobileNav />
                 <main className="px-4 sm:px-6 lg:px-8 py-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-6">
                   <div className="mx-auto w-full max-w-6xl">
-                  <div className="animate-page-in">
-  {isNavPending ? (
-    <div className="fixed top-4 right-4 z-[950] text-[11px] font-semibold px-3 py-1.5 rounded-2xl bg-black/80 text-white">
-      Loading…
-    </div>
-  ) : null}
-  {renderPage()}
-</div>
+                    <div className="animate-page-in">
+                      {isNavPending ? (
+                        <div className="fixed top-4 right-4 z-[950] text-[11px] font-semibold px-3 py-1.5 rounded-2xl bg-black/80 text-white">
+                          Loading…
+                        </div>
+                      ) : null}
+                      {renderPage()}
+                    </div>
                   </div>
                 </main>
                 <BottomNav />
