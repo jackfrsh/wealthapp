@@ -506,6 +506,7 @@ export default function App() {
 
         const fromPath = pageFromPath(window.location.pathname)
         const publicPage =
+        fromPath === 'auth' ||
         fromPath === 'privacy' ||
         fromPath === 'security' ||
         fromPath === 'terms' ||
@@ -600,6 +601,7 @@ export default function App() {
 
         const fromPath = pageFromPath(window.location.pathname)
         const publicPage =
+        fromPath === 'auth' ||
         fromPath === 'privacy' ||
         fromPath === 'security' ||
         fromPath === 'terms' ||
