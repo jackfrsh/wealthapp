@@ -1,4 +1,3 @@
-// frontend/src/pages/Landing.jsx
 import React, { useEffect, useRef, useState } from 'react'
 import { useApp } from '../App'
 import Card from '../components/Card'
@@ -50,6 +49,13 @@ function useReveal() {
     const el = ref.current
     if (!el) return
 
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotion) {
+      el.style.opacity = '1'
+      el.style.transform = 'none'
+      return
+    }
+
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -86,7 +92,7 @@ function Reveal({ children, className = '' }) {
   )
 }
 
-function Screenshot({ src, webp, alt, className = '' }) {
+function Screenshot({ src, webp, alt, className = '', loading = 'lazy' }) {
   return (
     <div
       className={[
@@ -100,7 +106,7 @@ function Screenshot({ src, webp, alt, className = '' }) {
       <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-white/[.06] via-transparent to-black/[.04] dark:from-white/[.04] dark:to-black/[.18]" />
       <picture>
         {webp ? <source srcSet={webp} type="image/webp" /> : null}
-        <img src={src} alt={alt} className="w-full h-auto block relative" loading="lazy" />
+        <img src={src} alt={alt} className="w-full h-auto block relative" loading={loading} />
       </picture>
     </div>
   )
@@ -110,9 +116,9 @@ export default function Landing() {
   const { setPage } = useApp()
 
   useSEO({
-    title: 'Paddock — Personal Wealth Dashboard (Multi-Currency Net Worth)',
+    title: 'Paddock — Personal Wealth Dashboard',
     description:
-      'Track multi-currency net worth with daily FX, record snapshots, hit milestones, and model long-term wealth projections — without ads or noise.',
+      'Track net worth, understand progress, and model your long-term future with multi-currency tracking, visible assumptions, and projections that show the path ahead.',
     canonicalPath: '/',
   })
 
@@ -140,7 +146,7 @@ export default function Landing() {
         <div className="mx-auto max-w-6xl px-5 sm:px-6 h-16 flex items-center justify-between">
           <button
             type="button"
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            onClick={() => setPage('landing')}
             className="font-display text-xl text-ink dark:text-white tracking-tight"
           >
             Paddock<span className="text-accent">.</span>
@@ -160,6 +166,13 @@ export default function Landing() {
               className="hidden sm:inline px-3 py-2 rounded-xl text-sm font-semibold text-ink-muted/70 hover:text-ink dark:text-white/40 dark:hover:text-white transition-colors"
             >
               Pricing
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage('guides_index')}
+              className="hidden sm:inline px-3 py-2 rounded-xl text-sm font-semibold text-ink-muted/70 hover:text-ink dark:text-white/40 dark:hover:text-white transition-colors"
+            >
+              Guides
             </button>
 
             <div className="w-px h-4 bg-black/[.08] dark:bg-white/[.08] mx-2 hidden sm:block" />
@@ -182,29 +195,24 @@ export default function Landing() {
       {/* HERO */}
       <section className="mx-auto max-w-6xl px-5 sm:px-6 pt-24 sm:pt-32 lg:pt-40 pb-12 sm:pb-16">
         <div className="max-w-[820px]">
-          {/* Category label (clear, premium) */}
           <div className="text-sm font-semibold tracking-[.12em] uppercase text-ink-muted/60 dark:text-white/30 mb-4">
             Personal wealth dashboard
           </div>
 
           <h1 className="font-display text-[2.85rem] sm:text-6xl lg:text-[4.35rem] font-semibold tracking-[-0.03em] leading-[1.03] text-ink dark:text-white">
-            Know your number.
+            A net worth tracker.
             <br />
-            Build your future.
+            For long-term wealth.
           </h1>
 
           <p className="mt-5 sm:mt-6 text-lg sm:text-xl text-ink-3/90 dark:text-white/50 tracking-[-0.01em] max-w-[46rem]">
-            A clear model of your wealth, built around one long-term goal — with visible assumptions and projections that
-            show the path ahead.
-          </p>
-
-          <p className="mt-6 text-sm text-ink-muted/60 dark:text-white/30 max-w-2xl">
-            Multi-currency net worth tracking with daily FX. Visible assumptions. No ads. No bank connections.
+            Track cash, investments, pensions and property in one calm dashboard — with
+            multi-currency support, long-term projections, and privacy-first manual tracking.
           </p>
 
           <div className="mt-8 sm:mt-10 flex flex-wrap items-center gap-3">
             <Button variant="primary" className="h-12 px-6 rounded-2xl" onClick={() => openAuth('register')}>
-              Create account
+              Get started — it&apos;s free
             </Button>
 
             <button
@@ -221,17 +229,31 @@ export default function Landing() {
           </p>
 
           <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-ink-muted/55 dark:text-white/20">
-            <span>Multi-currency portfolios</span>
-            <span>Snapshots</span>
-            <span>Manual input (no bank linking)</span>
+            <button
+              type="button"
+              onClick={() => setPage('net_worth_tracker')}
+              className="hover:text-ink dark:hover:text-white/50 transition-colors"
+            >
+              Net worth tracking
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage('guide_multi_currency')}
+              className="hover:text-ink dark:hover:text-white/50 transition-colors"
+            >
+              Multi-currency support
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage('track_isas_pensions_savings')}
+              className="hover:text-ink dark:hover:text-white/50 transition-colors"
+            >
+              Track ISAs and pensions
+            </button>
             <span>No ads</span>
-            <span>No tracking cookies</span>
-            <span>Stripe billing</span>
+            <span>No bank linking</span>
+            <span>Private by design</span>
           </div>
-
-          <p className="mt-4 text-xs text-ink-muted/55 dark:text-white/20">
-            For people building wealth deliberately.
-          </p>
         </div>
       </section>
 
@@ -241,12 +263,67 @@ export default function Landing() {
           <Screenshot
             src={homeShot}
             webp={homeShotWebp}
-            alt="Paddock dashboard showing total wealth, milestone tracking, and plan progress"
+            alt="Paddock dashboard showing total wealth, milestones and plan progress"
+            loading="eager"
           />
           <p className="mt-5 text-sm text-ink-muted/50 dark:text-white/20">
-            Net worth dashboard with milestones and plan progress.
+            Net worth dashboard with milestones, trajectory and plan progress.
           </p>
         </Reveal>
+      </section>
+
+      {/* USE PAGES */}
+      <section className="border-t border-black/[.03] dark:border-white/[.03]">
+        <div className="mx-auto max-w-6xl px-5 sm:px-6 py-16 sm:py-20">
+          <Reveal>
+            <SectionLabel>Use Paddock for</SectionLabel>
+            <h2 className="mt-3 font-display text-3xl sm:text-4xl font-semibold text-ink dark:text-white tracking-tight">
+              Built for real wealth tracking.
+            </h2>
+            <p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-xl leading-relaxed">
+              Explore the core ways people use Paddock to track wealth more clearly and stay focused
+              on long-term progress.
+            </p>
+
+            <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[
+                {
+                  title: 'Net worth tracking',
+                  body: 'See assets and liabilities together in one calm dashboard.',
+                  page: 'net_worth_tracker',
+                },
+                {
+                  title: 'Track ISAs and pensions',
+                  body: 'Bring core UK wealth accounts into one clear long-term view.',
+                  page: 'track_isas_pensions_savings',
+                },
+                {
+                  title: 'Replace spreadsheets',
+                  body: 'Move from fragile tabs and formulas to a cleaner structured workflow.',
+                  page: 'spreadsheet_alternative',
+                },
+                {
+                  title: 'How to track your net worth',
+                  body: 'Learn what to include, how often to update, and what matters most.',
+                  page: 'how_to_track_net_worth',
+                },
+              ].map(({ title, body, page }) => (
+                <button
+                  key={title}
+                  type="button"
+                  onClick={() => setPage(page)}
+                  className="text-left rounded-3xl border border-black/[.06] dark:border-white/[.08] bg-white/70 dark:bg-white/[.04] backdrop-blur-xl shadow-card p-6 hover:bg-black/[.02] dark:hover:bg-white/[.06] transition-colors"
+                >
+                  <h3 className="font-display text-base font-semibold text-ink dark:text-white tracking-tight">
+                    {title}
+                  </h3>
+                  <div className="mt-3 h-px w-10 bg-black/[.10] dark:bg-white/[.10]" />
+                  <p className="mt-3 text-sm text-ink-muted/65 dark:text-white/35 leading-relaxed">{body}</p>
+                </button>
+              ))}
+            </div>
+          </Reveal>
+        </div>
       </section>
 
       {/* PRODUCT */}
@@ -257,22 +334,22 @@ export default function Landing() {
             Everything that matters, in one place.
           </h2>
           <p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-xl leading-relaxed">
-            Built for clarity: one long-term goal, visible assumptions, and a dashboard you’ll actually check.
+            Built for clarity: one long-term goal, visible assumptions, and a dashboard you&apos;ll actually check.
           </p>
 
           <div className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-10 lg:gap-14">
             {[
               {
                 title: 'One target. Always visible.',
-                body: 'A single long-term goal anchors the model. Your projection updates as your net worth evolves.',
+                body: 'A single long-term goal anchors the model. Your projection evolves as your net worth and contributions change.',
               },
               {
                 title: 'Multi-currency portfolios.',
-                body: 'ISAs, SIPPs, property, crypto and cash — across currencies with daily FX updates. Designed for global portfolios.',
+                body: 'Track ISAs, SIPPs, cash, property and more across currencies with a clear base-currency view.',
               },
               {
                 title: 'Assumptions in plain sight.',
-                body: 'Contribution, return, and horizon live next to the chart — not hidden in settings.',
+                body: 'Contribution, return and time horizon sit next to the model — not buried in menus or hidden settings.',
               },
             ].map(({ title, body }) => (
               <div key={title}>
@@ -296,7 +373,7 @@ export default function Landing() {
               See where your wealth is heading.
             </h2>
             <p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-xl leading-relaxed">
-              A long-horizon projection that makes the gap visible — and the path measurable.
+              A long-horizon model that shows both the gap and the path — so your progress is easier to understand and easier to act on.
             </p>
           </Reveal>
 
@@ -306,6 +383,9 @@ export default function Landing() {
               webp={outlookShotWebp}
               alt="Paddock projection view showing trajectory graph with projected and required net worth curves over time"
             />
+            <p className="mt-5 text-sm text-ink-muted/50 dark:text-white/20">
+              Long-term projection with visible assumptions and trajectory.
+            </p>
           </Reveal>
         </div>
       </section>
@@ -320,7 +400,7 @@ export default function Landing() {
                 See the impact before you commit.
               </h2>
               <p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-md leading-relaxed">
-                Adjust contributions and compare timelines. Pro adds real-terms modelling and the Optimiser.
+                Adjust contributions, compare timelines, and understand the trade-offs before you make the next move.
               </p>
 
               <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -329,20 +409,30 @@ export default function Landing() {
                   onClick={() => setPage('guide_long_term_projection')}
                   className="px-4 py-2 rounded-2xl text-sm font-semibold border border-black/[.08] dark:border-white/[.10] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors text-ink dark:text-white"
                 >
-                  Read: Long-term projections
+                  Long-term projections
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage('guide_multi_currency')}
+                  className="px-4 py-2 rounded-2xl text-sm font-semibold border border-black/[.08] dark:border-white/[.10] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors text-ink dark:text-white"
+                >
+                  Multi-currency tracking
                 </button>
                 <button
                   type="button"
                   onClick={() => setPage('guide_inflation_adjusted')}
                   className="px-4 py-2 rounded-2xl text-sm font-semibold border border-black/[.08] dark:border-white/[.10] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors text-ink dark:text-white"
                 >
-                  Read: Inflation-adjusted
+                  Inflation-adjusted views
                 </button>
               </div>
             </Reveal>
 
             <Reveal>
               <Screenshot src={insightsShot} webp={insightsShotWebp} alt="Paddock insights showing scenario modelling" />
+              <p className="mt-5 text-sm text-ink-muted/50 dark:text-white/20">
+                Scenario modelling and deeper planning views.
+              </p>
             </Reveal>
           </div>
         </div>
@@ -354,17 +444,26 @@ export default function Landing() {
           <Reveal>
             <SectionLabel>Trust</SectionLabel>
             <h2 className="mt-3 font-display text-3xl sm:text-4xl font-semibold text-ink dark:text-white tracking-tight">
-              Private by default.
+              Private by design.
             </h2>
             <p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-xl leading-relaxed">
-              No ads. No trackers. No bank linking. You enter the data you want to track.
+              No ads. No trackers. No bank linking. Just a deliberate, premium space to understand and build wealth.
             </p>
 
             <div className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-10 lg:gap-14">
               {[
-                { title: 'No ads. No ad tracking.', body: 'The product does not run advertising trackers.' },
-                { title: 'Secure sign-in.', body: 'Password reset and session security handled by Supabase Auth.' },
-                { title: 'Stripe billing.', body: 'Subscriptions are managed by Stripe. Cancel anytime.' },
+                {
+                  title: 'No ads. No ad tracking.',
+                  body: 'The product is designed to stay focused, private and free from ad clutter.',
+                },
+                {
+                  title: 'Secure authentication.',
+                  body: 'Industry-standard sign-in with protected sessions and secure password management.',
+                },
+                {
+                  title: 'Payments by Stripe.',
+                  body: 'Card details are handled entirely by Stripe — they never touch our servers.',
+                },
               ].map(({ title, body }) => (
                 <div key={title}>
                   <h3 className="text-sm font-semibold text-ink dark:text-white">{title}</h3>
@@ -395,13 +494,6 @@ export default function Landing() {
               >
                 Security
               </button>
-              <button
-                type="button"
-                onClick={() => setPage('guide_multi_currency')}
-                className="px-4 py-2 rounded-2xl text-sm font-semibold border border-black/[.08] dark:border-white/[.10] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors text-ink dark:text-white"
-              >
-                Guides
-              </button>
             </div>
           </Reveal>
         </div>
@@ -416,12 +508,11 @@ export default function Landing() {
               Simple.
             </h2>
             <p className="mt-4 text-sm text-ink-muted/65 dark:text-white/35 max-w-xl leading-relaxed">
-              Start with structured tracking. Upgrade when you’re ready to plan decades ahead.
+              Start with structured tracking. Upgrade when you&apos;re ready to plan decades ahead.
             </p>
           </Reveal>
 
           <Reveal className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Free */}
             <Card className="p-7 sm:p-8 bg-white/70 dark:bg-white/[.04] backdrop-blur-xl border border-black/[.06] dark:border-white/[.08] shadow-card">
               <div className="text-sm font-semibold text-ink-muted/70 dark:text-white/40">Free</div>
               <div className="mt-3 text-3xl font-semibold text-ink dark:text-white tracking-tight">£0</div>
@@ -448,7 +539,6 @@ export default function Landing() {
               </div>
             </Card>
 
-            {/* Pro */}
             <Card className="p-7 sm:p-8 bg-white/70 dark:bg-white/[.04] backdrop-blur-xl border border-accent/15 dark:border-accent/20 shadow-card">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-semibold text-ink dark:text-white">Pro</div>
@@ -472,11 +562,11 @@ export default function Landing() {
               <div className="mt-6 space-y-2 text-sm text-ink-muted/65 dark:text-white/35">
                 <p>Unlimited accounts</p>
                 <p>5–40 year projections</p>
-                <p>Net-worth trajectory modelling</p>
+                <p>Full trajectory chart: projected vs required path</p>
                 <p>Inflation-adjusted (real terms) view</p>
                 <p>One-off deposit modelling</p>
-                <p>Optimiser: required contribution to hit target</p>
-                <p>Deeper insights</p>
+                <p>Optimiser: calculates required monthly contribution</p>
+                <p>What-if scenario comparisons</p>
               </div>
 
               <div className="mt-8">
@@ -484,8 +574,6 @@ export default function Landing() {
                   Start free trial
                 </Button>
               </div>
-
-              <p className="mt-4 text-sm text-ink-muted/55 dark:text-white/25">Cancel anytime.</p>
             </Card>
           </Reveal>
         </div>
@@ -496,10 +584,10 @@ export default function Landing() {
         <div className="mx-auto max-w-6xl px-5 sm:px-6 py-16 sm:py-20 text-center">
           <Reveal>
             <h2 className="font-display text-3xl sm:text-4xl font-semibold text-ink dark:text-white tracking-tight">
-              Wealth isn’t built by accident.
+              Wealth isn&apos;t built by accident.
             </h2>
             <p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-xl leading-relaxed mx-auto">
-              It’s built with clarity, consistency, and time. Paddock gives you the structure to see it through.
+              It&apos;s built with clarity, consistency and time. Paddock gives you a calmer way to see the numbers and keep moving.
             </p>
 
             <div className="mt-8 flex items-center justify-center gap-3">
@@ -525,14 +613,18 @@ export default function Landing() {
       {/* FOOTER */}
       <footer className="border-t border-black/[.03] dark:border-white/[.03]">
         <div className="mx-auto max-w-6xl px-5 sm:px-6 py-10 flex items-center justify-between">
-          <div className="font-display text-lg text-ink dark:text-white tracking-tight font-semibold">
+          <button
+            type="button"
+            onClick={() => setPage('landing')}
+            className="font-display text-lg text-ink dark:text-white tracking-tight font-semibold"
+          >
             Paddock<span className="text-accent">.</span>
-          </div>
+          </button>
 
           <div className="flex items-center gap-5 text-xs text-ink-muted/50 dark:text-white/20">
             <button
               type="button"
-              onClick={() => setPage('guide_multi_currency')}
+              onClick={() => setPage('guides_index')}
               className="hover:text-ink dark:hover:text-white/50 transition-colors"
             >
               Guides
