@@ -396,14 +396,14 @@ export default function AuthPage({ onLogin }) {
   const headline = recovery
     ? 'Reset your password.'
     : mode === 'register'
-      ? 'Welcome to Paddock.'
+      ? 'Create your account.'
       : 'Welcome back.'
 
-  const subcopy = recovery
-    ? 'Choose a new password to regain access to your account.'
-    : mode === 'register'
-      ? 'Create your account to track net worth, understand progress, and build your future with more clarity.'
-      : 'Sign in to continue to your dashboard and pick up where you left off.'
+      const subcopy = recovery
+      ? 'Choose a new password to regain access to your account.'
+      : mode === 'register'
+        ? 'Create your account to track net worth and plan long-term wealth with more clarity.'
+        : 'Sign in to continue to your dashboard.'
 
   return (
     <div className="min-h-screen overflow-x-hidden brand-auth-bg text-ink dark:text-white">
@@ -436,7 +436,7 @@ export default function AuthPage({ onLogin }) {
               className="text-sm font-semibold text-ink dark:text-white hover:text-accent dark:hover:text-accent transition-colors"
               type="button"
             >
-              {recovery ? 'Reset' : 'Jump to form'}
+              {recovery ? 'Reset' : 'Continue'}
             </button>
           </div>
         </header>
@@ -452,13 +452,13 @@ export default function AuthPage({ onLogin }) {
                 Personal wealth dashboard
               </p>
 
-              <h1 className="font-display text-[2.35rem] sm:text-[3.5rem] lg:text-[4rem] leading-[1.04] text-ink dark:text-white tracking-tighterish">
-                {headline}
-              </h1>
+              <h1 className="font-display text-[2.35rem] sm:text-[3.5rem] lg:text-[4rem] font-semibold leading-[1.04] text-ink dark:text-white tracking-tighterish">
+  {headline}
+</h1>
 
-              <p className="text-lg sm:text-xl text-ink-muted dark:text-white/45 leading-relaxed max-w-[560px]">
-                {subcopy}
-              </p>
+<p className="text-lg sm:text-xl text-ink-muted dark:text-white/50 leading-relaxed max-w-[560px]">
+  {subcopy}
+</p>
 
               {!recovery ? (
                 <>
@@ -479,16 +479,16 @@ export default function AuthPage({ onLogin }) {
                   </div>
 
                   <div className="hidden lg:grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-                    <FeatureCard
-                      icon={BarChart2}
-                      title="See everything clearly"
-                      body="Track accounts, assets and liabilities in one calm dashboard."
-                    />
-                    <FeatureCard
-                      icon={Globe}
-                      title="Plan with confidence"
-                      body="Follow progress over time with long-term thinking and multi-currency support."
-                    />
+                  <FeatureCard
+  icon={BarChart2}
+  title="See everything clearly"
+  body="Track accounts, assets and liabilities in one calm dashboard."
+/>
+<FeatureCard
+  icon={Globe}
+  title="Built for long-term wealth"
+  body="Follow progress over time with multi-currency support and long-term thinking."
+/>
                   </div>
 
                   <div className="hidden lg:flex items-center gap-5 pt-2 text-xs text-ink-muted/50 dark:text-white/20">
