@@ -44,6 +44,11 @@ import BottomNav from './components/BottomNav'
 import MultiCurrencyGuide from './pages/guides/MultiCurrency'
 import LongTermProjectionGuide from './pages/guides/LongTermProjection'
 import InflationAdjustedGuide from './pages/guides/InflationAdjusted'
+import GuideIndex from './pages/guides/GuideIndex'
+import NetWorthTracker from './pages/guides/NetWorthTracker'
+import TrackISAsPensionsSavings from './pages/guides/TrackISAsPensionsSavings'
+import SpreadsheetAlternative from './pages/guides/SpreadsheetAlternative'
+import HowToTrackNetWorth from './pages/guides/HowToTrackNetWorth'
 
 /* ────────────────────────────────────────────
    Error Boundary — catches render crashes
@@ -154,6 +159,11 @@ const PAGE_TO_PATH = {
   guide_multi_currency: '/guides/multi-currency-net-worth-tracker',
   guide_long_term_projection: '/guides/long-term-wealth-projection',
   guide_inflation_adjusted: '/guides/inflation-adjusted-net-worth',
+  guides_index: '/guides',
+  net_worth_tracker: '/net-worth-tracker',
+  track_isas_pensions_savings: '/track-isas-pensions-savings',
+  spreadsheet_alternative: '/spreadsheet-alternative-net-worth-tracking',
+  how_to_track_net_worth: '/how-to-track-your-net-worth',
 }
 
 function pageFromPath(pathname) {
@@ -168,6 +178,11 @@ function pageFromPath(pathname) {
   if (p.startsWith('/guides/multi-currency-net-worth-tracker')) return 'guide_multi_currency'
   if (p.startsWith('/guides/long-term-wealth-projection')) return 'guide_long_term_projection'
   if (p.startsWith('/guides/inflation-adjusted-net-worth')) return 'guide_inflation_adjusted'
+  if (p === '/guides' || p === '/guides/') return 'guides_index'
+  if (p.startsWith('/net-worth-tracker')) return 'net_worth_tracker'
+  if (p.startsWith('/track-isas-pensions-savings')) return 'track_isas_pensions_savings'
+  if (p.startsWith('/spreadsheet-alternative-net-worth-tracking')) return 'spreadsheet_alternative'
+  if (p.startsWith('/how-to-track-your-net-worth')) return 'how_to_track_net_worth'
 
   if (p.startsWith('/upgrade')) return 'upgrade'
   if (p.startsWith('/settings')) return 'settings'
@@ -275,6 +290,14 @@ export default function App() {
     [startNavTransition]
   )
 
+  const navigateTo = useCallback(
+    (path) => {
+      const next = pageFromPath(path) || 'landing'
+      setPage(next)
+    },
+    [setPage]
+  )
+
   useEffect(() => {
     const initialRaw = pageFromPath(window.location.pathname)
     const initial = initialRaw || 'landing'
@@ -314,6 +337,11 @@ export default function App() {
     guide_multi_currency: 'Multi-Currency Net Worth Tracking — Paddock',
     guide_long_term_projection: 'Long-Term Wealth Projections — Paddock',
     guide_inflation_adjusted: 'Inflation-Adjusted Net Worth — Paddock',
+    guides_index: 'Guides — Paddock',
+    net_worth_tracker: 'Net Worth Tracker — Paddock',
+    track_isas_pensions_savings: 'Track ISAs, Pensions and Savings — Paddock',
+    spreadsheet_alternative: 'Spreadsheet Alternative for Net Worth Tracking — Paddock',
+    how_to_track_net_worth: 'How to Track Your Net Worth — Paddock',
     admin: 'Admin — Paddock',
   }
   useEffect(() => {
@@ -478,13 +506,17 @@ export default function App() {
 
         const fromPath = pageFromPath(window.location.pathname)
         const publicPage =
-          fromPath === 'auth' ||
-          fromPath === 'privacy' ||
-          fromPath === 'security' ||
-          fromPath === 'terms' ||
-          fromPath === 'guide_multi_currency' ||
-          fromPath === 'guide_long_term_projection' ||
-          fromPath === 'guide_inflation_adjusted'
+        fromPath === 'privacy' ||
+        fromPath === 'security' ||
+        fromPath === 'terms' ||
+        fromPath === 'guides_index' ||
+        fromPath === 'guide_multi_currency' ||
+        fromPath === 'guide_long_term_projection' ||
+        fromPath === 'guide_inflation_adjusted' ||
+        fromPath === 'net_worth_tracker' ||
+        fromPath === 'track_isas_pensions_savings' ||
+        fromPath === 'spreadsheet_alternative' ||
+        fromPath === 'how_to_track_net_worth'
             ? fromPath
             : 'landing'
 
@@ -529,7 +561,11 @@ export default function App() {
           resolvedFromPath === 'terms' ||
           resolvedFromPath === 'guide_multi_currency' ||
           resolvedFromPath === 'guide_long_term_projection' ||
-          resolvedFromPath === 'guide_inflation_adjusted'
+          resolvedFromPath === 'guide_inflation_adjusted' ||
+          resolvedFromPath === 'net_worth_tracker' ||
+          resolvedFromPath === 'track_isas_pensions_savings' ||
+          resolvedFromPath === 'spreadsheet_alternative' ||
+          resolvedFromPath === 'how_to_track_net_worth'
 
         const isBlocked = resolvedFromPath === 'upgrade'
 
@@ -564,13 +600,17 @@ export default function App() {
 
         const fromPath = pageFromPath(window.location.pathname)
         const publicPage =
-          fromPath === 'auth' ||
-          fromPath === 'privacy' ||
-          fromPath === 'security' ||
-          fromPath === 'terms' ||
-          fromPath === 'guide_multi_currency' ||
-          fromPath === 'guide_long_term_projection' ||
-          fromPath === 'guide_inflation_adjusted'
+        fromPath === 'privacy' ||
+        fromPath === 'security' ||
+        fromPath === 'terms' ||
+        fromPath === 'guides_index' ||
+        fromPath === 'guide_multi_currency' ||
+        fromPath === 'guide_long_term_projection' ||
+        fromPath === 'guide_inflation_adjusted' ||
+        fromPath === 'net_worth_tracker' ||
+        fromPath === 'track_isas_pensions_savings' ||
+        fromPath === 'spreadsheet_alternative' ||
+        fromPath === 'how_to_track_net_worth'
             ? fromPath
             : 'landing'
 
@@ -677,31 +717,47 @@ export default function App() {
 
   const renderPage = () => {
     if (!authed) {
-      if (page === 'privacy') return <Privacy />
-      if (page === 'security') return <Security />
-      if (page === 'terms') return <Terms />
+      if (page === 'privacy') return <Privacy navigateTo={navigateTo} />
+      if (page === 'security') return <Security navigateTo={navigateTo} />
+      if (page === 'terms') return <Terms navigateTo={navigateTo} />
       if (page === 'auth') return <AuthPage />
+      if (page === 'guides_index') return <GuideIndex navigateTo={navigateTo} />
       if (page === 'guide_multi_currency') return <MultiCurrencyGuide />
       if (page === 'guide_long_term_projection') return <LongTermProjectionGuide />
       if (page === 'guide_inflation_adjusted') return <InflationAdjustedGuide />
+      if (page === 'net_worth_tracker') return <NetWorthTracker navigateTo={navigateTo} />
+      if (page === 'track_isas_pensions_savings') return <TrackISAsPensionsSavings navigateTo={navigateTo} />
+      if (page === 'spreadsheet_alternative') return <SpreadsheetAlternative navigateTo={navigateTo} />
+      if (page === 'how_to_track_net_worth') return <HowToTrackNetWorth navigateTo={navigateTo} />
       return <Landing />
     }
 
     switch (page) {
       case 'privacy':
-        return <Privacy />
+        return <Privacy navigateTo={navigateTo} />
       case 'security':
-        return <Security />
+        return <Security navigateTo={navigateTo} />
       case 'terms':
-        return <Terms />
-
+        return <Terms navigateTo={navigateTo} />
+    
+      case 'guides_index':
+        return <GuideIndex navigateTo={navigateTo} />
       case 'guide_multi_currency':
         return <MultiCurrencyGuide />
       case 'guide_long_term_projection':
         return <LongTermProjectionGuide />
       case 'guide_inflation_adjusted':
         return <InflationAdjustedGuide />
-
+    
+      case 'net_worth_tracker':
+        return <NetWorthTracker navigateTo={navigateTo} />
+      case 'track_isas_pensions_savings':
+        return <TrackISAsPensionsSavings navigateTo={navigateTo} />
+      case 'spreadsheet_alternative':
+        return <SpreadsheetAlternative navigateTo={navigateTo} />
+      case 'how_to_track_net_worth':
+        return <HowToTrackNetWorth navigateTo={navigateTo} />
+    
       case 'home':
         return <Home />
       case 'outlook':
@@ -721,7 +777,7 @@ export default function App() {
             }}
           />
         )
-
+    
       case 'insights':
         return (
           <Suspense fallback={<LazyFallback />}>
@@ -734,7 +790,7 @@ export default function App() {
             <Admin />
           </Suspense>
         )
-
+    
       default:
         return <Home />
     }
