@@ -1,109 +1,62 @@
-import React, { useCallback } from 'react'
-import { X } from 'lucide-react'
-import { useApp } from '../App'
-import Card from '../components/Card'
-import { useSEO } from '../useSEO'
+import React from 'react'
+import { GuideShell, H2, P } from '../components/GuideLayout'
 
-export default function Security() {
-  const { setPage, authed } = useApp()
-
-  useSEO({
-    title: 'Security — Paddock',
-    description:
-      'Security at Paddock. We take security seriously and design the app to minimise risk. No bank linking by design.',
-    canonicalPath: '/security',
-  })
-
-  const handleClose = useCallback(() => {
-    try {
-      if (window.history.length > 1) {
-        window.history.back()
-        return
-      }
-    } catch {}
-
-    setPage(authed ? 'home' : 'landing')
-  }, [authed, setPage])
-
+export default function Security({ navigateTo }) {
   return (
-    <div className="min-h-screen bg-surface dark:bg-surface-dark">
-      <div className="sticky top-0 z-20 bg-white/70 dark:bg-surface-dark/70 backdrop-blur-xl border-b border-black/[.05] dark:border-white/[.06]">
-        <div className="mx-auto max-w-3xl px-5 sm:px-6 h-14 flex items-center justify-between">
-          <div className="w-10" />
-          <div className="text-sm font-semibold text-ink dark:text-white">Security</div>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="w-10 h-10 grid place-items-center rounded-2xl border border-black/[.06] dark:border-white/[.08] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors"
-            aria-label="Close"
-            title="Close"
-          >
-            <X size={18} className="text-ink dark:text-white" />
-          </button>
-        </div>
-      </div>
+    <GuideShell
+      title="Security"
+      onBack={() => navigateTo('/')}
+      navigateTo={navigateTo}
+      backLabel="Back to Paddock"
+    >
+      <div className="guide-kicker">Security</div>
+      <h1 className="guide-h1">Security at Paddock</h1>
 
-      <div className="mx-auto max-w-3xl px-5 sm:px-6 py-8 sm:py-10">
-        <Card className="p-7 sm:p-8">
-          <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-ink dark:text-white">
-            Security
-          </h1>
-          <p className="mt-2 text-sm text-ink-muted dark:text-white/60">Last updated: March 2, 2026</p>
+      <p className="guide-lead">
+        Paddock is designed to feel calm and simple on the surface, but the
+        foundations are built to be trustworthy. Security is part of the product,
+        not an afterthought.
+      </p>
 
-          <div className="mt-7 space-y-6 text-sm leading-relaxed text-ink dark:text-white/80">
-            <p>
-              We take security seriously and design the app to minimise risk. No system is perfect, but we aim to follow
-              sensible best practices for an early-stage product.
-            </p>
+      <H2>Secure authentication</H2>
+      <P>
+        Sign-in, password reset, and session management are handled through
+        industry-standard authentication infrastructure. Credentials are never stored
+        in plain text, and sessions are managed with modern security practices.
+      </P>
 
-            <section>
-              <h2 className="text-sm font-semibold text-ink dark:text-white">Authentication</h2>
-              <ul className="mt-2 list-disc pl-5 space-y-1 text-ink-muted dark:text-white/60">
-                <li>Sign-in is handled by Supabase Auth.</li>
-                <li>Passwords are not stored in our application code or database in plain text.</li>
-                <li>Access to your data is scoped to your account.</li>
-              </ul>
-            </section>
+      <H2>Payments handled by Stripe</H2>
+      <P>
+        All billing and subscription management is processed by Stripe. Your card
+        details are handled entirely within Stripe&apos;s PCI-compliant environment —
+        they never touch Paddock&apos;s servers.
+      </P>
 
-            <section>
-              <h2 className="text-sm font-semibold text-ink dark:text-white">Data protection</h2>
-              <ul className="mt-2 list-disc pl-5 space-y-1 text-ink-muted dark:text-white/60">
-                <li>Traffic is encrypted in transit (HTTPS).</li>
-                <li>We follow least-privilege principles for database access.</li>
-                <li>We use rate limiting and monitoring to reduce abuse and credential stuffing.</li>
-              </ul>
-            </section>
+      <H2>Minimal data surface</H2>
+      <P>
+        Paddock is designed around manual input rather than mandatory bank linking.
+        This means fewer connected financial accounts, fewer integrations, and a
+        smaller surface area where trust needs to be extended.
+      </P>
 
-            <section>
-              <h2 className="text-sm font-semibold text-ink dark:text-white">What you can do</h2>
-              <ul className="mt-2 list-disc pl-5 space-y-1 text-ink-muted dark:text-white/60">
-                <li>Use a strong, unique password.</li>
-                <li>Don’t share your login details.</li>
-                <li>Report anything suspicious so we can investigate quickly.</li>
-              </ul>
-            </section>
+      <H2>Encrypted in transit</H2>
+      <P>
+        All connections to Paddock are encrypted using HTTPS. Data is transmitted
+        securely between your browser and our servers at all times.
+      </P>
 
-            <section>
-              <h2 className="text-sm font-semibold text-ink dark:text-white">Reporting a vulnerability</h2>
-              <p className="mt-2 text-ink-muted dark:text-white/60">
-                If you believe you’ve found a security issue, email:{' '}
-                <span className="text-ink dark:text-white/80">security@ygetpaddock.com</span>. Please include steps to
-                reproduce and we’ll respond as soon as possible.
-              </p>
-            </section>
-          </div>
-        </Card>
+      <H2>Conservative by design</H2>
+      <P>
+        The product is deliberately built with fewer moving parts, fewer third-party
+        integrations, and fewer places where data is exposed. This is a deliberate
+        design choice — simplicity reduces risk.
+      </P>
 
-        <div className="mt-6 flex justify-center">
-          <button
-            type="button"
-            onClick={handleClose}
-            className="h-11 px-6 rounded-2xl text-sm font-semibold border border-black/[.08] dark:border-white/[.10] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors text-ink dark:text-white"
-          >
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
+      <H2>Contact</H2>
+      <P>
+        If you have questions about security at Paddock, you can reach us at
+        hello@getpaddock.com.
+      </P>
+    </GuideShell>
   )
 }
