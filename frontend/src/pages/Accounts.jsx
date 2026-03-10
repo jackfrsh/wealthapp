@@ -1062,7 +1062,7 @@ setConfirmState(null)
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className={lbl}>Monthly contribution (optional, per month))</label>
+            <label className={lbl}>Monthly contribution (optional, per month)</label>
               <input
                 className={inp}
                 value={form.monthly_contribution}
