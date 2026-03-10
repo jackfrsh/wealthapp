@@ -6,8 +6,12 @@ export default function Modal({ open, onClose, title, children }) {
 
   useEffect(() => {
     if (!open) return
-    const prev = document.body.style.overflow
+
+    const prevOverflow = document.body.style.overflow
+    const prevTouchAction = document.body.style.touchAction
+
     document.body.style.overflow = 'hidden'
+    document.body.style.touchAction = 'none'
 
     const onKey = (e) => {
       if (e.key === 'Escape') onClose?.()
@@ -15,12 +19,15 @@ export default function Modal({ open, onClose, title, children }) {
       if (e.key === 'Tab') {
         const root = panelRef.current
         if (!root) return
+
         const focusables = root.querySelectorAll(
           'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
         )
         if (!focusables.length) return
+
         const first = focusables[0]
         const last = focusables[focusables.length - 1]
+
         if (e.shiftKey && document.activeElement === first) {
           e.preventDefault()
           last.focus()
@@ -32,8 +39,10 @@ export default function Modal({ open, onClose, title, children }) {
     }
 
     window.addEventListener('keydown', onKey)
+
     return () => {
-      document.body.style.overflow = prev
+      document.body.style.overflow = prevOverflow
+      document.body.style.touchAction = prevTouchAction
       window.removeEventListener('keydown', onKey)
     }
   }, [open, onClose])
@@ -42,32 +51,26 @@ export default function Modal({ open, onClose, title, children }) {
 
   return (
     <div className="fixed inset-0 z-[1000]" role="dialog" aria-modal="true">
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/35 dark:bg-black/55 backdrop-blur-sm"
         onClick={() => onClose?.()}
       />
 
-      {/* Scrollable viewport */}
-      <div className="absolute inset-0 overflow-y-auto">
-        {/* Positioning wrapper */}
-        <div className="min-h-full flex items-start sm:items-center justify-center p-4 sm:p-6">
-          {/* Panel */}
+      <div className="absolute inset-0 overflow-y-auto overscroll-contain">
+        <div className="min-h-full flex items-start justify-center p-4 sm:p-6">
           <div
             ref={panelRef}
             className="w-full max-w-[560px]"
-            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <div
               className={[
                 'rounded-3xl border border-black/[.08] dark:border-white/[.10]',
                 'bg-white dark:bg-surface-dark-2',
                 'shadow-[0_24px_60px_rgba(0,0,0,.18)]',
-                'max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)]',
-                'overflow-hidden flex flex-col',
               ].join(' ')}
             >
-              <div className="px-6 sm:px-7 py-5 border-b border-black/[.06] dark:border-white/[.07] flex items-center justify-between gap-4 shrink-0">
+              <div className="px-6 sm:px-7 py-5 border-b border-black/[.06] dark:border-white/[.07] flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <div className="text-base font-semibold text-ink dark:text-white truncate">
                     {title}
@@ -84,7 +87,7 @@ export default function Modal({ open, onClose, title, children }) {
                 </button>
               </div>
 
-              <div className="flex-1 min-h-0 p-6 sm:p-7 overflow-y-auto overscroll-contain pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+              <div className="p-6 sm:p-7 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
                 {children}
               </div>
             </div>
