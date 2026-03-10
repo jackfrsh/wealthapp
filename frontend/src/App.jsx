@@ -420,6 +420,38 @@ export default function App() {
     }
   }, [refreshSettings])
 
+  useEffect(() => {
+    if (!authed) return
+  
+    let running = false
+  
+    const run = async () => {
+      if (running) return
+      running = true
+      try {
+        await syncBilling()
+      } finally {
+        running = false
+      }
+    }
+  
+    const onFocus = () => {
+      run()
+    }
+  
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') run()
+    }
+  
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+  
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [authed, syncBilling])
+
   // Auth bootstrap
   const bootIdRef = useRef(0)
   const tokenRef = useRef(null)
@@ -544,7 +576,7 @@ export default function App() {
         setAuthed(true)
 
         await Promise.allSettled([
-          refreshSettings({ force: true }),
+          syncBilling(),
           fetchPrimaryGoal(),
           fetchAccountsCount(),
         ])
@@ -629,7 +661,7 @@ export default function App() {
       cancelled = true
       data?.subscription?.unsubscribe?.()
     }
-  }, [fetchAccountsCount, fetchPrimaryGoal, refreshSettings, showToast, logout, setPage, resetUserScopedState])
+  }, [fetchAccountsCount, fetchPrimaryGoal, refreshSettings, syncBilling, showToast, logout, setPage, resetUserScopedState])
 
   // Loading gate
   if (checking || (authed && !settingsReady)) {

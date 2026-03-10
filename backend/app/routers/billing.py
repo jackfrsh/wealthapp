@@ -119,7 +119,7 @@ def create_checkout(
 
     # 7-day trial ONLY for annual, only if user hasn't had a subscription id stored
     if plan == "annual" and not getattr(current_user, "stripe_subscription_id", None):
-        subscription_data["trial_period_days"] = 1
+        subscription_data["trial_period_days"] = 7
 
     params = {
         "mode": "subscription",
