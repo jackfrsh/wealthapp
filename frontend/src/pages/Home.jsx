@@ -1,6 +1,7 @@
 // frontend/src/pages/Home.jsx
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { api } from '../api'
+import { track } from '../track'
 import { useApp } from '../App'
 import Card from '../components/Card'
 import { fmtCurrency, fmtCurrencyCompact } from '../utils'
@@ -407,6 +408,10 @@ export default function Home() {
     } catch {}
   }, [])
 
+  useEffect(() => {
+    track('page_view', { page: 'home' })
+  }, [])
+
   const clearCelebration = useCallback(() => {
     setCelebrateVisible(false)
     window.setTimeout(() => {
@@ -724,7 +729,10 @@ export default function Home() {
                   if (daysLeft > 14) return null
                   return (
                     <button
-                      onClick={() => setPage('upgrade')}
+                    onClick={() => {
+                      track('upgrade_clicked', { page: 'home', source: 'trial_badge' })
+                      setPage('upgrade')
+                    }}
                       className="inline-flex items-center gap-1 text-[10px] font-medium tracking-wider uppercase px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-500/15 transition-colors"
                       type="button"
                     >

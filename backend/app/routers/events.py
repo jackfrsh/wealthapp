@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Dict, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field as PydField
 from sqlmodel import Session, select
 
@@ -12,61 +12,96 @@ from ..models import AnalyticsEvent, User
 
 router = APIRouter(prefix="/events", tags=["events"])
 
-# Keep this strict. You can add more later, but don’t allow freeform “anything”.
+# Keep this strict. Add names deliberately, not freeform.
 EventName = Literal[
     "signup",
+    "page_view",
     "goal_created",
+    "goal_updated",
     "account_added",
+    "account_created",
+    "account_updated",
+    "account_deleted",
     "projection_opened",
+    "upgrade_viewed",
     "upgrade_clicked",
     "checkout_started",
+    "checkout_completed",
     "upgrade_success",
+    "billing_portal_opened",
+    "dashboard_loaded",
+    "insights_viewed",
+    "settings_updated",
 ]
 
-# Cap payload size: keep this lightweight and non-sensitive.
 MAX_META_KEYS = 25
 MAX_META_JSON_BYTES = 1500
+MAX_STR_LEN = 120
 
 
 class EventIn(BaseModel):
     name: EventName
+    page: Optional[str] = None
+    entity_type: Optional[str] = None
+    entity_id: Optional[str] = None
     meta: Optional[Dict[str, Any]] = PydField(default=None)
 
 
-def _sanitize_meta(meta: Optional[Dict[str, Any]]) -> str:
-    if not meta:
-        return "{}"
-    if not isinstance(meta, dict):
-        return "{}"
+def _clean_short_str(value: Any, limit: int = MAX_STR_LEN) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    return value[:limit]
 
-    # Limit keys
-    items = list(meta.items())[:MAX_META_KEYS]
+
+def _sanitize_meta(
+    meta: Optional[Dict[str, Any]],
+    *,
+    page: Optional[str] = None,
+    entity_type: Optional[str] = None,
+    entity_id: Optional[str] = None,
+) -> str:
     clean: Dict[str, Any] = {}
 
-    for k, v in items:
-        # Keep keys short + safe
-        if not isinstance(k, str):
-            continue
-        k2 = k.strip()[:64]
-        if not k2:
-            continue
+    if isinstance(meta, dict):
+        items = list(meta.items())[:MAX_META_KEYS]
 
-        # Only allow JSON-serializable primitives + small lists/dicts
-        if isinstance(v, (str, int, float, bool)) or v is None:
-            clean[k2] = v
-        elif isinstance(v, list):
-            clean[k2] = v[:25]  # cap list length
-        elif isinstance(v, dict):
-            # shallow dict only
-            clean[k2] = {str(kk)[:64]: vv for kk, vv in list(v.items())[:25]}
-        else:
-            # drop weird objects
-            continue
+        for k, v in items:
+            if not isinstance(k, str):
+                continue
+
+            key = k.strip()[:64]
+            if not key:
+                continue
+
+            if isinstance(v, (str, int, float, bool)) or v is None:
+                clean[key] = v
+            elif isinstance(v, list):
+                clean[key] = v[:25]
+            elif isinstance(v, dict):
+                nested: Dict[str, Any] = {}
+                for kk, vv in list(v.items())[:25]:
+                    if isinstance(vv, (str, int, float, bool)) or vv is None:
+                        nested[str(kk)[:64]] = vv
+                clean[key] = nested
+
+    page_value = _clean_short_str(page)
+    entity_type_value = _clean_short_str(entity_type)
+    entity_id_value = _clean_short_str(entity_id)
+
+    if page_value and "page" not in clean:
+        clean["page"] = page_value
+    if entity_type_value and "entity_type" not in clean:
+        clean["entity_type"] = entity_type_value
+    if entity_id_value and "entity_id" not in clean:
+        clean["entity_id"] = entity_id_value
 
     raw = json.dumps(clean, separators=(",", ":"), ensure_ascii=False)
     if len(raw.encode("utf-8")) > MAX_META_JSON_BYTES:
-        # If too big, drop meta entirely
         return "{}"
+
     return raw
 
 
@@ -76,13 +111,15 @@ def log_event(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_session),
 ):
-    # OPTIONAL: if you add an opt-out flag later, enforce it here.
-    # e.g. if settings.analytics_opt_out: return {"ok": True}
-
     evt = AnalyticsEvent(
         user_id=current_user.id,
         name=body.name,
-        meta_json=_sanitize_meta(body.meta),
+        meta_json=_sanitize_meta(
+            body.meta,
+            page=body.page,
+            entity_type=body.entity_type,
+            entity_id=body.entity_id,
+        ),
         created_at=datetime.now(timezone.utc),
     )
     db.add(evt)
@@ -90,7 +127,6 @@ def log_event(
     return {"ok": True}
 
 
-# Optional (admin/debug): list recent events for the authed user
 @router.get("/mine")
 def list_my_events(
     limit: int = 50,

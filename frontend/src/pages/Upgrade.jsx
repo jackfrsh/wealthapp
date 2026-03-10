@@ -1,4 +1,3 @@
-// frontend/src/pages/Upgrade.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../App'
 import UpgradeButton from '../components/UpgradeButton'
@@ -17,7 +16,7 @@ export default function Upgrade() {
 
   const [isLoading, setIsLoading] = useState(false)
   const [statusMsg, setStatusMsg] = useState('')
-  const [plan, setPlan] = useState('annual') // 'monthly' | 'annual'
+  const [plan, setPlan] = useState('annual')
 
   const reason = useMemo(() => {
     try {
@@ -29,8 +28,22 @@ export default function Upgrade() {
 
   const isAccountLimit = reason === 'account_limit'
 
-  // Guard so return flow only runs once per mount
   const returnRanRef = useRef(false)
+  const trackedViewRef = useRef(false)
+
+  useEffect(() => {
+    if (trackedViewRef.current) return
+    trackedViewRef.current = true
+
+    track('page_view', {
+      page: 'upgrade',
+    })
+
+    track('upgrade_viewed', {
+      page: 'upgrade',
+      reason,
+    })
+  }, [reason])
 
   useEffect(() => {
     let cancelled = false
@@ -131,7 +144,12 @@ export default function Upgrade() {
         localStorage.setItem('upgrade_reason', 'upgrade_cta')
       } catch {}
 
-      track?.('upgrade_clicked', { plan, reason })
+      track('upgrade_clicked', {
+        page: 'upgrade',
+        source: 'checkout_cta',
+        plan,
+        reason,
+      })
 
       const res = await api('/billing/create-checkout', {
         method: 'POST',
@@ -159,7 +177,6 @@ export default function Upgrade() {
     ? 'Free supports up to 3 accounts. Pro unlocks unlimited accounts and long-horizon projections.'
     : 'Long-horizon projections, real-terms modelling, and tools to close the gap to your target.'
 
-  // Pro features: concrete + outcome-led
   const proBullets = [
     'Unlimited accounts',
     '5–40 year projections + milestones',
@@ -174,7 +191,6 @@ export default function Upgrade() {
 
   return (
     <div className="space-y-10">
-      {/* Header */}
       <div className="text-center space-y-3">
         <div className="text-xs font-semibold tracking-[.18em] uppercase text-ink-muted/50 dark:text-white/25">
           Paddock Pro
@@ -195,7 +211,6 @@ export default function Upgrade() {
         )}
       </div>
 
-      {/* Pricing Card */}
       <div className="max-w-md mx-auto">
         <div className="rounded-3xl border border-black/[.08] dark:border-white/[.08] bg-white dark:bg-white/5 shadow-[0_20px_40px_rgba(0,0,0,.08)] p-8 space-y-6">
           <div className="text-center space-y-3">
@@ -204,7 +219,6 @@ export default function Upgrade() {
               Paddock Pro
             </div>
 
-            {/* Plan toggle */}
             <div className="inline-flex p-1 rounded-2xl border border-black/[.08] dark:border-white/[.10] bg-black/[.02] dark:bg-white/[.06]">
               <button
                 onClick={() => setPlan('monthly')}
@@ -231,7 +245,6 @@ export default function Upgrade() {
               </button>
             </div>
 
-            {/* Price display */}
             <div className="space-y-1">
               <div className="text-4xl font-display tracking-tight text-ink dark:text-white">
                 {price}
@@ -252,7 +265,6 @@ export default function Upgrade() {
             </div>
           </div>
 
-          {/* Features */}
           <div className="space-y-3 text-sm">
             {proBullets.map((t) => (
               <div key={t} className="flex items-start gap-2">
@@ -268,7 +280,6 @@ export default function Upgrade() {
             </div>
           </div>
 
-          {/* CTA */}
           {!isPro ? (
             <UpgradeButton onClick={handleUpgrade} size="lg" className="w-full" disabled={isLoading}>
               {isLoading ? 'Redirecting…' : 'Upgrade'}
@@ -285,7 +296,6 @@ export default function Upgrade() {
         </div>
       </div>
 
-      {/* Comparison */}
       <div className="max-w-3xl mx-auto">
         <div className="rounded-3xl border border-black/[.06] dark:border-white/[.08] bg-white/60 dark:bg-white/[.04] p-6 sm:p-8">
           <h2 className="text-lg font-semibold text-ink dark:text-white text-center">Free vs Pro</h2>

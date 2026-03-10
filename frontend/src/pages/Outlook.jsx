@@ -1,4 +1,3 @@
-// frontend/src/pages/Outlook.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import { invalidatePath } from '../api'
@@ -60,7 +59,7 @@ function requiredMonthlyContribution({ pv, fv, yearsRemaining, annualReturnPct }
   if (pv >= fv) return 0
 
   const er = Number(annualReturnPct || 0)
-  const r = (er / 100) / 12
+  const r = er / 100 / 12
   if (!Number.isFinite(r)) return null
 
   if (r === 0) return Math.max(0, (fv - pv) / n)
@@ -104,6 +103,7 @@ export default function Outlook() {
   const forecastRef = useRef(null)
   const justAppliedRef = useRef(false)
   const lastWhatIfKeyRef = useRef('')
+  const trackedViewRef = useRef(false)
 
   const [feedback, setFeedback] = useState(null)
   const feedbackTimer = useRef(null)
@@ -143,6 +143,22 @@ export default function Outlook() {
   const HORIZONS = settingsReady && isPro ? [1, 5, 10, 15, 20, 25, 30, 40] : [1]
   const effectiveProjYears = settingsReady && isPro ? projYears : FREE_HORIZON
   const goalId = primaryGoal?.id
+
+  const goUpgrade = useCallback(
+    (source = 'outlook_cta') => {
+      track('upgrade_clicked', {
+        page: 'outlook',
+        source,
+      })
+
+      try {
+        localStorage.setItem('upgrade_reason', source)
+      } catch {}
+
+      setPage('upgrade')
+    },
+    [setPage]
+  )
 
   // ────────────────────────────────────────────────────────
   // Forecast fetch (base) + read-only fetch (what-if)
@@ -301,7 +317,7 @@ export default function Outlook() {
   useEffect(() => {
     if (!settingsReady || !isPro) return
     if (!goalId) return
-    if (!forecastVersion) return // only after baseline loaded at least once
+    if (!forecastVersion) return
 
     const key = `${goalId}|${localContrib}|${localReturn}`
     if (lastWhatIfKeyRef.current === key) return
@@ -353,7 +369,11 @@ export default function Outlook() {
   }, [projOpen, settingsReady, effectiveProjYears, loadProjections])
 
   useEffect(() => {
-    track?.('projection_opened')
+    if (trackedViewRef.current) return
+    trackedViewRef.current = true
+
+    track('page_view', { page: 'outlook' })
+    track('projection_opened', { page: 'outlook' })
   }, [])
 
   // ─── UI helpers ─────────────────────────────────────────
@@ -393,12 +413,17 @@ export default function Outlook() {
           },
         })
 
+        track('goal_updated', {
+          page: 'outlook',
+          entityType: 'goal',
+          entityId: goalId,
+          source: 'assumptions_update',
+        })
+
         setDirty(false)
 
-        // Targeted invalidation (no storms)
         invalidatePath('/goals/primary', `/goals/${goalId}/forecast`)
 
-        // Fetch updated baseline forecast ONCE
         const newForecast = await loadForecast(mc, er, { force: true })
 
         if (
@@ -411,7 +436,6 @@ export default function Outlook() {
           showFeedback('Updated')
         }
 
-        // Background refresh (safe)
         justAppliedRef.current = true
         Promise.resolve()
           .then(async () => {
@@ -471,6 +495,14 @@ export default function Outlook() {
       setEditSaving(true)
 
       await api(`/goals/${goalId}`, { method: 'PATCH', body: payload })
+
+      track('goal_updated', {
+        page: 'outlook',
+        entityType: 'goal',
+        entityId: goalId,
+        source: 'edit_plan_save',
+      })
+
       showToast('Plan updated', 'success')
 
       setEditOpen(false)
@@ -588,7 +620,6 @@ export default function Outlook() {
       'text-red-400 dark:text-red-300/[0.6] bg-red-300/[.06] border border-red-300/[.12]',
   }
 
-  // Chart data
   const chartData = useMemo(() => {
     const projPoints = forecast?.projected_points || []
     const reqPoints = forecast?.required_points || []
@@ -633,7 +664,6 @@ export default function Outlook() {
     return out
   }, [projData, projHistory, deflate])
 
-  // Milestones selection
   const milestones = projData?.milestones || []
   const filteredMilestones = useMemo(() => {
     const all = milestones
@@ -675,7 +705,6 @@ export default function Outlook() {
     return picked.slice(0, 4)
   }, [milestones, effectiveProjYears])
 
-  // UI tokens
   const inp =
     'w-full px-4 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] bg-white dark:bg-surface-dark text-base text-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all'
   const lbl = 'block text-xs font-semibold text-ink-3 dark:text-white/50 mb-2'
@@ -687,7 +716,6 @@ export default function Outlook() {
     String(editForm.target_age || '').trim() &&
     String(editForm.target_amount || '').trim()
 
-  // ─── Renders ────────────────────────────────────────────
   if (primaryGoal === undefined) {
     return (
       <div className="space-y-7 animate-fade-in">
@@ -818,252 +846,247 @@ export default function Outlook() {
         </div>
       )}
 
-      {/* Executive Summary */}
-<div className="strategy-header rounded-3xl p-7 sm:p-9">
-  <div className="space-y-4">
-    <div className="flex items-start justify-between gap-4">
-      <h1 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">
-        {goal?.name || 'Outlook'}
-      </h1>
-      <button
-        onClick={openEdit}
-        className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-2xl bg-white/70 dark:bg-white/[.06] text-ink dark:text-white border border-black/[.06] dark:border-white/[.08] hover:bg-white transition-colors"
-        type="button"
-      >
-        <Pencil size={16} /> Edit plan
-      </button>
-    </div>
-
-    <div className="flex flex-wrap items-center gap-3">
-      <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${statusColors[status]}`}>
-        {statusLabels[status]}
-      </span>
-
-      <div className="text-xs text-ink-muted dark:text-white/35">
-        Based on your current net worth and contribution rate.
-      </div>
-
-      {settingsReady &&
-        (isPro ? (
-          <button
-            onClick={() => setInflationAdj((v) => !v)}
-            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
-              inflationAdj
-                ? 'bg-accent/10 border-accent/20 text-accent dark:text-blue-400'
-                : 'bg-transparent border-black/[.06] dark:border-white/[.06] text-ink-muted/60 dark:text-white/30 hover:text-ink dark:hover:text-white/50'
-            }`}
-            type="button"
-          >
-            {inflationAdj ? '📉 Real (today’s money)' : '💰 Future value (nominal)'}
-          </button>
-        ) : (
-          <button
-            onClick={() => setPage('upgrade')}
-            className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-full border border-amber-500/15 text-amber-600 dark:text-amber-300 bg-amber-50/50 dark:bg-amber-500/[.04] hover:bg-amber-50 transition-colors"
-            type="button"
-          >
-            <Crown size={11} /> Real-terms modelling
-          </button>
-        ))}
-
-      {feedback && (
-        <span className="text-xs font-medium text-gain dark:text-emerald-400 flex items-center gap-1.5 animate-fade-in">
-          <Check size={14} /> {feedback}
-        </span>
-      )}
-    </div>
-
-    {/* Executive Stats */}
-    <div className="pt-6 space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 items-end">
-        <div>
-          <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">
-            Projected at age {goal?.target_age}
-            {inflationAdj ? ' (today’s money)' : ''}
-          </div>
-          <div className="font-display text-2xl text-ink dark:text-white tabular-nums">
-            {fmtCurrencyCompact(derived.displayProjEnd, ccy)}
-          </div>
-        </div>
-
-        <div>
-          <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">
-            Your target{inflationAdj ? ' (today’s money)' : ''}
-          </div>
-          <div className="font-display text-2xl text-ink dark:text-white tabular-nums">
-            {fmtCurrencyCompact(derived.displayTarget, ccy)}
-          </div>
-        </div>
-
-        <div>
-          <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">Current net worth</div>
-          <div className="font-display text-2xl text-ink dark:text-white tabular-nums">
-            {fmtCurrencyCompact(derived.currentNW, ccy)}
-          </div>
-        </div>
-
-        <div>
-          <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">Years to target age</div>
-          <div className="font-display text-2xl text-ink dark:text-white tabular-nums">
-            {derived.yearsRemaining}
-          </div>
-        </div>
-      </div>
-
-      {/* Optimiser */}
-      {settingsReady && isPro && status === 'adjust' && derived.reqMc != null && (
-        <div className="mt-4 pt-4 border-t border-black/[.06] dark:border-white/[.08]">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <div className="text-xs font-semibold text-ink-3 dark:text-white/50 tracking-wide">
-                Optimiser
-              </div>
-              <div className="mt-1 text-sm text-ink-muted dark:text-white/40">
-                To hit your target by age {goal?.target_age}, aim for{' '}
-                <span className="font-medium text-ink dark:text-white">
-                  {fmtCurrency(Math.ceil(derived.reqMc), ccy)}/mo
-                </span>
-                {derived.deltaMc != null && derived.deltaMc > 0 ? (
-                  <>
-                    {' '}
-                    (+{' '}
-                    <span className="font-medium text-ink dark:text-white">
-                      {fmtCurrency(Math.ceil(derived.deltaMc), ccy)}/mo
-                    </span>
-                    )
-                  </>
-                ) : null}
-                .
-              </div>
-            </div>
-
+      <div className="strategy-header rounded-3xl p-7 sm:p-9">
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">
+              {goal?.name || 'Outlook'}
+            </h1>
             <button
+              onClick={openEdit}
+              className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-2xl bg-white/70 dark:bg-white/[.06] text-ink dark:text-white border border-black/[.06] dark:border-white/[.08] hover:bg-white transition-colors"
               type="button"
-              onClick={async (e) => {
-                e.preventDefault()
-                e.stopPropagation()
-
-                const next = Math.ceil(derived.reqMc)
-                const nextStr = String(next)
-
-                setLocalContrib(nextStr)
-                setDirty(true)
-
-                await applyAssumptions({ mcOverride: next })
-              }}
-              className="inline-flex items-center justify-center
-              px-5 py-2.5 rounded-2xl text-sm font-semibold
-              bg-accent text-white
-              hover:bg-accent/90 active:scale-[0.98]
-              transition-all duration-150
-              shadow-sm hover:shadow-md
-              disabled:opacity-50 disabled:cursor-not-allowed
-              min-h-[42px]"
             >
-              Set & update
+              <Pencil size={16} /> Edit plan
             </button>
           </div>
-        </div>
-      )}
 
-      {/* Independence */}
-      <div className="mt-2 rounded-3xl border border-black/[.06] dark:border-white/[.08] bg-white/60 dark:bg-white/[.04] p-5 sm:p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="text-xs font-semibold text-ink-3 dark:text-white/50 tracking-wide">
-              Independence
+          <div className="flex flex-wrap items-center gap-3">
+            <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${statusColors[status]}`}>
+              {statusLabels[status]}
+            </span>
+
+            <div className="text-xs text-ink-muted dark:text-white/35">
+              Based on your current net worth and contribution rate.
             </div>
 
-            {settingsReady && isPro ? (
-              <>
-                <div className="mt-2 font-display text-2xl text-ink dark:text-white leading-tight">
-                  {derived.freedomAge != null ? (
-                    <>
-                      Age {derived.freedomAge}
-                      {derived.freedomYearNum != null ? (
-                        <span className="ml-2 text-sm font-sans text-ink-muted/60 dark:text-white/35">
-                          ({derived.freedomYearNum})
-                        </span>
-                      ) : null}
-                    </>
-                  ) : (
-                    <>Off target</>
-                  )}
-                </div>
+            {settingsReady &&
+              (isPro ? (
+                <button
+                  onClick={() => setInflationAdj((v) => !v)}
+                  className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+                    inflationAdj
+                      ? 'bg-accent/10 border-accent/20 text-accent dark:text-blue-400'
+                      : 'bg-transparent border-black/[.06] dark:border-white/[.06] text-ink-muted/60 dark:text-white/30 hover:text-ink dark:hover:text-white/50'
+                  }`}
+                  type="button"
+                >
+                  {inflationAdj ? '📉 Real (today’s money)' : '💰 Future value (nominal)'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => goUpgrade('inflation_locked')}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-full border border-amber-500/15 text-amber-600 dark:text-amber-300 bg-amber-50/50 dark:bg-amber-500/[.04] hover:bg-amber-50 transition-colors"
+                  type="button"
+                >
+                  <Crown size={11} /> Real-terms modelling
+                </button>
+              ))}
 
-                <div className="mt-2 text-sm text-ink-muted dark:text-white/40">
-                  {derived.freedomAge != null ? (
-                    derived.yearsToGoal != null ? (
-                      `${derived.yearsToGoal} years away at your current pace.`
-                    ) : (
-                      'Timeline updates as your net worth changes.'
-                    )
-                  ) : (
-                    'Consider adjusting your monthly contribution to stay on track.'
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="mt-2 font-display text-2xl text-ink-muted/40 dark:text-white/25 leading-tight">
-                  Freedom timeline
-                </div>
-                <div className="mt-2 text-sm text-ink-muted dark:text-white/40">
-                  Unlock independence timing and scenario modelling.
-                </div>
-              </>
+            {feedback && (
+              <span className="text-xs font-medium text-gain dark:text-emerald-400 flex items-center gap-1.5 animate-fade-in">
+                <Check size={14} /> {feedback}
+              </span>
             )}
           </div>
 
-          {!isPro && settingsReady && (
-            <button
-              onClick={() => setPage('upgrade')}
-              className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-2xl bg-amber-50/60 dark:bg-amber-500/[.06] text-amber-700 dark:text-amber-200 border border-amber-500/15 hover:bg-amber-50 transition-colors shrink-0"
-              type="button"
-            >
-              <Lock size={16} /> Go Pro
-            </button>
-          )}
-        </div>
-
-        {settingsReady &&
-          isPro &&
-          derived.freedomYearNum != null &&
-          (derived.plus100Year != null || derived.plus250Year != null) && (
-            <div className="mt-4 pt-4 border-t border-black/[.06] dark:border-white/[.08] text-[13px] text-ink-muted dark:text-white/40">
-              {derived.plus100Year != null && (
-                <div>
-                  +£100/mo →{' '}
-                  <span className="font-medium text-ink dark:text-white">{derived.plus100Year}</span>
-                  {derived.plus100Year < derived.freedomYearNum ? (
-                    <span className="text-gain dark:text-emerald-300/90">
-                      {' '}
-                      ({formatYearsEarlier(derived.freedomYearNum - derived.plus100Year)})
-                    </span>
-                  ) : null}
+          <div className="pt-6 space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 items-end">
+              <div>
+                <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">
+                  Projected at age {goal?.target_age}
+                  {inflationAdj ? ' (today’s money)' : ''}
                 </div>
-              )}
-
-              {derived.plus250Year != null && (
-                <div className="mt-1">
-                  +£250/mo →{' '}
-                  <span className="font-medium text-ink dark:text-white">{derived.plus250Year}</span>
-                  {derived.plus250Year < derived.freedomYearNum ? (
-                    <span className="text-gain dark:text-emerald-300/90">
-                      {' '}
-                      ({formatYearsEarlier(derived.freedomYearNum - derived.plus250Year)})
-                    </span>
-                  ) : null}
+                <div className="font-display text-2xl text-ink dark:text-white tabular-nums">
+                  {fmtCurrencyCompact(derived.displayProjEnd, ccy)}
                 </div>
-              )}
+              </div>
+
+              <div>
+                <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">
+                  Your target{inflationAdj ? ' (today’s money)' : ''}
+                </div>
+                <div className="font-display text-2xl text-ink dark:text-white tabular-nums">
+                  {fmtCurrencyCompact(derived.displayTarget, ccy)}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">Current net worth</div>
+                <div className="font-display text-2xl text-ink dark:text-white tabular-nums">
+                  {fmtCurrencyCompact(derived.currentNW, ccy)}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">Years to target age</div>
+                <div className="font-display text-2xl text-ink dark:text-white tabular-nums">
+                  {derived.yearsRemaining}
+                </div>
+              </div>
             </div>
-          )}
-      </div>
-    </div>
-  </div>
-</div>
 
-      {/* Trajectory */}
+            {settingsReady && isPro && status === 'adjust' && derived.reqMc != null && (
+              <div className="mt-4 pt-4 border-t border-black/[.06] dark:border-white/[.08]">
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <div className="text-xs font-semibold text-ink-3 dark:text-white/50 tracking-wide">
+                      Optimiser
+                    </div>
+                    <div className="mt-1 text-sm text-ink-muted dark:text-white/40">
+                      To hit your target by age {goal?.target_age}, aim for{' '}
+                      <span className="font-medium text-ink dark:text-white">
+                        {fmtCurrency(Math.ceil(derived.reqMc), ccy)}/mo
+                      </span>
+                      {derived.deltaMc != null && derived.deltaMc > 0 ? (
+                        <>
+                          {' '}
+                          (+{' '}
+                          <span className="font-medium text-ink dark:text-white">
+                            {fmtCurrency(Math.ceil(derived.deltaMc), ccy)}/mo
+                          </span>
+                          )
+                        </>
+                      ) : null}
+                      .
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+
+                      const next = Math.ceil(derived.reqMc)
+                      const nextStr = String(next)
+
+                      setLocalContrib(nextStr)
+                      setDirty(true)
+
+                      await applyAssumptions({ mcOverride: next })
+                    }}
+                    className="inline-flex items-center justify-center
+                    px-5 py-2.5 rounded-2xl text-sm font-semibold
+                    bg-accent text-white
+                    hover:bg-accent/90 active:scale-[0.98]
+                    transition-all duration-150
+                    shadow-sm hover:shadow-md
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                    min-h-[42px]"
+                  >
+                    Set & update
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-2 rounded-3xl border border-black/[.06] dark:border-white/[.08] bg-white/60 dark:bg-white/[.04] p-5 sm:p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-ink-3 dark:text-white/50 tracking-wide">
+                    Independence
+                  </div>
+
+                  {settingsReady && isPro ? (
+                    <>
+                      <div className="mt-2 font-display text-2xl text-ink dark:text-white leading-tight">
+                        {derived.freedomAge != null ? (
+                          <>
+                            Age {derived.freedomAge}
+                            {derived.freedomYearNum != null ? (
+                              <span className="ml-2 text-sm font-sans text-ink-muted/60 dark:text-white/35">
+                                ({derived.freedomYearNum})
+                              </span>
+                            ) : null}
+                          </>
+                        ) : (
+                          <>Off target</>
+                        )}
+                      </div>
+
+                      <div className="mt-2 text-sm text-ink-muted dark:text-white/40">
+                        {derived.freedomAge != null ? (
+                          derived.yearsToGoal != null ? (
+                            `${derived.yearsToGoal} years away at your current pace.`
+                          ) : (
+                            'Timeline updates as your net worth changes.'
+                          )
+                        ) : (
+                          'Consider adjusting your monthly contribution to stay on track.'
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="mt-2 font-display text-2xl text-ink-muted/40 dark:text-white/25 leading-tight">
+                        Freedom timeline
+                      </div>
+                      <div className="mt-2 text-sm text-ink-muted dark:text-white/40">
+                        Unlock independence timing and scenario modelling.
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {!isPro && settingsReady && (
+                  <button
+                    onClick={() => goUpgrade('independence_locked')}
+                    className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-2xl bg-amber-50/60 dark:bg-amber-500/[.06] text-amber-700 dark:text-amber-200 border border-amber-500/15 hover:bg-amber-50 transition-colors shrink-0"
+                    type="button"
+                  >
+                    <Lock size={16} /> Go Pro
+                  </button>
+                )}
+              </div>
+
+              {settingsReady &&
+                isPro &&
+                derived.freedomYearNum != null &&
+                (derived.plus100Year != null || derived.plus250Year != null) && (
+                  <div className="mt-4 pt-4 border-t border-black/[.06] dark:border-white/[.08] text-[13px] text-ink-muted dark:text-white/40">
+                    {derived.plus100Year != null && (
+                      <div>
+                        +£100/mo →{' '}
+                        <span className="font-medium text-ink dark:text-white">{derived.plus100Year}</span>
+                        {derived.plus100Year < derived.freedomYearNum ? (
+                          <span className="text-gain dark:text-emerald-300/90">
+                            {' '}
+                            ({formatYearsEarlier(derived.freedomYearNum - derived.plus100Year)})
+                          </span>
+                        ) : null}
+                      </div>
+                    )}
+
+                    {derived.plus250Year != null && (
+                      <div className="mt-1">
+                        +£250/mo →{' '}
+                        <span className="font-medium text-ink dark:text-white">{derived.plus250Year}</span>
+                        {derived.plus250Year < derived.freedomYearNum ? (
+                          <span className="text-gain dark:text-emerald-300/90">
+                            {' '}
+                            ({formatYearsEarlier(derived.freedomYearNum - derived.plus250Year)})
+                          </span>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <Card className="p-0 overflow-hidden sm:rounded-3xl rounded-2xl">
         <details className="group" open={trajOpen} onToggle={(e) => setTrajOpen(e.currentTarget.open)}>
           <summary
@@ -1242,7 +1265,6 @@ export default function Outlook() {
         </details>
       </Card>
 
-      {/* Account Projections */}
       <Card className="overflow-hidden">
         <button
           onClick={() => setProjOpen((v) => !v)}
@@ -1286,7 +1308,7 @@ export default function Outlook() {
 
                 {settingsReady && !isPro && (
                   <button
-                    onClick={() => setPage('upgrade')}
+                    onClick={() => goUpgrade('projection_horizon_locked')}
                     className="text-xs font-semibold px-3.5 py-2 rounded-full text-amber-600 dark:text-amber-300 hover:bg-amber-500/10 transition-all flex items-center gap-1"
                     type="button"
                   >
@@ -1387,7 +1409,7 @@ export default function Outlook() {
                         Unlock 5–40 year projections, milestones and strategic tools.
                       </div>
                     </div>
-                    <UpgradeButton onClick={() => setPage('upgrade')} size="sm">
+                    <UpgradeButton onClick={() => goUpgrade('projection_footer_cta')} size="sm">
                       Upgrade
                     </UpgradeButton>
                   </div>
@@ -1398,7 +1420,6 @@ export default function Outlook() {
         )}
       </Card>
 
-      {/* Edit Plan Modal */}
       {editOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" />

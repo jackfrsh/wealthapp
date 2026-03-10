@@ -1,4 +1,3 @@
-// frontend/src/pages/Settings.jsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useApp } from '../App'
 import Card from '../components/Card'
@@ -64,7 +63,7 @@ export default function Settings() {
     setBaseCurrency,
     showToast,
     themePref,
-    setThemePreference, // ✅ use ONLY this one from App.jsx
+    setThemePreference,
     isPro,
     setIsPro,
     refreshSettings,
@@ -75,7 +74,10 @@ export default function Settings() {
   const isDark = !!dark
   const [currency, setCurrency] = useState((baseCurrency || 'GBP').toUpperCase())
 
-  // Always mirror current app currency (fast paint)
+  useEffect(() => {
+    track('page_view', { page: 'settings' })
+  }, [])
+
   useEffect(() => {
     setCurrency((baseCurrency || 'GBP').toUpperCase())
   }, [baseCurrency])
@@ -106,19 +108,39 @@ export default function Settings() {
     return adminEmails.has(String(username).toLowerCase())
   }, [adminEmails, username])
 
-  // Persist theme to server (but App owns UI + localStorage + DOM)
-const persistThemePreference = useCallback(
-  async (pref) => {
-    try {
-      await api('/settings', { method: 'PUT', body: { theme_preference: pref } })
-      invalidateCache()
-    } catch (e) {
-      console.warn('Theme save failed:', e)
-      showToast?.('Could not save theme preference', 'error')
-    }
-  },
-  [api, showToast]
-)
+  const goUpgrade = useCallback(
+    (source = 'settings_cta') => {
+      track('upgrade_clicked', {
+        page: 'settings',
+        source,
+      })
+
+      try {
+        localStorage.setItem('upgrade_reason', source)
+      } catch {}
+
+      setPage('upgrade')
+    },
+    [setPage]
+  )
+
+  const persistThemePreference = useCallback(
+    async (pref) => {
+      try {
+        await api('/settings', { method: 'PUT', body: { theme_preference: pref } })
+        invalidateCache()
+
+        track('settings_updated', {
+          page: 'settings',
+          source: 'theme_preference',
+        })
+      } catch (e) {
+        console.warn('Theme save failed:', e)
+        showToast?.('Could not save theme preference', 'error')
+      }
+    },
+    [api, showToast]
+  )
 
   const saveCurrency = async () => {
     setSaving(true)
@@ -126,8 +148,12 @@ const persistThemePreference = useCallback(
       await api('/settings', { method: 'PUT', body: { base_currency: currency } })
       setBaseCurrency?.(currency)
       showToast?.('Settings saved', 'success')
-      // Only refresh if you rely on server to also return entitlement fields, etc.
       await refreshSettings?.({ force: true })
+
+      track('settings_updated', {
+        page: 'settings',
+        source: 'base_currency',
+      })
     } catch (e) {
       showToast?.(e?.message || 'Failed to save', 'error')
     } finally {
@@ -158,6 +184,11 @@ const persistThemePreference = useCallback(
     try {
       const res = await api('/billing/portal', { method: 'POST' })
       if (res?.url) {
+        track('billing_portal_opened', {
+          page: 'settings',
+          source: 'manage_billing',
+        })
+
         window.location.href = res.url
         return
       }
@@ -262,7 +293,6 @@ const persistThemePreference = useCallback(
         </button>
       </div>
 
-      {/* Admin */}
       {isAdmin && (
         <Card className="p-7">
           <div className="flex items-center justify-between gap-4">
@@ -285,7 +315,6 @@ const persistThemePreference = useCallback(
         </Card>
       )}
 
-      {/* Subscription */}
       <Card className="p-7 overflow-hidden relative">
         {isPro && (
           <div className="absolute top-0 right-0 w-32 h-32 opacity-[.035] pointer-events-none">
@@ -362,13 +391,7 @@ const persistThemePreference = useCallback(
 
             <div className="flex flex-wrap items-center gap-3">
               <UpgradeButton
-                onClick={() => {
-                  track?.('upgrade_clicked', { source: 'settings_cta' })
-                  try {
-                    localStorage.setItem('upgrade_reason', 'settings_cta')
-                  } catch {}
-                  setPage('upgrade')
-                }}
+                onClick={() => goUpgrade('settings_cta')}
                 disabled={billingBusy}
                 className="min-h-[48px]"
               >
@@ -376,12 +399,7 @@ const persistThemePreference = useCallback(
               </UpgradeButton>
 
               <button
-                onClick={() => {
-                  try {
-                    localStorage.setItem('upgrade_reason', 'settings_view_plans')
-                  } catch {}
-                  setPage('upgrade')
-                }}
+                onClick={() => goUpgrade('settings_view_plans')}
                 className="text-sm font-semibold text-ink-muted dark:text-white/45 hover:text-ink dark:hover:text-white transition-colors"
                 type="button"
               >
@@ -404,7 +422,6 @@ const persistThemePreference = useCallback(
         )}
       </Card>
 
-      {/* Appearance */}
       <Card className="p-7">
         <h3 className="text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35 mb-5 flex items-center gap-2">
           {isDark ? <Moon size={14} /> : <Sun size={14} />} Appearance
@@ -418,9 +435,7 @@ const persistThemePreference = useCallback(
               <button
                 key={opt.id}
                 onClick={async () => {
-                  // Instant UX (App setter: state + DOM + localStorage)
                   setThemePreference(opt.id)
-                  // Persist quietly (no extra GET)
                   await persistThemePreference(opt.id)
                 }}
                 className={[
@@ -442,7 +457,6 @@ const persistThemePreference = useCallback(
         </div>
       </Card>
 
-      {/* Currency */}
       <Card className="p-7">
         <h3 className="text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35 mb-5 flex items-center gap-2">
           <Globe size={14} /> Currency
@@ -474,7 +488,6 @@ const persistThemePreference = useCallback(
         </button>
       </Card>
 
-      {/* FX */}
       <Card className="p-7">
         <h3 className="text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35 mb-4">
           Exchange Rates

@@ -1,9 +1,9 @@
-// frontend/src/pages/Insights.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../api'
 import { useApp } from '../App'
 import Card from '../components/Card'
 import ProPreview from '../components/ProPreview'
+import { track } from '../track'
 import { ArrowRight, TrendingUp, Lightbulb, Award, Lock } from 'lucide-react'
 import WhatIfCard from './WhatIfCard'
 import ProProjectionCard from './ProProjectionCard'
@@ -20,16 +20,11 @@ const CATEGORY_LABELS = {
   opportunity: 'Opportunity',
 }
 
-// Token-only tones (no emerald/blue/amber hardcoding)
 const TONE_STYLES = {
   positive: 'border-l-gain/35 dark:border-l-gain/30',
   neutral: 'border-l-accent/25 dark:border-l-accent/22',
   warning: 'border-l-loss/28 dark:border-l-loss/24',
 }
-
-/* ──────────────────────────────────────────── */
-/* Milestone ladder (match Home)                 */
-/* ──────────────────────────────────────────── */
 
 const MILESTONE_LADDER = [
   1_000, 2_500, 5_000, 10_000,
@@ -54,6 +49,7 @@ export default function Insights() {
   const { setPage, isPro, primaryGoal, showToast } = useApp()
 
   const recordingRef = useRef(false)
+  const trackedViewRef = useRef(false)
 
   const [data, setData] = useState(null)
   const [accounts, setAccounts] = useState([])
@@ -85,11 +81,18 @@ export default function Insights() {
     load()
   }, [load])
 
+  useEffect(() => {
+    if (trackedViewRef.current) return
+    trackedViewRef.current = true
+
+    track('page_view', { page: 'insights' })
+    track('insights_viewed', { page: 'insights' })
+  }, [])
+
   const insights = data?.insights || []
   const visibleInsights = isPro ? insights : insights.slice(0, 2)
   const lockedCount = Math.max(0, insights.length - visibleInsights.length)
 
-  // Group visible insights by category
   const groups = {}
   for (const ins of visibleInsights) {
     const cat = ins?.category || 'progress'
@@ -98,16 +101,11 @@ export default function Insights() {
   }
   const categoryOrder = ['progress', 'discipline', 'opportunity']
 
-  // Retirement target (long-term): from primaryGoal
   const retirementTarget =
     primaryGoal?.target_amount ??
     primaryGoal?.targetAmount ??
     primaryGoal?.target ??
     null
-
-  /* ──────────────────────────────────────────── */
-  /* Milestone wiring                              */
-  /* ──────────────────────────────────────────── */
 
   const total = Number(dashboard?.current_total || 0)
 
@@ -231,19 +229,19 @@ export default function Insights() {
 
                     {ins.action === 'record' && (
                       <button
-                      onClick={async () => {
-                        if (recordingRef.current) return
-                        recordingRef.current = true
-                        try {
-                          await api('/snapshots', { method: 'POST' })
-                          showToast?.('Snapshot recorded')
-                          load()
-                        } catch (e) {
-                          showToast?.(e?.message || 'Failed to record snapshot', 'error')
-                        } finally {
-                          recordingRef.current = false
-                        }
-                      }}
+                        onClick={async () => {
+                          if (recordingRef.current) return
+                          recordingRef.current = true
+                          try {
+                            await api('/snapshots', { method: 'POST' })
+                            showToast?.('Snapshot recorded')
+                            load()
+                          } catch (e) {
+                            showToast?.(e?.message || 'Failed to record snapshot', 'error')
+                          } finally {
+                            recordingRef.current = false
+                          }
+                        }}
                         className="flex items-center gap-1 text-xs font-semibold text-accent hover:text-accent-dark transition-colors whitespace-nowrap mt-1"
                         type="button"
                       >
@@ -263,7 +261,6 @@ export default function Insights() {
           title={`${lockedCount} more insight${lockedCount > 1 ? 's' : ''} available`}
           subtitle="Unlock deeper analysis of your wealth trajectory with Pro."
         >
-          {/* Simulated Pro insight cards behind frosted glass */}
           <div className="space-y-3">
             <Card className="p-6 border-l-[3px] border-l-emerald-400">
               <h3 className="text-sm font-semibold text-ink dark:text-white mb-1.5">
