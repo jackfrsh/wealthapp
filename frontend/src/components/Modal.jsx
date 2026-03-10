@@ -1,15 +1,31 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
 export default function Modal({ open, onClose, title, children }) {
   const panelRef = useRef(null)
+  const [mounted, setMounted] = useState(false)
+  const [viewportHeight, setViewportHeight] = useState(0)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     if (!open) return
 
-    const prevOverflow = document.body.style.overflow
-    const prevTouchAction = document.body.style.touchAction
+    const updateViewportHeight = () => {
+      const h = window.visualViewport?.height || window.innerHeight || 0
+      setViewportHeight(h)
+    }
 
+    updateViewportHeight()
+
+    const prevHtmlOverflow = document.documentElement.style.overflow
+    const prevBodyOverflow = document.body.style.overflow
+    const prevBodyTouchAction = document.body.style.touchAction
+
+    document.documentElement.style.overflow = 'hidden'
     document.body.style.overflow = 'hidden'
     document.body.style.touchAction = 'none'
 
@@ -39,61 +55,147 @@ export default function Modal({ open, onClose, title, children }) {
     }
 
     window.addEventListener('keydown', onKey)
+    window.addEventListener('resize', updateViewportHeight)
+    window.visualViewport?.addEventListener?.('resize', updateViewportHeight)
 
     return () => {
-      document.body.style.overflow = prevOverflow
-      document.body.style.touchAction = prevTouchAction
+      document.documentElement.style.overflow = prevHtmlOverflow
+      document.body.style.overflow = prevBodyOverflow
+      document.body.style.touchAction = prevBodyTouchAction
+
       window.removeEventListener('keydown', onKey)
+      window.removeEventListener('resize', updateViewportHeight)
+      window.visualViewport?.removeEventListener?.('resize', updateViewportHeight)
     }
   }, [open, onClose])
 
-  if (!open) return null
+  useEffect(() => {
+    if (!open) return
+    const root = panelRef.current
+    if (!root) return
 
-  return (
-    <div className="fixed inset-0 z-[1000]" role="dialog" aria-modal="true">
-      <div
+    const firstFocusable = root.querySelector(
+      'input, select, textarea, button, [href], [tabindex]:not([tabindex="-1"])'
+    )
+    firstFocusable?.focus?.()
+  }, [open])
+
+  if (!open || !mounted) return null
+
+  const mobileBottomOffset = 'calc(env(safe-area-inset-bottom) + 5.5rem)'
+  const mobileTopGap = 12
+  const desktopGap = 24
+
+  const computedMaxHeight = viewportHeight
+    ? Math.max(320, viewportHeight - mobileTopGap - 16)
+    : undefined
+
+  const modal = (
+    <div
+      className="fixed inset-0 z-[2000]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
+      <button
+        type="button"
+        aria-label="Close modal"
         className="absolute inset-0 bg-black/35 dark:bg-black/55 backdrop-blur-sm"
         onClick={() => onClose?.()}
       />
 
-      <div className="absolute inset-0 overflow-y-auto overscroll-contain">
-        <div className="min-h-full flex items-start justify-center p-4 sm:p-6">
+      {/* Mobile: Apple-style bottom sheet */}
+      <div className="sm:hidden absolute inset-0 pointer-events-none">
+        <div
+          className="h-full w-full flex items-end justify-stretch px-2"
+          style={{ paddingBottom: mobileBottomOffset }}
+        >
           <div
             ref={panelRef}
-            className="w-full max-w-[560px]"
             onClick={(e) => e.stopPropagation()}
+            className="pointer-events-auto w-full rounded-t-[28px] rounded-b-[28px] bg-white dark:bg-surface-dark-2 border border-black/[.08] dark:border-white/[.10] shadow-[0_24px_60px_rgba(0,0,0,.22)] overflow-hidden flex flex-col"
+            style={{
+              maxHeight: computedMaxHeight ? `${computedMaxHeight}px` : '82vh',
+            }}
           >
-            <div
-              className={[
-                'rounded-3xl border border-black/[.08] dark:border-white/[.10]',
-                'bg-white dark:bg-surface-dark-2',
-                'shadow-[0_24px_60px_rgba(0,0,0,.18)]',
-              ].join(' ')}
-            >
-              <div className="px-6 sm:px-7 py-5 border-b border-black/[.06] dark:border-white/[.07] flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="text-base font-semibold text-ink dark:text-white truncate">
-                    {title}
-                  </div>
-                </div>
+            <div className="pt-2 pb-1 flex justify-center shrink-0">
+              <div className="h-1.5 w-10 rounded-full bg-black/10 dark:bg-white/15" />
+            </div>
 
-                <button
-                  type="button"
-                  onClick={() => onClose?.()}
-                  className="h-10 w-10 rounded-2xl border border-black/[.08] dark:border-white/[.10] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors grid place-items-center"
-                  aria-label="Close"
+            <div className="px-5 py-4 border-b border-black/[.06] dark:border-white/[.07] flex items-center justify-between gap-4 shrink-0">
+              <div className="min-w-0">
+                <div
+                  id="modal-title"
+                  className="text-[17px] font-semibold text-ink dark:text-white truncate"
                 >
-                  <X size={16} className="opacity-80" />
-                </button>
+                  {title}
+                </div>
               </div>
 
-              <div className="p-6 sm:p-7 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
-                {children}
+              <button
+                type="button"
+                onClick={() => onClose?.()}
+                className="h-10 w-10 rounded-2xl border border-black/[.08] dark:border-white/[.10] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors grid place-items-center shrink-0"
+                aria-label="Close"
+              >
+                <X size={16} className="opacity-80" />
+              </button>
+            </div>
+
+            <div
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-5"
+              style={{
+                paddingBottom: 'calc(env(safe-area-inset-bottom) + 6rem)',
+              }}
+            >
+              {children}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop / tablet: form sheet */}
+      <div className="hidden sm:block absolute inset-0 pointer-events-none overflow-y-auto">
+        <div
+          className="min-h-full flex items-center justify-center p-6"
+          style={{ paddingTop: `${desktopGap}px`, paddingBottom: `${desktopGap}px` }}
+        >
+          <div
+            ref={panelRef}
+            onClick={(e) => e.stopPropagation()}
+            className="pointer-events-auto w-full max-w-[560px] rounded-[28px] bg-white dark:bg-surface-dark-2 border border-black/[.08] dark:border-white/[.10] shadow-[0_24px_60px_rgba(0,0,0,.18)] overflow-hidden flex flex-col"
+            style={{
+              maxHeight: viewportHeight ? `${Math.max(420, viewportHeight - 48)}px` : 'calc(100vh - 3rem)',
+            }}
+          >
+            <div className="px-7 py-5 border-b border-black/[.06] dark:border-white/[.07] flex items-center justify-between gap-4 shrink-0">
+              <div className="min-w-0">
+                <div
+                  id="modal-title"
+                  className="text-base font-semibold text-ink dark:text-white truncate"
+                >
+                  {title}
+                </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => onClose?.()}
+                className="h-10 w-10 rounded-2xl border border-black/[.08] dark:border-white/[.10] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors grid place-items-center shrink-0"
+                aria-label="Close"
+              >
+                <X size={16} className="opacity-80" />
+              </button>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-7 pt-6 pb-7">
+              {children}
             </div>
           </div>
         </div>
       </div>
     </div>
   )
+
+  return createPortal(modal, document.body)
 }

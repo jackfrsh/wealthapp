@@ -1083,7 +1083,7 @@ setConfirmState(null)
             </div>
           </div>
 
-          <div className="pt-2 flex items-center justify-end gap-2">
+          <div className="sticky bottom-0 z-10 -mx-5 sm:-mx-7 mt-2 px-5 sm:px-7 pt-3 pb-1 bg-white/95 dark:bg-surface-dark-2/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:supports-[backdrop-filter]:bg-surface-dark-2/80 border-t border-black/[.06] dark:border-white/[.07] flex items-center justify-end gap-2">
             <button
               type="button"
               className="px-4 py-3 rounded-2xl text-sm font-semibold border border-black/[.08] dark:border-white/[.10] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors"
