@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, X as XIcon } from 'lucide-react'
-import { supabase } from '../supabase'
+import {
+  supabase,
+  setAuthPersistenceMode,
+  getAuthPersistenceMode,
+  clearStoredAuthSession,
+} from '../supabase'
 import UpgradeButton from './UpgradeButton'
 import Card from './Card'
 
@@ -70,13 +75,15 @@ function PasswordChecklist({ value, className = '' }) {
   const itemClass = (ok) =>
     [
       'flex items-center gap-2 text-[12px] leading-relaxed transition-colors',
-      ok
-  ? 'text-ink dark:text-white'
-  : 'text-ink-muted/70 dark:text-white/38'
+      ok ? 'text-ink dark:text-white' : 'text-ink-muted/70 dark:text-white/38',
     ].join(' ')
 
   const Icon = ({ ok }) =>
-    ok ? <Check size={13} className="shrink-0" /> : <div className="h-[13px] w-[13px] rounded-full border border-current/35 shrink-0" />
+    ok ? (
+      <Check size={13} className="shrink-0" />
+    ) : (
+      <div className="h-[13px] w-[13px] rounded-full border border-current/35 shrink-0" />
+    )
 
   return (
     <div
@@ -126,6 +133,9 @@ export default function AuthModal({
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [sharedComputer, setSharedComputer] = useState(
+    () => getAuthPersistenceMode() === 'session'
+  )
 
   const [newPassword, setNewPasswordValue] = useState('')
   const [confirmPassword, setConfirmPasswordValue] = useState('')
@@ -138,11 +148,17 @@ export default function AuthModal({
     if (!open) return
     setMode(initial)
     setRecovery(forceMode === 'recovery')
+    setSharedComputer(getAuthPersistenceMode() === 'session')
     setNotice('')
     setError('')
     setLoading(false)
     requestAnimationFrame(() => firstFieldRef.current?.focus?.())
   }, [open, initial, forceMode])
+
+  const close = () => {
+    if (loading) return
+    onClose?.()
+  }
 
   useEffect(() => {
     if (!open) return
@@ -151,7 +167,8 @@ export default function AuthModal({
     document.body.style.overflow = 'hidden'
 
     const onKeyDown = (e) => {
-      if (e.key === 'Escape') onClose?.()
+      if (e.key === 'Escape') close()
+
       if (e.key === 'Tab') {
         const root = panelRef.current
         if (!root) return
@@ -159,8 +176,10 @@ export default function AuthModal({
           'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
         )
         if (!focusables.length) return
+
         const first = focusables[0]
         const last = focusables[focusables.length - 1]
+
         if (e.shiftKey && document.activeElement === first) {
           e.preventDefault()
           last.focus()
@@ -176,7 +195,7 @@ export default function AuthModal({
       document.body.style.overflow = prevOverflow
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [open, onClose])
+  }, [open, loading])
 
   useEffect(() => {
     if (!open) return
@@ -231,24 +250,25 @@ export default function AuthModal({
   }, [open])
 
   const canAuth = useMemo(() => {
-    const e = email.trim()
-    if (!e || !e.includes('@') || loading) return false
-    if (mode === 'login') return password.length >= 8
+    const clean = email.trim()
+    if (!clean || !clean.includes('@') || loading) return false
+    if (mode === 'login') return password.length > 0
     return isStrongPassword(password)
   }, [email, password, loading, mode])
 
   const canSetPassword = useMemo(() => {
     return (
       isStrongPassword(newPassword) &&
-      confirmPassword.length >= 8 &&
+      confirmPassword.length > 0 &&
       newPassword === confirmPassword &&
       !loading
     )
   }, [newPassword, confirmPassword, loading])
 
-  const close = () => {
-    if (loading) return
-    onClose?.()
+  const prepareSessionStorageMode = () => {
+    const nextMode = sharedComputer ? 'session' : 'persistent'
+    setAuthPersistenceMode(nextMode)
+    clearStoredAuthSession()
   }
 
   const submitAuth = async () => {
@@ -272,16 +292,13 @@ export default function AuthModal({
       return
     }
 
-    if (mode === 'login' && password.length < 8) {
-      setError('Enter your password to continue.')
-      return
-    }
-
     setLoading(true)
 
     try {
+      prepareSessionStorageMode()
+
       if (mode === 'register') {
-        const { error: signUpError } = await supabase.auth.signUp({
+        const { data, error: signUpError } = await supabase.auth.signUp({
           email: clean,
           password,
         })
@@ -294,6 +311,11 @@ export default function AuthModal({
             return
           }
           throw signUpError
+        }
+
+        if (data?.session) {
+          close()
+          return
         }
 
         setMode('login')
@@ -309,7 +331,12 @@ export default function AuthModal({
 
       close()
     } catch (e) {
-      setError(mapAuthErrorMessage(e?.message, mode === 'login' ? 'Could not sign in.' : 'Could not create your account.'))
+      setError(
+        mapAuthErrorMessage(
+          e?.message,
+          mode === 'login' ? 'Could not sign in.' : 'Could not create your account.'
+        )
+      )
     } finally {
       setLoading(false)
     }
@@ -332,7 +359,7 @@ export default function AuthModal({
 
     setLoading(true)
     try {
-      const redirectTo = `${window.location.origin}/?mode=recovery`
+      const redirectTo = `${window.location.origin}/auth?mode=recovery`
       const { error } = await supabase.auth.resetPasswordForEmail(clean, { redirectTo })
       if (error) throw error
       setNotice('Password reset email sent. Check your inbox and spam folder.')
@@ -522,6 +549,23 @@ export default function AuthModal({
                       ) : null}
                     </div>
 
+                    <label className="flex items-start gap-3 rounded-2xl border border-black/[.06] dark:border-white/[.08] bg-black/[.02] dark:bg-white/[.04] px-4 py-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={sharedComputer}
+                        onChange={(e) => setSharedComputer(e.target.checked)}
+                        className="mt-1 h-4 w-4 shrink-0 rounded border-black/20 dark:border-white/20"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-ink dark:text-white">
+                          This is a shared computer
+                        </span>
+                        <span className="block mt-1 text-[12px] leading-relaxed text-ink-muted/65 dark:text-white/35">
+                          We’ll avoid keeping you signed in after you close the browser. For maximum safety, log out before you leave.
+                        </span>
+                      </span>
+                    </label>
+
                     <UpgradeButton
                       onClick={submitAuth}
                       disabled={!canAuth}
@@ -610,7 +654,7 @@ export default function AuthModal({
                             'mt-2 text-[12px]',
                             newPassword === confirmPassword
                               ? 'text-ink dark:text-white'
-                              : 'text-ink-muted/70 dark:text-white/38'
+                              : 'text-ink-muted/70 dark:text-white/38',
                           ].join(' ')}
                         >
                           {newPassword === confirmPassword ? 'Passwords match.' : 'Passwords must match.'}

@@ -1,5 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
-import { supabase } from '../supabase'
+import {
+  supabase,
+  setAuthPersistenceMode,
+  getAuthPersistenceMode,
+  clearStoredAuthSession,
+} from '../supabase'
 import UpgradeButton from '../components/UpgradeButton'
 import { useApp } from '../App'
 import { Shield, Globe, BarChart2, Lock, Check } from 'lucide-react'
@@ -93,9 +98,7 @@ function PasswordChecklist({ value, className = '' }) {
   const itemClass = (ok) =>
     [
       'flex items-center gap-2 text-[12px] leading-relaxed transition-colors',
-      ok
-  ? 'text-ink dark:text-white'
-  : 'text-ink-muted/70 dark:text-white/38'
+      ok ? 'text-ink dark:text-white' : 'text-ink-muted/70 dark:text-white/38',
     ].join(' ')
 
   const Icon = ({ ok }) =>
@@ -145,6 +148,9 @@ export default function AuthPage({ onLogin }) {
   const [mode, setMode] = useState(getAuthModeFromUrl)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [sharedComputer, setSharedComputer] = useState(
+    () => getAuthPersistenceMode() === 'session'
+  )
 
   const [recovery, setRecovery] = useState(false)
   const [newPassword, setNewPassword] = useState('')
@@ -245,6 +251,12 @@ export default function AuthPage({ onLogin }) {
     )
   }, [newPassword, confirmPassword, loading])
 
+  const prepareSessionStorageMode = () => {
+    const nextMode = sharedComputer ? 'session' : 'persistent'
+    setAuthPersistenceMode(nextMode)
+    clearStoredAuthSession()
+  }
+
   const submit = async () => {
     setError('')
     setNotice('')
@@ -267,6 +279,8 @@ export default function AuthPage({ onLogin }) {
 
     setLoading(true)
     try {
+      prepareSessionStorageMode()
+
       if (mode === 'register') {
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
@@ -399,11 +413,11 @@ export default function AuthPage({ onLogin }) {
       ? 'Create your account.'
       : 'Welcome back.'
 
-      const subcopy = recovery
-      ? 'Choose a new password to regain access to your account.'
-      : mode === 'register'
-        ? 'Create your account to track net worth and plan long-term wealth with more clarity.'
-        : 'Sign in to continue to your dashboard.'
+  const subcopy = recovery
+    ? 'Choose a new password to regain access to your account.'
+    : mode === 'register'
+      ? 'Create your account to track net worth and plan long-term wealth with more clarity.'
+      : 'Sign in to continue to your dashboard.'
 
   return (
     <div className="min-h-screen overflow-x-hidden brand-auth-bg text-ink dark:text-white">
@@ -453,12 +467,12 @@ export default function AuthPage({ onLogin }) {
               </p>
 
               <h1 className="font-display text-[2.35rem] sm:text-[3.5rem] lg:text-[4rem] font-semibold leading-[1.04] text-ink dark:text-white tracking-tighterish">
-  {headline}
-</h1>
+                {headline}
+              </h1>
 
-<p className="text-lg sm:text-xl text-ink-muted dark:text-white/50 leading-relaxed max-w-[560px]">
-  {subcopy}
-</p>
+              <p className="text-lg sm:text-xl text-ink-muted dark:text-white/50 leading-relaxed max-w-[560px]">
+                {subcopy}
+              </p>
 
               {!recovery ? (
                 <>
@@ -479,16 +493,16 @@ export default function AuthPage({ onLogin }) {
                   </div>
 
                   <div className="hidden lg:grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-                  <FeatureCard
-  icon={BarChart2}
-  title="See everything clearly"
-  body="Track accounts, assets and liabilities in one calm dashboard."
-/>
-<FeatureCard
-  icon={Globe}
-  title="Built for long-term wealth"
-  body="Follow progress over time with multi-currency support and long-term thinking."
-/>
+                    <FeatureCard
+                      icon={BarChart2}
+                      title="See everything clearly"
+                      body="Track accounts, assets and liabilities in one calm dashboard."
+                    />
+                    <FeatureCard
+                      icon={Globe}
+                      title="Built for long-term wealth"
+                      body="Follow progress over time with multi-currency support and long-term thinking."
+                    />
                   </div>
 
                   <div className="hidden lg:flex items-center gap-5 pt-2 text-xs text-ink-muted/50 dark:text-white/20">
@@ -612,6 +626,23 @@ export default function AuthPage({ onLogin }) {
                         )}
                       </div>
 
+                      <label className="flex items-start gap-3 rounded-2xl border border-black/[.06] dark:border-white/[.08] bg-black/[.02] dark:bg-white/[.04] px-4 py-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={sharedComputer}
+                          onChange={(e) => setSharedComputer(e.target.checked)}
+                          className="mt-1 h-4 w-4 shrink-0 rounded border-black/20 dark:border-white/20"
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-ink dark:text-white">
+                            This is a shared computer
+                          </span>
+                          <span className="block mt-1 text-[12px] leading-relaxed text-ink-muted/65 dark:text-white/35">
+                            We’ll avoid keeping you signed in after you close the browser. For maximum safety, log out before you leave.
+                          </span>
+                        </span>
+                      </label>
+
                       <UpgradeButton
                         type="submit"
                         disabled={!canSubmit}
@@ -714,7 +745,7 @@ export default function AuthPage({ onLogin }) {
                             'mt-2 text-[12px]',
                             newPassword === confirmPassword
                               ? 'text-ink dark:text-white'
-                              : 'text-ink-muted/70 dark:text-white/38'
+                              : 'text-ink-muted/70 dark:text-white/38',
                           ].join(' ')}
                         >
                           {newPassword === confirmPassword ? 'Passwords match.' : 'Passwords must match.'}

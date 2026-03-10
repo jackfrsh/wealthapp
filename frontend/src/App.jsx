@@ -9,7 +9,7 @@ import React, {
   useTransition,
 } from 'react'
 
-import { supabase } from './supabase'
+import { supabase, clearStoredAuthSession } from './supabase'
 import {
   api,
   setAccessTokenProvider,
@@ -474,25 +474,29 @@ export default function App() {
 
   const logout = useCallback(async () => {
     try {
-      await supabase?.auth?.signOut?.()
+      await supabase?.auth?.signOut?.({ scope: 'local' })
     } catch {}
-
+  
+    try {
+      clearStoredAuthSession()
+    } catch {}
+  
     bootTokenRef.current = null
     tokenRef.current = null
     currentUserIdRef.current = null
     setApiCacheScope('anon')
-
+  
     resetUserScopedState()
-
+  
     setAuthed(false)
     setSettingsReady(true)
     setChecking(false)
-
+  
     try {
       localStorage.removeItem('force_pro')
       localStorage.removeItem('upgrade_reason')
     } catch {}
-
+  
     setPage('landing', { replace: true })
   }, [resetUserScopedState, setPage])
 
