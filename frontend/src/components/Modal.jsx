@@ -83,12 +83,14 @@ export default function Modal({ open, onClose, title, children }) {
   if (!open || !mounted) return null
 
   const mobileBottomOffset = 'calc(env(safe-area-inset-bottom) + 5.5rem)'
-  const mobileTopGap = 12
-  const desktopGap = 24
+const mobileTopInset = 'max(0.75rem, calc(env(safe-area-inset-top) + 0.5rem))'
+const mobileMaxHeight =
+  'calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 6.75rem)'
+const desktopGap = 24
 
-  const computedMaxHeight = viewportHeight
-    ? Math.max(320, viewportHeight - mobileTopGap - 16)
-    : undefined
+const computedMaxHeight = viewportHeight
+  ? Math.max(320, viewportHeight - 96)
+  : undefined
 
   const modal = (
     <div
@@ -106,53 +108,56 @@ export default function Modal({ open, onClose, title, children }) {
 
       {/* Mobile: Apple-style bottom sheet */}
       <div className="sm:hidden absolute inset-0 pointer-events-none">
-        <div
-          className="h-full w-full flex items-end justify-stretch px-2"
-          style={{ paddingBottom: mobileBottomOffset }}
-        >
+  <div
+    className="h-full w-full flex items-end justify-stretch px-2"
+    style={{
+      paddingTop: mobileTopInset,
+      paddingBottom: mobileBottomOffset,
+    }}
+  >
+    <div
+      ref={panelRef}
+      onClick={(e) => e.stopPropagation()}
+      className="pointer-events-auto w-full rounded-t-[28px] rounded-b-[28px] bg-white dark:bg-surface-dark-2 border border-black/[.08] dark:border-white/[.10] shadow-[0_24px_60px_rgba(0,0,0,.22)] overflow-hidden flex flex-col"
+      style={{
+        maxHeight: mobileMaxHeight,
+      }}
+    >
+      <div className="pt-2.5 pb-1.5 flex justify-center shrink-0">
+        <div className="h-1.5 w-10 rounded-full bg-black/10 dark:bg-white/15" />
+      </div>
+
+      <div className="px-5 pt-4.5 pb-4 border-b border-black/[.06] dark:border-white/[.07] flex items-center justify-between gap-4 shrink-0">
+        <div className="min-w-0">
           <div
-            ref={panelRef}
-            onClick={(e) => e.stopPropagation()}
-            className="pointer-events-auto w-full rounded-t-[28px] rounded-b-[28px] bg-white dark:bg-surface-dark-2 border border-black/[.08] dark:border-white/[.10] shadow-[0_24px_60px_rgba(0,0,0,.22)] overflow-hidden flex flex-col"
-            style={{
-              maxHeight: computedMaxHeight ? `${computedMaxHeight}px` : '82vh',
-            }}
+            id="modal-title"
+            className="text-[17px] leading-tight font-semibold text-ink dark:text-white truncate pr-2"
           >
-            <div className="pt-2 pb-1 flex justify-center shrink-0">
-              <div className="h-1.5 w-10 rounded-full bg-black/10 dark:bg-white/15" />
-            </div>
-
-            <div className="px-5 py-4 border-b border-black/[.06] dark:border-white/[.07] flex items-center justify-between gap-4 shrink-0">
-              <div className="min-w-0">
-                <div
-                  id="modal-title"
-                  className="text-[17px] font-semibold text-ink dark:text-white truncate"
-                >
-                  {title}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => onClose?.()}
-                className="h-10 w-10 rounded-2xl border border-black/[.08] dark:border-white/[.10] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors grid place-items-center shrink-0"
-                aria-label="Close"
-              >
-                <X size={16} className="opacity-80" />
-              </button>
-            </div>
-
-            <div
-              className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-5"
-              style={{
-                paddingBottom: 'calc(env(safe-area-inset-bottom) + 6rem)',
-              }}
-            >
-              {children}
-            </div>
+            {title}
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={() => onClose?.()}
+          className="h-10 w-10 rounded-2xl border border-black/[.08] dark:border-white/[.10] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors grid place-items-center shrink-0"
+          aria-label="Close"
+        >
+          <X size={16} className="opacity-80" />
+        </button>
       </div>
+
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-5"
+        style={{
+          paddingBottom: 'calc(env(safe-area-inset-bottom) + 6rem)',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  </div>
+</div>
 
       {/* Desktop / tablet: form sheet */}
       <div className="hidden sm:block absolute inset-0 pointer-events-none overflow-y-auto">
