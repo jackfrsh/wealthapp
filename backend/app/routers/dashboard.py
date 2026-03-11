@@ -88,14 +88,6 @@ async def dashboard(
         .order_by(Snapshot.created_at.asc())
     ).all()
 
-    latest_snap = all_snaps[-1] if all_snaps else None
-    latest_total = round(float(latest_snap.total_base), 2) if latest_snap else 0.0
-
-    change = round(current_total - latest_total, 2)
-    change_pct = 0.0
-    if latest_total != 0:
-        change_pct = round((change / abs(latest_total)) * 100, 2)
-
     # Compute range-specific delta (first snapshot in range vs latest)
     days = RANGE_DAYS.get(range.upper(), 30)
     cutoff = None
@@ -172,9 +164,6 @@ async def dashboard(
     return {
         "base_currency": base_currency,
         "current_total": current_total,
-        "latest_snapshot_total": latest_total,
-        "change_since_snapshot": change,
-        "change_since_snapshot_pct": change_pct,
         "range_change": range_change,
         "range_change_pct": range_change_pct,
         "goal": goal,

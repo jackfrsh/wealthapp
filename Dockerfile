@@ -35,4 +35,4 @@ COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
 
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
-CMD ["sh", "-lc", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-lc", "cd /app/backend && python -m alembic upgrade head && cd /app && uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

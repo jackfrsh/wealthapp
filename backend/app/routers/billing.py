@@ -20,7 +20,8 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 def _require_env(name: str) -> str:
     val = os.getenv(name)
     if not val:
-        raise HTTPException(status_code=500, detail=f"Missing server env var: {name}")
+        logger.error("Missing required env var: %s", name)
+        raise HTTPException(status_code=500, detail="Billing service is temporarily unavailable")
     return val
 
 def _frontend_base() -> str:
@@ -145,7 +146,7 @@ def create_checkout(
         session = stripe.checkout.Session.create(**params)
     except Exception as e:
         logger.exception("Stripe checkout creation failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Could not start checkout. Please try again.")
 
     return {"url": session.url}
 
@@ -358,13 +359,23 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_session)):
         if user_id:
             user = db.get(User, int(user_id))
             if user:
-                _set_pro_for_user(
-                    db,
-                    user,
-                    True,
-                    customer=customer,
-                    subscription_id=subscription_id,
-                )
+                # Verify customer mapping: either first purchase (no existing customer)
+                # or the existing customer matches the webhook payload.
+                existing_cust = getattr(user, "stripe_customer_id", None)
+                if existing_cust and customer and existing_cust != customer:
+                    logger.warning(
+                        "checkout.session.completed: customer mismatch for user=%s "
+                        "(existing=%s, webhook=%s) — skipping entitlement",
+                        user_id, existing_cust, customer,
+                    )
+                else:
+                    _set_pro_for_user(
+                        db,
+                        user,
+                        True,
+                        customer=customer,
+                        subscription_id=subscription_id,
+                    )
         return {"status": "ok"}
 
     # 2) Subscription lifecycle updates: source of truth

@@ -90,7 +90,7 @@ def update_settings(
     session: Session = Depends(get_session),
 ):
     settings = _get_or_create_settings(current_user.id, session)
-    data = body.dict(exclude_unset=True)
+    data = body.model_dump(exclude_unset=True)
 
     if "base_currency" in data and data["base_currency"]:
         settings.base_currency = str(data["base_currency"]).upper()

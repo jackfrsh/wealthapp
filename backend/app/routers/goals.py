@@ -245,7 +245,7 @@ def create_goal(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    goal = Goal(**body.dict(), user_id=current_user.id)
+    goal = Goal(**body.model_dump(), user_id=current_user.id)
 
     session.add(goal)
     session.commit()
@@ -268,7 +268,7 @@ def update_goal_partial(
     if not goal or goal.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Goal not found")
 
-    for k, v in body.dict(exclude_unset=True).items():
+    for k, v in body.model_dump(exclude_unset=True).items():
         setattr(goal, k, v)
 
     goal.updated_at = datetime.now(timezone.utc)
@@ -294,7 +294,7 @@ def update_goal_full(
     if not goal or goal.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Goal not found")
 
-    for k, v in body.dict().items():
+    for k, v in body.model_dump().items():
         setattr(goal, k, v)
 
     goal.updated_at = datetime.now(timezone.utc)

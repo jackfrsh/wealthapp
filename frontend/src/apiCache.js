@@ -62,12 +62,16 @@ export function invalidateCache() {
 
 /**
  * Invalidate specific path(s).
+ * Cache keys are scoped as "scope:path", so we extract the path portion for matching.
  */
 export function invalidatePath(...paths) {
   for (const p of paths) {
     // Delete exact and any query-string variants
     for (const key of _cache.keys()) {
-      if (key === p || key.startsWith(p + '?') || key.startsWith(p + '/')) {
+      // Extract the path portion after the scope prefix (e.g. "user123:/dashboard" → "/dashboard")
+      const colonIdx = key.indexOf(':')
+      const keyPath = colonIdx !== -1 ? key.slice(colonIdx + 1) : key
+      if (keyPath === p || keyPath.startsWith(p + '?') || keyPath.startsWith(p + '/')) {
         _cache.delete(key)
       }
     }

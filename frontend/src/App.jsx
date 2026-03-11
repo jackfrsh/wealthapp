@@ -496,6 +496,11 @@ export default function App() {
       localStorage.removeItem('force_pro')
       localStorage.removeItem('upgrade_reason')
     } catch {}
+
+    // Clear user-specific sessionStorage caches to prevent cross-user data flash
+    try {
+      sessionStorage.removeItem('wealthapp:dash:3M:v1')
+    } catch {}
   
     setPage('landing', { replace: true })
   }, [resetUserScopedState, setPage])

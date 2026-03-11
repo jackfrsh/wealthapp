@@ -189,6 +189,36 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add standard security headers to every response."""
 
+    # Build CSP once at import time; SUPABASE_URL may not be set yet,
+    # so we read it lazily on first request via a class-level cache.
+    _csp: str | None = None
+
+    @classmethod
+    def _build_csp(cls) -> str:
+        """Construct a Content-Security-Policy value.
+
+        Allows: self, Supabase auth, Google Fonts, Stripe frames.
+        Override entirely via CSP_HEADER env var if needed.
+        """
+        override = (os.getenv("CSP_HEADER") or "").strip()
+        if override:
+            return override
+
+        supabase_url = (os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
+        connect_supabase = supabase_url if supabase_url else "https://*.supabase.co"
+
+        return "; ".join([
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-inline'",
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+            f"connect-src 'self' {connect_supabase}",
+            "font-src 'self' https://fonts.gstatic.com",
+            "img-src 'self' data: https://getpaddock.com",
+            "frame-src https://js.stripe.com",
+            "object-src 'none'",
+            "base-uri 'self'",
+        ])
+
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         response = await call_next(request)
 
@@ -206,6 +236,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(self)"
+
+        # Content-Security-Policy (lazy-init, cached after first request)
+        if SecurityHeadersMiddleware._csp is None:
+            SecurityHeadersMiddleware._csp = self._build_csp()
+        response.headers["Content-Security-Policy"] = SecurityHeadersMiddleware._csp
 
         return response
 

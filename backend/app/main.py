@@ -87,21 +87,6 @@ app.include_router(billing.router, prefix=API_PREFIX)
 app.include_router(events.router, prefix=API_PREFIX)
 app.include_router(admin.router, prefix=API_PREFIX)
 
-# --- Serve built frontend (single-origin like Railway) ---
-FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
-ASSETS_DIR = FRONTEND_DIST / "assets"
-INDEX_HTML = FRONTEND_DIST / "index.html"
-
-if ASSETS_DIR.exists():
-    app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
-
-    @app.get("/{full_path:path}")
-    async def serve_spa(full_path: str):
-        # Don't hijack API routes
-        if full_path.startswith("api/"):
-            raise HTTPException(status_code=404, detail="Not Found")
-        return FileResponse(str(INDEX_HTML))
-
 # ────────────────────────────────────────────
 # Health
 # ────────────────────────────────────────────
@@ -124,8 +109,6 @@ def health():
 # ────────────────────────────────────────────
 # Serve frontend static files (production)
 # ────────────────────────────────────────────
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 
 _DIST_DIR = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
