@@ -4,19 +4,14 @@ Note: `is_pro` is server-controlled (billing/webhooks), not user-editable.
 """
 
 from fastapi import APIRouter, Depends
-# add import:
-from fastapi import Body
 from typing import Optional
 from pydantic import BaseModel
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
-import logging
 
 from ..auth import get_current_user
 from ..database import get_session
 from ..models import Settings, User
-
-logger = logging.getLogger("wealth.settings")
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -37,6 +32,13 @@ class SettingsUpdate(BaseModel):
     goal: Optional[float] = None
     theme_preference: Optional[str] = None
     # IMPORTANT: is_pro intentionally omitted (server-controlled)
+
+
+class EntitlementResponse(BaseModel):
+    tier: str
+    trial_active: bool
+    subscription_status: Optional[str] = None
+    trial_end: Optional[str] = None
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
@@ -83,6 +85,29 @@ def get_settings(
     )
 
 
+@router.get("/entitlement", response_model=EntitlementResponse)
+def get_entitlement(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """
+    Fast cached entitlement read for native/mobile clients.
+    Never calls Stripe directly.
+    """
+    settings = _get_or_create_settings(current_user.id, session)
+
+    status = getattr(settings, "subscription_status", None)
+    trial_end = getattr(settings, "trial_end_iso", None)
+    is_pro = bool(getattr(settings, "is_pro", False))
+
+    return EntitlementResponse(
+        tier="pro" if is_pro else "free",
+        trial_active=(status == "trialing"),
+        subscription_status=status,
+        trial_end=trial_end,
+    )
+
+
 @router.put("", response_model=SettingsResponse)
 def update_settings(
     body: SettingsUpdate,
@@ -116,11 +141,11 @@ def update_settings(
         trial_end=getattr(settings, "trial_end_iso", None),
     )
 
+
 @router.patch("", response_model=SettingsResponse)
 def patch_settings(
     body: SettingsUpdate,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    # Reuse the same logic as PUT
-    return update_settings(body, current_user=current_user, session=session)    
+    return update_settings(body, current_user=current_user, session=session)
