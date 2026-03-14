@@ -24,18 +24,40 @@ async def networth_projection(
 ):
     result = await compute_projection_series(session, current_user.id, years=years)
 
-    # Compute milestones (year 1, 5, 10, 15, 20, 25, 30, 40)
-    points = result.get("points", [])
+    raw_points = result.get("points", [])
+
+    points = [
+        {
+            "date": p["date"],
+            "value": p["projected_net_worth"],
+        }
+        for p in raw_points
+    ]
+
     milestones = []
     milestone_years = [1, 5, 10, 15, 20, 25, 30, 40]
+
     for my in milestone_years:
         month_idx = my * 12
-        if month_idx < len(points):
-            milestones.append({
-                "year": my,
-                "projected_net_worth": points[month_idx]["projected_net_worth"],
-                "date": points[month_idx]["date"],
-            })
+        if month_idx < len(raw_points):
+            point = raw_points[month_idx]
+            milestones.append(
+                {
+                    "label": f"Year {my}",
+                    "amount": point["projected_net_worth"],
+                    "date": point["date"],
+                    "reached": False,
+                }
+            )
 
-    result["milestones"] = milestones
-    return result
+    assumptions = {
+        "expectedReturn": result.get("expected_annual_return_pct", 7.0),
+        "monthlyContribution": result.get("monthly_contribution", 0.0),
+        "inflationRate": result.get("inflation_rate"),
+    }
+
+    return {
+        "points": points,
+        "milestones": milestones,
+        "assumptions": assumptions,
+    }

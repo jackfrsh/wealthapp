@@ -217,8 +217,18 @@ export default function Accounts() {
     try {
       localStorage.setItem('upgrade_reason', 'account_limit')
     } catch {}
+
+    track('upgrade_clicked', {
+      page: 'accounts',
+      source: 'account_limit',
+    })
+
     setPage('upgrade')
   }, [setPage])
+
+  useEffect(() => {
+    track('page_view', { page: 'accounts' })
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -438,6 +448,15 @@ invalidatePath('/dashboard')
 invalidatePath('/dashboard?range=3M')
 bumpData?.()
 
+track('account_updated', {
+  page: 'accounts',
+  entityType: 'account',
+  entityId: editingId,
+  account_type: body.type,
+  currency: body.currency,
+  source: 'accounts_edit',
+})
+
 showToast?.('Account updated')
 setModal(false)
 setEditing(null)
@@ -466,7 +485,14 @@ invalidatePath('/dashboard?range=3M')
 bumpData?.()
 
 showToast?.('Account added')
-track?.('account_added', { source: 'accounts_create' })
+track('account_added', {
+  page: 'accounts',
+  entityType: 'account',
+  entityId: createdAccount.id,
+  account_type: body.type,
+  currency: body.currency,
+  source: 'accounts_create',
+})
 
 setModal(false)
 setEditing(null)
@@ -499,6 +525,15 @@ invalidatePath('/accounts')
 invalidatePath('/dashboard')
 invalidatePath('/dashboard?range=3M')
 bumpData?.()
+
+track('account_deleted', {
+  page: 'accounts',
+  entityType: 'account',
+  entityId: a.id,
+  account_type: a.type,
+  currency: a.currency,
+  source: 'accounts_delete',
+})
 
 showToast?.('Deleted')
 setConfirmState(null)
