@@ -28,6 +28,7 @@ import Terms from './pages/Terms'
 // ✅ Eager-load core authed pages (instant navigation, no suspense blank)
 import Home from './pages/Home'
 import Outlook from './pages/Outlook'
+import Strategy from './pages/Strategy'
 import Accounts from './pages/Accounts'
 import Settings from './pages/Settings'
 import GoalSetup from './pages/GoalSetup'
@@ -764,6 +765,7 @@ export default function App() {
       if (page === 'security') return <Security navigateTo={navigateTo} />
       if (page === 'terms') return <Terms navigateTo={navigateTo} />
       if (page === 'auth') return <AuthPage />
+      if (page === 'strategy') return <Strategy />
       if (page === 'guides_index') return <GuideIndex navigateTo={navigateTo} />
       if (page === 'guide_multi_currency') return <MultiCurrencyGuide />
       if (page === 'guide_long_term_projection') return <LongTermProjectionGuide />
@@ -809,6 +811,8 @@ export default function App() {
         return <Accounts />
       case 'upgrade':
         return <Upgrade />
+      case 'strategy':
+        return <Strategy />  
       case 'settings':
         return <Settings />
       case 'goal_setup':

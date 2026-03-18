@@ -1,14 +1,15 @@
 import React, { useMemo } from 'react'
 import { useApp } from '../App'
-import { Crown } from 'lucide-react'
+import { ChevronLeft, Crown } from 'lucide-react'
 
 export default function MobileNav() {
-  const { page, isPro } = useApp()
+  const { page, setPage, isPro } = useApp()
 
   const section = useMemo(() => {
     const map = {
       home: 'Home',
       outlook: 'Outlook',
+      strategy: 'Strategy',
       insights: 'Insights',
       accounts: 'Accounts',
       settings: 'Settings',
@@ -21,8 +22,8 @@ export default function MobileNav() {
   return (
     <div className="lg:hidden sticky top-0 z-40 border-b border-black/[.06] dark:border-white/[.07] bg-white/80 dark:bg-surface-dark/75 backdrop-blur-xl">
       <div className="px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="font-display text-lg tracking-tighterish text-ink dark:text-white leading-none">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="font-display text-lg tracking-tighterish text-ink dark:text-white leading-none shrink-0">
             Paddock<span className="text-accent">.</span>
           </div>
 
@@ -40,7 +41,18 @@ export default function MobileNav() {
           )}
         </div>
 
-        <div className="w-8" />
+        {page === 'strategy' ? (
+          <button
+            type="button"
+            onClick={() => setPage('outlook')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-tightish border border-black/[.08] dark:border-white/[.10] text-ink dark:text-white bg-black/[.02] dark:bg-white/[.05] hover:bg-black/[.04] dark:hover:bg-white/[.08] transition-colors shrink-0"
+          >
+            <ChevronLeft size={13} />
+            Plan
+          </button>
+        ) : (
+          <div className="w-8" />
+        )}
       </div>
     </div>
   )

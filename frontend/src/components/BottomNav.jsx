@@ -15,7 +15,6 @@ function Tab({ icon: Icon, label, active, onClick }) {
         'transition-all duration-180 ease-smooth',
       ].join(' ')}
     >
-      {/* Active rail */}
       <span
         className={[
           'absolute top-0 left-1/2 -translate-x-1/2 h-[2px] w-8 rounded-full',
@@ -70,6 +69,11 @@ export default function BottomNav() {
     []
   )
 
+  const isActive = (id) => {
+    if (id === 'outlook') return page === 'outlook' || page === 'strategy'
+    return page === id
+  }
+
   return (
     <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-black/[.06] dark:border-white/[.07] bg-white/85 dark:bg-surface-dark/75 backdrop-blur-xl">
       {isTrialing && (
@@ -81,13 +85,14 @@ export default function BottomNav() {
           />
         </div>
       )}
+
       <div className="flex px-2 pb-[calc(env(safe-area-inset-bottom)+2px)]">
         {items.map((it) => (
           <Tab
             key={it.id}
             icon={it.icon}
             label={it.label}
-            active={page === it.id}
+            active={isActive(it.id)}
             onClick={() => setPage(it.id)}
           />
         ))}

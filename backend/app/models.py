@@ -140,6 +140,23 @@ class Goal(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+# ─── Projection scenarios ────────────────────────────────────────────────────
+
+class ProjectionScenario(SQLModel, table=True):
+    __tablename__ = "projection_scenarios"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+
+    name: str = Field(index=True)
+    monthly_contribution: float = Field(default=0.0)
+    expected_annual_return_pct: float = Field(default=7.0)
+    notes: Optional[str] = Field(default=None)
+    sort_order: int = Field(default=0)
+
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))    
+
 
 # ─── Net worth snapshots ─────────────────────────────────────────────────────
 

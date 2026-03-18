@@ -9,6 +9,7 @@ import {
   Settings as SettingsIcon,
   LogOut,
   Crown,
+  Sparkles,
   LineChart,
 } from 'lucide-react'
 
@@ -57,6 +58,7 @@ export default function Sidebar() {
     () => [
       { id: 'home', label: 'Dashboard', icon: Home },
       { id: 'outlook', label: 'Outlook', icon: LineChart },
+      { id: 'strategy', label: 'Strategy', icon: Sparkles },
       { id: 'insights', label: 'Insights', icon: BarChart3 },
       { id: 'accounts', label: 'Accounts', icon: Wallet },
       { id: 'settings', label: 'Settings', icon: SettingsIcon },
