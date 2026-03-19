@@ -246,7 +246,7 @@ export default function Settings() {
   }
 
   const reportProblemHref = useMemo(() => {
-    const subject = encodeURIComponent('Wealth beta — report a problem')
+    const subject = encodeURIComponent('Paddock — report a problem')
     const body = encodeURIComponent(
       [
         `Describe what happened:`,
@@ -260,7 +260,7 @@ export default function Settings() {
         ``,
       ].join('\n')
     )
-    return `mailto:support@yourdomain.com?subject=${subject}&body=${body}`
+    return `mailto:support@getpaddock.com?subject=${subject}&body=${body}`
   }, [username, isPro, currency, themePref])
 
   const inp =

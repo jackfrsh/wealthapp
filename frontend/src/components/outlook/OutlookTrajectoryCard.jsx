@@ -1,5 +1,4 @@
 import React from 'react'
-import Card from '../Card'
 import {
   AreaChart,
   Area,
@@ -21,9 +20,18 @@ import {
   ACCENT_STROKE,
   activeDotStyle,
 } from '../charts/chartTheme'
-import { ChevronDown, Sparkles } from 'lucide-react'
+import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
 import { fmtCurrency } from '../../utils'
 import { planTheme } from './planTheme'
+import PlanSectionFrame from './PlanSectionFrame'
+
+const innerPanel =
+  planTheme.innerPanel ||
+  'rounded-2xl border border-black/[.05] dark:border-white/[.06] bg-black/[.02] dark:bg-white/[.04] p-4 sm:p-5'
+
+const innerPanelCompact =
+  planTheme.innerPanelCompact ||
+  'rounded-2xl border border-black/[.05] dark:border-white/[.06] bg-black/[.02] dark:bg-white/[.04] p-4'
 
 export default function OutlookTrajectoryCard({
   trajOpen,
@@ -44,49 +52,50 @@ export default function OutlookTrajectoryCard({
   bestScenario,
   compareLoading,
 }) {
-  return (
-    <Card className={`${planTheme.sectionCard} p-0 overflow-hidden`}>
-      <details className="group" open={trajOpen} onToggle={(e) => setTrajOpen(e.currentTarget.open)}>
-        <summary
-          className={`
-            [&::-webkit-details-marker]:hidden
-            list-none cursor-pointer select-none
-            px-5 sm:px-6 py-5
-            flex items-start justify-between gap-4
-            border-b ${planTheme.divider}
-          `}
-        >
-          <div className="min-w-0">
-            <h3 className={planTheme.title}>Plan Trajectory</h3>
-            <div className={`mt-1 ${planTheme.body}`}>Projected net worth over time</div>
+  const header = (
+    <div className="flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <h3 className={planTheme.title}>Plan Trajectory</h3>
+        <div className={`mt-1 ${planTheme.body}`}>Projected net worth over time</div>
 
-            <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-ink-muted dark:text-white/35">
-              <span className="flex items-center gap-1.5">
-                <span className="w-4 h-0.5 bg-accent rounded-full inline-block" /> Current plan
-              </span>
+        <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-ink-muted dark:text-white/35">
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 h-0.5 bg-accent rounded-full inline-block" /> Current plan
+          </span>
 
-              {!compareLoading && bestScenario && (
-                <span className="flex items-center gap-1.5">
-                  <span className="w-4 h-0.5 bg-emerald-500 rounded-full inline-block" /> Best scenario
-                </span>
-              )}
-
-              <span className="flex items-center gap-1.5">
-                <span className="w-4 h-0.5 bg-ink-muted/30 dark:bg-white/20 rounded-full inline-block" /> Required
-              </span>
-
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 border-2 border-amber-500 rounded-full inline-block" /> Target
-              </span>
-            </div>
-          </div>
-
-          <ChevronDown className="h-5 w-5 text-ink-muted dark:text-white/50 shrink-0 group-open:rotate-180 transition-transform mt-0.5" />
-        </summary>
-
-        <div className="px-4 sm:px-6 py-5 sm:py-6">
           {!compareLoading && bestScenario && (
-            <div className={`${planTheme.innerPanel} ${planTheme.mobileInnerBleed} mb-4`}>
+            <span className="flex items-center gap-1.5">
+              <span className="w-4 h-0.5 bg-emerald-500 rounded-full inline-block" /> Best scenario
+            </span>
+          )}
+
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 h-0.5 bg-ink-muted/30 dark:bg-white/20 rounded-full inline-block" /> Required
+          </span>
+
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 border-2 border-amber-500 rounded-full inline-block" /> Target
+          </span>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setTrajOpen((v) => !v)}
+        className={planTheme.buttonSecondary}
+      >
+        {trajOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+        {trajOpen ? 'Hide' : 'Show'}
+      </button>
+    </div>
+  )
+
+  return (
+    <PlanSectionFrame header={header}>
+      {!trajOpen ? null : (
+        <div className="space-y-5">
+          {!compareLoading && bestScenario && (
+            <div className={innerPanelCompact}>
               <div className={`${planTheme.eyebrowAccent} flex items-center gap-2`}>
                 <Sparkles size={12} />
                 Comparing against
@@ -96,7 +105,7 @@ export default function OutlookTrajectoryCard({
           )}
 
           {chartData.length > 1 ? (
-            <div className={`${planTheme.innerPanel} ${planTheme.mobileChartBleed} sm:mx-0`}>
+            <div className={innerPanel}>
               <div className="h-[320px] sm:h-[340px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={chartData} margin={chartMargin}>
@@ -173,7 +182,7 @@ export default function OutlookTrajectoryCard({
             </div>
           )}
 
-          <div className={`mt-4 sm:mt-5 ${planTheme.innerPanel} ${planTheme.mobileInnerBleed}`}>
+          <div className={innerPanel}>
             <div className={planTheme.eyebrow}>Assumptions</div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-3">
@@ -252,7 +261,7 @@ export default function OutlookTrajectoryCard({
             </p>
           </div>
         </div>
-      </details>
-    </Card>
+      )}
+    </PlanSectionFrame>
   )
 }

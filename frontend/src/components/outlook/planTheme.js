@@ -1,15 +1,15 @@
 export const planTheme = {
     sectionCard:
-      'rounded-[28px] border border-black/[.05] dark:border-white/[.06] bg-white dark:bg-surface-dark-2',
+      'rounded-[28px] border border-black/[.05] dark:border-white/[.06] bg-white dark:bg-surface-dark-2 overflow-hidden',
     sectionCardSoft:
       'rounded-[28px] border border-black/[.05] dark:border-white/[.06] bg-black/[.02] dark:bg-white/[.03]',
   
     innerCard:
       'rounded-2xl border border-black/[.05] dark:border-white/[.06] bg-black/[.02] dark:bg-white/[.04]',
   
-      innerPanel:
-      'rounded-2xl border border-black/[.05] dark:border-white/[.06] bg-black/[.02] dark:bg-white/[.04] p-3.5 sm:p-5',
-      
+    innerPanel:
+      'rounded-2xl border border-black/[.05] dark:border-white/[.06] bg-black/[.02] dark:bg-white/[.04] p-4 sm:p-5',
+  
     innerPanelCompact:
       'rounded-2xl border border-black/[.05] dark:border-white/[.06] bg-black/[.02] dark:bg-white/[.04] p-4',
   
@@ -46,7 +46,4 @@ export const planTheme = {
       'block text-xs font-semibold text-ink-3 dark:text-white/50 mb-2 tracking-[.10em] uppercase',
     fieldInput:
       'w-full px-4 py-3.5 rounded-2xl border border-black/[.08] dark:border-white/[.08] bg-white dark:bg-surface-dark-2 text-base text-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all',
-  
-      mobileInnerBleed: '-mx-3 sm:mx-0',
-      mobileChartBleed: '-mx-4 sm:mx-0',
   }

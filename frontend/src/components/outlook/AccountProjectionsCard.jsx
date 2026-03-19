@@ -1,5 +1,4 @@
 import React from 'react'
-import Card from '../Card'
 import UpgradeButton from '../UpgradeButton'
 import { fmtCurrency } from '../../utils'
 import {
@@ -30,6 +29,15 @@ import {
   Lock,
 } from 'lucide-react'
 import { planTheme } from './planTheme'
+import PlanSectionFrame from './PlanSectionFrame'
+
+const innerPanel =
+  planTheme.innerPanel ||
+  'rounded-2xl border border-black/[.05] dark:border-white/[.06] bg-black/[.02] dark:bg-white/[.04] p-4 sm:p-5'
+
+const innerPanelCompact =
+  planTheme.innerPanelCompact ||
+  'rounded-2xl border border-black/[.05] dark:border-white/[.06] bg-black/[.02] dark:bg-white/[.04] p-4'
 
 export default function AccountProjectionsCard({
   projOpen,
@@ -47,31 +55,36 @@ export default function AccountProjectionsCard({
   ccy,
   projChartData,
 }) {
-  return (
-    <Card className={`${planTheme.sectionCard} overflow-hidden`}>
-      <button
-        onClick={() => setProjOpen((v) => !v)}
-        className={`w-full flex items-center justify-between px-5 sm:px-6 py-5 ${planTheme.title} hover:bg-surface-2/50 dark:hover:bg-white/[.02] transition-colors`}
-        type="button"
-      >
-        <div className="flex items-center gap-2.5">
-          <TrendingUp size={16} className="text-accent" />
-          <span>Account Projections</span>
-          {settingsReady && !isPro && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-medium tracking-wider uppercase px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300">
-              <Crown size={10} /> Pro
-            </span>
-          )}
-        </div>
-        {projOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-      </button>
+  const badge =
+    settingsReady && !isPro ? (
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium tracking-wider uppercase px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300">
+        <Crown size={10} /> Pro
+      </span>
+    ) : null
 
-      {projOpen && (
-        <div className={`border-t ${planTheme.divider} animate-fade-in`}>
-          <div className="px-5 sm:px-6 pt-5 pb-3 flex items-center justify-between gap-4 flex-wrap">
-            <p className={planTheme.body}>
-              Based on your accounts&apos; contributions and expected returns.
-            </p>
+  const actions = (
+    <button
+      type="button"
+      onClick={() => setProjOpen((v) => !v)}
+      className={planTheme.buttonSecondary}
+    >
+      {projOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+      {projOpen ? 'Hide' : 'Show'}
+    </button>
+  )
+
+  return (
+    <PlanSectionFrame
+      icon={TrendingUp}
+      title="Account Projections"
+      subtitle="Based on your accounts’ contributions and expected returns."
+      badge={badge}
+      actions={actions}
+    >
+      {!projOpen ? null : (
+        <div className="space-y-5">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className={planTheme.body}>Choose a projection horizon.</div>
 
             <div className="flex bg-surface-2 dark:bg-white/5 rounded-full p-0.5 gap-0.5">
               {HORIZONS.map((h) => (
@@ -102,24 +115,19 @@ export default function AccountProjectionsCard({
           </div>
 
           {projLoading ? (
-            <div className="px-5 sm:px-6 pb-7">
-              <div className={`h-[260px] skeleton ${planTheme.innerPanel} ${planTheme.mobileChartBleed}`} />
-            </div>
+            <div className={`${innerPanel} h-[260px] skeleton`} />
           ) : !projData || !projData.points?.length ? (
-            <div className="px-5 sm:px-6 pb-7 text-center py-10">
+            <div className="text-center py-10">
               <p className="text-sm text-ink-muted dark:text-white/35">
                 Add accounts with balances to see projections.
               </p>
             </div>
           ) : (
-            <div className="px-5 sm:px-6 pb-7 space-y-5">
+            <>
               {filteredMilestones.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {filteredMilestones.map((m) => (
-                    <div
-                      key={m.year}
-                      className={`${planTheme.innerPanelCompact} ${planTheme.mobileInnerBleed}`}
-                    >
+                    <div key={m.year} className={innerPanelCompact}>
                       <div className="flex items-center gap-1.5 mb-2">
                         <Calendar size={11} className="text-ink-muted/70 dark:text-white/30" />
                         <span className={planTheme.statLabel}>In {m.year}y</span>
@@ -133,7 +141,7 @@ export default function AccountProjectionsCard({
                 </div>
               )}
 
-              <div className={`${planTheme.innerPanel} ${planTheme.mobileChartBleed}`}>
+              <div className={innerPanel}>
                 <div className="h-[280px] sm:h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={projChartData} margin={chartMargin}>
@@ -188,9 +196,7 @@ export default function AccountProjectionsCard({
               </div>
 
               {settingsReady && !isPro && filteredMilestones.length > 0 && (
-                <div
-                  className={`flex items-center justify-between gap-4 px-5 py-4 rounded-2xl bg-amber-50 dark:bg-amber-500/[.06] border border-amber-500/15 ${planTheme.mobileInnerBleed}`}
-                >
+                <div className="flex items-center justify-between gap-4 px-5 py-4 rounded-2xl bg-amber-50 dark:bg-amber-500/[.06] border border-amber-500/15">
                   <div>
                     <div className="text-sm font-semibold text-ink dark:text-white">
                       See the full picture
@@ -204,10 +210,10 @@ export default function AccountProjectionsCard({
                   </UpgradeButton>
                 </div>
               )}
-            </div>
+            </>
           )}
         </div>
       )}
-    </Card>
+    </PlanSectionFrame>
   )
 }
