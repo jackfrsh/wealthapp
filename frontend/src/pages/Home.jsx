@@ -551,7 +551,7 @@ function WealthRunway({ settingsReady, isPro, ccy }) {
         className="w-full text-left flex items-center justify-between gap-4 py-1 transition-opacity duration-150 hover:opacity-75"
       >
         <div className="min-w-0">
-          <div className="text-[10.5px] font-semibold tracking-[.14em] uppercase text-ink-muted/40 dark:text-white/28">
+          <div className="text-[10.5px] font-semibold tracking-[.14em] uppercase text-ink-muted/40 dark:text-white">
             If you keep going
           </div>
           {!runwayOpen && headlineValue && (
@@ -565,7 +565,7 @@ function WealthRunway({ settingsReady, isPro, ccy }) {
         </div>
         <ChevronRight
           size={13}
-          className={`shrink-0 text-ink-muted/30 dark:text-white/18 transition-transform duration-200 ${runwayOpen ? 'rotate-90' : ''}`}
+          className={`shrink-0 text-ink-muted/30 dark:text-white transition-transform duration-200 ${runwayOpen ? 'rotate-90' : ''}`}
         />
       </button>
 

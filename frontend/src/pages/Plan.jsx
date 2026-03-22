@@ -380,14 +380,44 @@ export default function Plan() {
                       <YAxis {...yAxisProps} tickFormatter={compactTickFormatter} />
                       <Tooltip content={<WealthTooltip currency={ccy} />} {...tooltipProps} />
                       <ReferenceLine y={derived.displayTarget} stroke="#C89B3C" strokeDasharray="4 6" strokeOpacity={0.45} />
-                      <Area type="monotone" dataKey="required" stroke="currentColor" strokeWidth={1.5}
-                        strokeOpacity={0.13} strokeDasharray="6 4" fill="none" dot={false} connectNulls />
-                      {!compareLoading && bestScenario && (
-                        <Area type="monotone" dataKey="compareProjected" stroke="#2FA676" strokeWidth={2}
-                          strokeDasharray="8 5" strokeOpacity={0.80} fill="none" dot={false} connectNulls />
-                      )}
-                      <Area type="monotone" dataKey="projected" stroke={ACCENT_STROKE} strokeWidth={2.5}
-                        fill="url(#planTrajFill)" dot={false} activeDot={activeDotStyle} />
+                      <Area
+  type="monotone"
+  dataKey="required"
+  name="Required"
+  stroke="currentColor"
+  strokeWidth={1.5}
+  strokeOpacity={0.13}
+  strokeDasharray="6 4"
+  fill="none"
+  dot={false}
+  connectNulls
+/>
+
+{!compareLoading && bestScenario && (
+  <Area
+    type="monotone"
+    dataKey="compareProjected"
+    name="Scenario"
+    stroke="#2FA676"
+    strokeWidth={2}
+    strokeDasharray="8 5"
+    strokeOpacity={0.80}
+    fill="none"
+    dot={false}
+    connectNulls
+  />
+)}
+
+<Area
+  type="monotone"
+  dataKey="projected"
+  name="Projected"
+  stroke={ACCENT_STROKE}
+  strokeWidth={2.5}
+  fill="url(#planTrajFill)"
+  dot={false}
+  activeDot={activeDotStyle}
+/>
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
