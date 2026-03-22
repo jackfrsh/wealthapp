@@ -172,22 +172,21 @@ export default function Upgrade() {
   const price = plan === 'monthly' ? '£6' : '£60'
   const cadence = plan === 'monthly' ? '/month' : '/year'
 
-  const headline = isAccountLimit ? 'Upgrade to add more accounts.' : 'Unlock the full model.'
+  const headline = isAccountLimit ? 'More accounts, deeper intelligence.' : 'See when your plan gets you there.'
   const subhead = isAccountLimit
-    ? 'Free supports up to 3 accounts. Pro unlocks unlimited accounts and long-horizon projections.'
-    : 'Long-horizon projections, real-terms modelling, and tools to close the gap to your target.'
+    ? 'Free supports up to 3 accounts. Pro unlocks unlimited accounts, long-horizon projections, and your full freedom timeline.'
+    : 'Your freedom timeline, 40-year projections, scenario modelling, and the planning depth to close the gap.'
 
-  const proBullets = [
-    'Unlimited accounts',
-    '5–40 year projections + milestones',
-    'Net-worth trajectory modelling',
-    'One-off deposit modelling',
-    'Inflation-adjusted (real terms) view',
-    'Scenario peeks (+£100/+£250 per month)',
-    'Optimiser: calculates required monthly contribution',
-    'One-tap “Set & update” from the Optimiser',
-    'What-if scenario comparisons',
-  ]
+    const proBullets = [
+      'Freedom timeline — see when your plan gets you there',
+      'Unlimited accounts',
+      '5–40 year projections with milestone markers',
+      'Contribution optimiser — see what it takes to stay on track',
+      'Scenario compare — test changes side by side',
+      'One-off deposit modelling — see the impact of lump sums',
+      'Real-terms (inflation-adjusted) projections',
+      'All insights unlocked',
+    ]
 
   return (
     <div className="space-y-10">
@@ -276,7 +275,7 @@ export default function Upgrade() {
             ))}
 
             <div className="pt-2 text-xs text-ink-muted/60 dark:text-white/30">
-              Coming soon: pensions tools, ISA bridge, mortgage overpayment modelling.
+              Coming soon: pensions tools and pension bridge.
             </div>
           </div>
 
@@ -300,7 +299,7 @@ export default function Upgrade() {
         <div className="rounded-3xl border border-black/[.06] dark:border-white/[.08] bg-white/60 dark:bg-white/[.04] p-6 sm:p-8">
           <h2 className="text-lg font-semibold text-ink dark:text-white text-center">Free vs Pro</h2>
           <p className="text-sm text-ink-muted/70 dark:text-white/35 text-center mt-2">
-            Start free. Upgrade when you want long horizons and tools to close the gap.
+            Free gives you core clarity. Pro gives you the depth to act on it.
           </p>
 
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -308,7 +307,10 @@ export default function Upgrade() {
               <div className="text-sm font-semibold text-ink dark:text-white">Free</div>
               <ul className="mt-3 space-y-2 text-sm text-ink-muted dark:text-white/45">
                 <li>Up to 3 accounts</li>
-                <li>1 year outlook</li>
+                <li>1-year projection</li>
+                <li>One goal</li>
+                <li>All 4 decision tools</li>
+                <li>2 insights</li>
                 <li>Core net worth dashboard</li>
               </ul>
             </div>
@@ -320,8 +322,11 @@ export default function Upgrade() {
               </div>
               <ul className="mt-3 space-y-2 text-sm text-ink dark:text-white/80">
                 <li>Unlimited accounts</li>
+                <li>Freedom timeline</li>
                 <li>5–40 year projections + milestones</li>
-                <li>Optimiser + real-terms modelling</li>
+                <li>Scenario compare &amp; one-off deposit modelling</li>
+                <li>Required contribution optimiser</li>
+                <li>Real-terms view + all insights</li>
               </ul>
             </div>
           </div>

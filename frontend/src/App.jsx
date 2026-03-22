@@ -27,11 +27,11 @@ import Terms from './pages/Terms'
 
 // ✅ Eager-load core authed pages (instant navigation, no suspense blank)
 import Home from './pages/Home'
-import Outlook from './pages/Outlook'
-import Strategy from './pages/Strategy'
+import Plan from './pages/Plan'
+import Decisions from './pages/Decisions'
 import Accounts from './pages/Accounts'
 import Settings from './pages/Settings'
-import GoalSetup from './pages/GoalSetup'
+const GoalSetup = React.lazy(() => import('./pages/GoalSetup'))
 import Upgrade from './pages/Upgrade'
 
 // 💤 Keep rarely-visited pages lazy
@@ -98,7 +98,7 @@ class ErrorBoundary extends React.Component {
         msg.includes('ChunkLoadError')
 
       return (
-        <div className="min-h-screen flex items-center justify-center bg-surface dark:bg-surface-dark px-6">
+        <div className="min-h-screen flex items-center justify-center bg-surface dark:bg-[#0F141F] px-7">
           <div className="text-center max-w-md space-y-4">
             <div className="font-display text-3xl text-ink dark:text-white">
               {isChunkError ? 'Paddock has been updated' : 'Something went wrong'}
@@ -152,7 +152,8 @@ const PAGE_TO_PATH = {
   upgrade: '/upgrade',
   settings: '/settings',
   accounts: '/accounts',
-  outlook: '/outlook',
+  plan: '/plan',
+  decisions: '/decisions',
   insights: '/insights',
   goal_setup: '/goal_setup',
   admin: '/admin',
@@ -188,7 +189,8 @@ function pageFromPath(pathname) {
   if (p.startsWith('/upgrade')) return 'upgrade'
   if (p.startsWith('/settings')) return 'settings'
   if (p.startsWith('/accounts')) return 'accounts'
-  if (p.startsWith('/outlook')) return 'outlook'
+  if (p.startsWith('/plan') || p.startsWith('/outlook')) return 'plan'
+  if (p.startsWith('/decisions') || p.startsWith('/strategy')) return 'decisions'
   if (p.startsWith('/insights')) return 'insights'
   if (p.startsWith('/goal_setup')) return 'goal_setup'
   if (p.startsWith('/admin')) return 'admin'
@@ -209,49 +211,23 @@ export default function App() {
 
   const [username, setUsername] = useState('')
 
-  // Theme
-  const THEME_KEY = 'theme_preference'
+  // Dark mode only — light mode is not yet supported.
+  // Force dark regardless of OS preference or any stored setting.
+  const resolveTheme = () => true
 
-  const resolveTheme = (pref) => {
-    if (pref === 'dark') return true
-    if (pref === 'light') return false
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
+  const applyThemeToDom = () => {
+    document.documentElement.classList.add('dark')
   }
 
-  const applyThemeToDom = (pref) => {
-    document.documentElement.classList.toggle('dark', resolveTheme(pref))
-  }
-
-  const [themePref, _setThemePref] = useState(() => {
-    try {
-      return localStorage.getItem(THEME_KEY) || 'system'
-    } catch {
-      return 'system'
-    }
-  })
+  const [themePref, _setThemePref] = useState('dark')
 
   const [isNavPending, startNavTransition] = useTransition()
 
-  const setThemePreference = useCallback((pref) => {
-    const next = pref || 'system'
-    _setThemePref(next)
-    applyThemeToDom(next)
-    try {
-      localStorage.setItem(THEME_KEY, next)
-    } catch {}
+  const setThemePreference = useCallback(() => {}, [])
+
+  useEffect(() => {
+    applyThemeToDom()
   }, [])
-
-  useEffect(() => {
-    applyThemeToDom(themePref)
-  }, [themePref])
-
-  useEffect(() => {
-    if (themePref !== 'system') return
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const handler = () => applyThemeToDom('system')
-    mq.addEventListener?.('change', handler)
-    return () => mq.removeEventListener?.('change', handler)
-  }, [themePref])
 
   const [baseCurrency, setBaseCurrency] = useState('GBP')
   const [isPro, setIsPro] = useState(false)
@@ -325,8 +301,9 @@ export default function App() {
   const PAGE_TITLES = {
     landing: 'Paddock — Private Net Worth Tracker & Wealth Dashboard',
     auth: 'Sign in — Paddock',
-    home: 'Dashboard — Paddock',
-    outlook: 'Outlook — Paddock',
+    home: 'Home — Paddock',
+    plan: 'Plan — Paddock',
+    decisions: 'Decisions — Paddock',
     insights: 'Insights — Paddock',
     accounts: 'Accounts — Paddock',
     settings: 'Settings — Paddock',
@@ -765,7 +742,7 @@ export default function App() {
       if (page === 'security') return <Security navigateTo={navigateTo} />
       if (page === 'terms') return <Terms navigateTo={navigateTo} />
       if (page === 'auth') return <AuthPage />
-      if (page === 'strategy') return <Strategy />
+      if (page === 'decisions') return <Decisions />
       if (page === 'guides_index') return <GuideIndex navigateTo={navigateTo} />
       if (page === 'guide_multi_currency') return <MultiCurrencyGuide />
       if (page === 'guide_long_term_projection') return <LongTermProjectionGuide />
@@ -805,24 +782,26 @@ export default function App() {
     
       case 'home':
         return <Home />
-      case 'outlook':
-        return <Outlook />
+      case 'plan':
+        return <Plan />
       case 'accounts':
         return <Accounts />
       case 'upgrade':
         return <Upgrade />
-      case 'strategy':
-        return <Strategy />  
+      case 'decisions':
+        return <Decisions />
       case 'settings':
         return <Settings />
       case 'goal_setup':
         return (
-          <GoalSetup
-            onComplete={(goal) => {
-              setPrimaryGoal(goal || null)
-              setPage('home', { replace: true })
-            }}
-          />
+          <Suspense fallback={<LazyFallback />}>
+            <GoalSetup
+              onComplete={(goal) => {
+                setPrimaryGoal(goal || null)
+                setPage('home', { replace: true })
+              }}
+            />
+          </Suspense>
         )
     
       case 'insights':
@@ -846,13 +825,13 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AppContext.Provider value={ctx}>
-        <div className="min-h-screen bg-surface dark:bg-surface-dark text-ink dark:text-white">
+      <div className="min-h-screen bg-surface dark:bg-[#0F141F] text-ink dark:text-white">
           {authed ? (
             <div className="flex min-h-screen">
               <Sidebar />
               <div className="flex-1 min-w-0">
                 <MobileNav />
-                <main className="px-4 sm:px-6 lg:px-8 py-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-6">
+                <main className="px-4 sm:px-6 lg:px-8 py-7 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-8">
                   <div className="mx-auto w-full max-w-6xl">
                     <div className="animate-page-in">
                       {isNavPending ? (

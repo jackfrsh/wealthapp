@@ -1,15 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react'
-import Card from '../Card'
 import { fmtCurrency, fmtCurrencyCompact } from '../../utils'
-import {
-  AlertTriangle,
-  CalendarClock,
-  CheckCircle2,
-  Sparkles,
-  Target,
-  TrendingUp,
-  Wallet,
-} from 'lucide-react'
+import { AlertTriangle, Sparkles } from 'lucide-react'
 import { planTheme } from './planTheme'
 import { formatShortDate, getPlanIsaGuidance, numFrom } from './planIsaGuidance'
 import { getPlanFundingOrder } from './planFundingOrder'
@@ -86,31 +77,52 @@ export default function PlanIsaStrategyCard({
   const planPace = Math.max(0, numFrom(localContrib, 0))
   const monthlyIsaValue = Math.max(0, numFrom(isaMonthly, 0))
 
+  const isaHeadline = useMemo(() => {
+    const nearFull = remainingAllowance <= 1000
+    const onTrack = !nearFull && projectedUnusedAllowance <= 500
+    if (nearFull) return {
+      title: `£${Math.round(remainingAllowance).toLocaleString()} of ISA room remaining`,
+      sub: 'Almost fully used. Consider your wrapper choice for the next contribution.',
+    }
+    if (onTrack) return {
+      title: `On track to use ${fmtCurrencyCompact(rules.annualAllowance - projectedUnusedAllowance, 'GBP')} of your ${fmtCurrency(rules.annualAllowance, 'GBP')} allowance`,
+      sub: `Current pace fills your allowance by ${formatShortDate(taxYear.end)}.`,
+    }
+    return {
+      title: `At current pace, ${fmtCurrencyCompact(projectedUnusedAllowance, 'GBP')} goes unused this tax year`,
+      sub: suggestedMonthlyIsa ? `Increase to ${fmtCurrency(suggestedMonthlyIsa, 'GBP')}/mo to fill your allowance.` : 'Increase your ISA funding to maximise tax-free growth.',
+    }
+  }, [remainingAllowance, projectedUnusedAllowance, rules.annualAllowance, suggestedMonthlyIsa, taxYear.end])
+
   return (
-    <Card className={`${planTheme.sectionCard} p-5 sm:p-6`}>
+    <div>
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0">
-          <div className={planTheme.eyebrowAccent}>
-            <span className="inline-flex items-center gap-2">
-              <Sparkles size={13} />
-              Wrapper strategy
-            </span>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className={planTheme.eyebrowAccent}>
+              <span className="inline-flex items-center gap-2">
+                <Sparkles size={13} />
+                Wrapper strategy
+              </span>
+            </div>
+            <div className="text-[11px] font-semibold text-ink-muted/50 dark:text-white/30">
+              {taxYear.label} tax year
+            </div>
           </div>
 
           <div className="mt-3 text-xl sm:text-2xl font-display text-ink dark:text-white tracking-tight">
             Use this tax year deliberately
           </div>
-
-          <div className={`mt-2 ${planTheme.body} max-w-[48rem]`}>
-            One place to see remaining ISA room, the best wrapper to use now, and the order your
-            next pounds should follow.
-          </div>
         </div>
+      </div>
 
-        <div
-          className={`${planTheme.innerCard} px-3 py-2 text-xs font-semibold text-ink dark:text-white`}
-        >
-          {taxYear.label} tax year
+      {/* State-aware dominant line */}
+      <div className="mt-4">
+        <div className="text-lg sm:text-xl font-display text-ink dark:text-white leading-snug">
+          {isaHeadline.title}
+        </div>
+        <div className="mt-1 text-sm text-ink-muted/60 dark:text-white/35">
+          {isaHeadline.sub}
         </div>
       </div>
 
@@ -186,38 +198,6 @@ export default function PlanIsaStrategyCard({
             These values are saved for this goal and reset automatically next tax year.
           </div>
 
-          <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className={`${planTheme.innerCard} p-4`}>
-              <div className={`${planTheme.statLabel} flex items-center gap-2`}>
-                <Wallet size={12} />
-                ISA allowance
-              </div>
-              <div className="mt-2 text-lg font-display text-ink dark:text-white">
-                {fmtCurrency(rules.annualAllowance, 'GBP')}
-              </div>
-            </div>
-
-            <div className={`${planTheme.innerCard} p-4`}>
-              <div className={`${planTheme.statLabel} flex items-center gap-2`}>
-                <Wallet size={12} />
-                Remaining now
-              </div>
-              <div className="mt-2 text-lg font-display text-ink dark:text-white">
-                {fmtCurrencyCompact(remainingAllowance, 'GBP')}
-              </div>
-            </div>
-
-            <div className={`${planTheme.innerCard} p-4`}>
-              <div className={`${planTheme.statLabel} flex items-center gap-2`}>
-                <CalendarClock size={12} />
-                Tax year ends
-              </div>
-              <div className="mt-2 text-lg font-display text-ink dark:text-white">
-                {formatShortDate(taxYear.end)}
-              </div>
-            </div>
-          </div>
-
           <div className="mt-5">
             <div className="flex items-center justify-between gap-3 mb-2.5">
               <div className={planTheme.statLabel}>Allowance usage</div>
@@ -232,7 +212,7 @@ export default function PlanIsaStrategyCard({
                 style={{ width: `${currentProgressPct}%` }}
               />
               <div
-                className="absolute inset-y-0 rounded-full bg-[linear-gradient(90deg,rgba(107,160,216,0.72),rgba(107,160,216,0.95))]"
+                className="absolute inset-y-0 rounded-full bg-[linear-gradient(90deg,rgba(120,169,230,0.72),rgba(120,169,230,0.95))]"
                 style={{
                   left: `${currentProgressPct}%`,
                   width: `${extensionPct}%`,
@@ -252,66 +232,58 @@ export default function PlanIsaStrategyCard({
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className={`${planTheme.innerCard} p-4`}>
-              <div className={`${planTheme.statLabel} flex items-center gap-2`}>
-                <Target size={12} />
-                Projected unused
-              </div>
-              <div className="mt-2 text-lg font-display text-ink dark:text-white">
-                {fmtCurrencyCompact(projectedUnusedAllowance, 'GBP')}
-              </div>
+          <div className="mt-5 flex items-stretch rounded-xl overflow-hidden bg-black/[.015] dark:bg-white/[.025]">
+            <div className="flex-1 min-w-0 px-4 py-3">
+              <div className="text-[10px] font-semibold uppercase tracking-[.12em] text-ink-muted/40 dark:text-white/22">Remaining</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums text-ink dark:text-white">{fmtCurrencyCompact(remainingAllowance, 'GBP')}</div>
             </div>
-
-            <div className={`${planTheme.innerCard} p-4`}>
-              <div className={`${planTheme.statLabel} flex items-center gap-2`}>
-                <TrendingUp size={12} />
-                ISA pace
-              </div>
-              <div className="mt-2 text-lg font-display text-ink dark:text-white">
-                {fmtCurrency(monthlyIsaValue, 'GBP')}/mo
-              </div>
+            <div className="w-px bg-black/[.06] dark:bg-white/[.06] my-2.5 shrink-0" />
+            <div className="flex-1 min-w-0 px-4 py-3">
+              <div className="text-[10px] font-semibold uppercase tracking-[.12em] text-ink-muted/40 dark:text-white/22">ISA pace</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums text-ink dark:text-white">{fmtCurrency(monthlyIsaValue, 'GBP')}/mo</div>
+            </div>
+            <div className="w-px bg-black/[.06] dark:bg-white/[.06] my-2.5 shrink-0" />
+            <div className="flex-1 min-w-0 px-4 py-3">
+              <div className="text-[10px] font-semibold uppercase tracking-[.12em] text-ink-muted/40 dark:text-white/22">Projected unused</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums text-ink dark:text-white">{fmtCurrencyCompact(projectedUnusedAllowance, 'GBP')}</div>
             </div>
           </div>
 
-          <div className={`${planTheme.innerCard} mt-5 p-4`}>
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 w-9 h-9 rounded-2xl flex items-center justify-center bg-white/75 dark:bg-white/[.05] border border-black/[.06] dark:border-white/[.08]">
-                <CheckCircle2 size={16} className="text-ink dark:text-white" />
-              </div>
-
-              <div>
-                <div className="text-sm font-semibold text-ink dark:text-white">
-                  {nextActionTitle}
-                </div>
-                <div className={`mt-1 ${planTheme.body}`}>{nextActionBody}</div>
-              </div>
+          {/* Next action */}
+          <div className="mt-5 pt-5 border-t border-black/[.05] dark:border-white/[.05]">
+            <div className="text-sm font-semibold text-ink dark:text-white">
+              {nextActionTitle}
             </div>
+            <div className={`mt-1 ${planTheme.body}`}>{nextActionBody}</div>
           </div>
         </div>
 
         <div>
-          <div className="rounded-2xl border border-accent/18 bg-accent/[.05] dark:bg-accent/[.10] p-4">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="text-[10px] font-semibold tracking-[.18em] uppercase text-accent dark:text-blue-300">
-                Recommended wrapper
+          {/* Recommended wrapper — accent bar treatment */}
+          <div className="flex items-stretch">
+            <div className="w-[3px] shrink-0 rounded-full bg-accent" />
+            <div className="flex-1 min-w-0 pl-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="text-[10px] font-semibold tracking-[.18em] uppercase text-accent dark:text-blue-300">
+                  Recommended wrapper
+                </div>
+                <div className="text-[11px] font-semibold text-ink-muted/50 dark:text-white/35">
+                  {confidence}
+                </div>
               </div>
 
-              <div className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-black/[.03] dark:bg-white/[.05] text-ink-muted dark:text-white/70 border border-black/[.05] dark:border-white/[.08]">
-                {confidence}
+              <div className="mt-2 text-lg font-display text-ink dark:text-white">
+                {recommendedWrapper}
               </div>
+              <div className="mt-2 text-sm text-ink dark:text-white/90 leading-relaxed">
+                {primaryReason}
+              </div>
+              <div className={`mt-2 ${planTheme.body}`}>{secondaryReason}</div>
             </div>
-
-            <div className="mt-2 text-lg font-display text-ink dark:text-white">
-              {recommendedWrapper}
-            </div>
-            <div className="mt-2 text-sm text-ink dark:text-white/90 leading-relaxed">
-              {primaryReason}
-            </div>
-            <div className={`mt-2 ${planTheme.body}`}>{secondaryReason}</div>
           </div>
 
-          <div className={`${planTheme.innerCard} mt-4 p-4`}>
+          {/* Funding order */}
+          <div className="mt-6 pt-6 border-t border-black/[.05] dark:border-white/[.05]">
             <div className="text-[10px] font-semibold tracking-[.18em] uppercase text-accent dark:text-blue-300">
               Funding order
             </div>
@@ -322,7 +294,7 @@ export default function PlanIsaStrategyCard({
               {fundingOrder.priorities.map((priority, index) => (
                 <div key={priority.key} className="py-3 first:pt-0 last:pb-0">
                   <div className="flex items-start gap-3">
-                    <div className="w-7 h-7 mt-0.5 rounded-full bg-black/[.05] dark:bg-white/[.06] text-[11px] font-semibold text-ink dark:text-white flex items-center justify-center shrink-0">
+                    <div className="w-6 h-6 mt-0.5 rounded-full bg-black/[.05] dark:bg-white/[.06] text-[10px] font-semibold text-ink dark:text-white flex items-center justify-center shrink-0">
                       {index + 1}
                     </div>
 
@@ -363,28 +335,18 @@ export default function PlanIsaStrategyCard({
             </div>
           </div>
 
-          <div className={`${planTheme.innerCard} mt-4 p-4`}>
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 w-9 h-9 rounded-2xl flex items-center justify-center bg-white/75 dark:bg-white/[.05] border border-black/[.06] dark:border-white/[.08]">
-                <AlertTriangle size={16} className="text-ink dark:text-white" />
-              </div>
-
+          {/* Watch-out + legal — collapsed to quiet footer */}
+          <div className="mt-6 pt-5 border-t border-black/[.05] dark:border-white/[.05]">
+            <div className="flex items-start gap-2 text-xs leading-relaxed text-ink-muted/55 dark:text-white/28">
+              <AlertTriangle size={12} className="shrink-0 mt-0.5 opacity-60" />
               <div>
-                <div className="text-sm font-semibold text-ink dark:text-white">Watch-out</div>
-                <div className={`mt-1 ${planTheme.body}`}>{watchout}</div>
+                <span className="font-semibold text-ink-muted/70 dark:text-white/38">Watch-out: </span>
+                {watchout} Lifetime ISA withdrawal rules are tighter than a standard ISA. Replacing withdrawn ISA money in the same tax year only preserves allowance in flexible ISAs.
               </div>
-            </div>
-          </div>
-
-          <div className={`mt-5 pt-5 border-t ${planTheme.divider}`}>
-            <div className="text-xs leading-relaxed text-ink-muted dark:text-white/34">
-              Lifetime ISA can be a strong wrapper, but the withdrawal rules are tighter than a
-              standard ISA. Replacing withdrawn ISA money in the same tax year only preserves
-              allowance in flexible ISAs.
             </div>
           </div>
         </div>
       </div>
-    </Card>
+    </div>
   )
 }

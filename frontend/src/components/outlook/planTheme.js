@@ -1,8 +1,8 @@
 export const planTheme = {
     sectionCard:
-      'rounded-[28px] border border-black/[.05] dark:border-white/[.06] bg-white dark:bg-surface-dark-2 overflow-hidden',
+      'rounded-[28px] border border-black/[.06] dark:border-white/[.07] bg-white dark:bg-surface-dark-2 overflow-hidden',
     sectionCardSoft:
-      'rounded-[28px] border border-black/[.05] dark:border-white/[.06] bg-black/[.02] dark:bg-white/[.03]',
+      'rounded-[28px] border border-black/[.06] dark:border-white/[.07] bg-black/[.02] dark:bg-white/[.03]',
   
     innerCard:
       'rounded-2xl border border-black/[.05] dark:border-white/[.06] bg-black/[.02] dark:bg-white/[.04]',
@@ -13,12 +13,12 @@ export const planTheme = {
     innerPanelCompact:
       'rounded-2xl border border-black/[.05] dark:border-white/[.06] bg-black/[.02] dark:bg-white/[.04] p-4',
   
-    divider: 'border-black/[.06] dark:border-white/[.06]',
+    divider: 'border-black/[.06] dark:border-white/[.07]',
   
     eyebrow:
       'text-[10px] font-semibold tracking-[.18em] uppercase text-ink-muted/60 dark:text-white/24',
     eyebrowAccent:
-      'text-[10px] font-semibold tracking-[.18em] uppercase text-accent dark:text-blue-300',
+      'text-[10px] font-semibold tracking-[.18em] uppercase text-accent dark:text-accent',
     title: 'text-sm font-semibold text-ink dark:text-white',
     body: 'text-sm text-ink-muted dark:text-white/38 leading-relaxed',
   

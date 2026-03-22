@@ -111,9 +111,12 @@ function projectTotal_perAccount({
 
 export default function WhatIfCard({
   goalTarget = null,
+  goalName = '',
+  milestoneTarget = 0,
   accounts = [],
   portfolioAnnualReturnPct = 7,
   onSimulationChange,
+  bare = false,
 }) {
   const { isPro, setPage } = useApp()
 
@@ -122,6 +125,13 @@ export default function WhatIfCard({
   const [mode, setMode] = useState('monthly') // 'monthly' | 'lump'
   const [amount, setAmount] = useState(100)
   const [accountId, setAccountId] = useState('')
+  const [targetMode, setTargetMode] = useState('goal') // 'goal' | 'milestone'
+
+  const showTargetSwitch = goalTarget > 0 && milestoneTarget > 0 && milestoneTarget !== goalTarget
+  const activeTarget = targetMode === 'milestone' && showTargetSwitch ? milestoneTarget : goalTarget
+  const activeTargetLabel = targetMode === 'milestone' && showTargetSwitch
+    ? `£${Number(milestoneTarget).toLocaleString()}`
+    : goalName || 'your main goal'
 
   useEffect(() => {
     if (accountId || included.length === 0) return
@@ -147,31 +157,31 @@ export default function WhatIfCard({
     onSimulationChange({ mode, amount, accountId })
   }, [mode, amount, accountId, onSimulationChange])
 
-  const canCompute = Boolean(goalTarget) && included.length > 0
+  const canCompute = Boolean(activeTarget) && included.length > 0
 
   const baselineMonths = useMemo(() => {
     if (!canCompute) return null
     return monthsToReachGoal_perAccount({
       accounts: included,
-      goalTarget,
+      goalTarget: activeTarget,
       extraAmount: 0,
       extraAccountId: accountId,
       fallbackAnnualReturnPct: portfolioAnnualReturnPct,
       mode,
     })
-  }, [canCompute, included, goalTarget, accountId, portfolioAnnualReturnPct, mode])
+  }, [canCompute, included, activeTarget, accountId, portfolioAnnualReturnPct, mode])
 
   const whatIfMonths = useMemo(() => {
     if (!canCompute) return null
     return monthsToReachGoal_perAccount({
       accounts: included,
-      goalTarget,
+      goalTarget: activeTarget,
       extraAmount: amount,
       extraAccountId: accountId,
       fallbackAnnualReturnPct: portfolioAnnualReturnPct,
       mode,
     })
-  }, [canCompute, included, goalTarget, accountId, portfolioAnnualReturnPct, mode, amount])
+  }, [canCompute, included, activeTarget, accountId, portfolioAnnualReturnPct, mode, amount])
 
   const savedMonths =
     baselineMonths != null && whatIfMonths != null
@@ -207,6 +217,14 @@ export default function WhatIfCard({
     ? getAnnualReturnPct(selected, portfolioAnnualReturnPct)
     : portfolioAnnualReturnPct
 
+  const impactReading = useMemo(() => {
+    if (savedMonths == null || amount === 0) return null
+    if (savedMonths <= 0) return null
+    const label = savedMonths >= 24 ? 'strong' : savedMonths >= 6 ? 'meaningful' : 'modest'
+    const modePhrase = mode === 'monthly' ? `an extra £${amount}/mo` : `a one-off £${amount}`
+    return `${label.charAt(0).toUpperCase() + label.slice(1)} impact — ${modePhrase} shortens your timeline by ${formatDurationMonths(savedMonths)}.`
+  }, [savedMonths, amount, mode])
+
   const toggleBtn = (active) =>
     [
       'px-4 py-1.5 text-xs font-semibold rounded-xl transition-all duration-200 ease-smooth',
@@ -215,34 +233,27 @@ export default function WhatIfCard({
         : 'text-ink-muted dark:text-white/40 hover:text-ink dark:hover:text-white/65',
     ].join(' ')
 
-  return (
-    <div className="rounded-3xl border border-black/[.06] dark:border-white/[.07] bg-card dark:bg-surface-dark-2 shadow-card p-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <div className="text-xs font-semibold tracking-tightish text-ink-muted/70 dark:text-white/35">
-            What-if
+  const controls = (
+    <div className="grid gap-4">
+        {/* Target context */}
+        {showTargetSwitch ? (
+          <div className="flex flex-col gap-1.5">
+            <div className="text-xs font-semibold text-ink-muted/55 dark:text-white/30">Accelerating toward</div>
+            <div className="flex rounded-2xl bg-black/[.03] dark:bg-white/[.05] p-1 w-fit">
+              <button type="button" onClick={() => setTargetMode('goal')} className={toggleBtn(targetMode === 'goal')}>
+                {goalName || 'Main goal'}
+              </button>
+              <button type="button" onClick={() => setTargetMode('milestone')} className={toggleBtn(targetMode === 'milestone')}>
+                £{Number(milestoneTarget).toLocaleString()}
+              </button>
+            </div>
           </div>
-          <div className="mt-1 text-lg font-semibold tracking-tightish text-ink dark:text-white">
-            Accelerate your milestone
+        ) : activeTarget > 0 ? (
+          <div className="text-sm text-ink-muted/70 dark:text-white/35">
+            Accelerating toward <span className="font-semibold text-ink dark:text-white">{goalName || 'your main goal'}</span>
           </div>
-          <div className="mt-1 text-sm text-ink-muted/70 dark:text-white/35">
-            Model contributions and see how much sooner you reach your target.
-          </div>
-        </div>
+        ) : null}
 
-        {!isPro && (
-          <button
-            type="button"
-            onClick={() => setPage('upgrade')}
-            className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-2xl border border-black/[.08] dark:border-white/[.10] bg-black/[.02] dark:bg-white/[.05] text-xs font-semibold text-ink dark:text-white hover:bg-black/[.04] dark:hover:bg-white/[.07] transition-colors"
-          >
-            <Lock size={14} className="opacity-75" />
-            Pro
-          </button>
-        )}
-      </div>
-
-      <div className="mt-5 grid gap-4">
         {/* Mode toggle */}
         <div className="flex rounded-2xl bg-black/[.03] dark:bg-white/[.05] p-1 w-fit">
           <button type="button" onClick={() => setMode('monthly')} className={toggleBtn(mode === 'monthly')}>
@@ -316,66 +327,116 @@ export default function WhatIfCard({
         <div className="mt-2 rounded-2xl bg-black/[.03] dark:bg-white/[.04] p-4">
           {!canCompute ? (
             <div className="text-sm text-ink-muted/70 dark:text-white/35">
-              {goalTarget
+              {activeTarget
                 ? 'Add an account included in net worth to see acceleration.'
                 : 'Set a target goal to see acceleration.'}
             </div>
           ) : (
-            <div className="space-y-1.5">
-              <div className="flex items-baseline justify-between">
-                <div className="text-sm text-ink-muted/70 dark:text-white/35">Current pace</div>
-                <div className="text-sm font-semibold tabular-nums text-ink dark:text-white">
-                  {formatDurationMonths(baselineMonths)}
-                </div>
-              </div>
-
-              <div className="flex items-baseline justify-between">
-                <div className="text-sm text-ink-muted/70 dark:text-white/35">
-                  With {mode === 'monthly' ? `+£${amount}/mo` : `+£${amount} now`}
-                </div>
-                <div className="text-sm font-semibold tabular-nums text-ink dark:text-white">
-                  {formatDurationMonths(whatIfMonths)}
-                </div>
-              </div>
-
-              <div className="pt-2 text-sm">
-                <span className="text-ink-muted/70 dark:text-white/35">Impact: </span>
-                <span className="font-semibold text-ink dark:text-white tabular-nums">
-                  {savedMonths == null
-                    ? '—'
-                    : savedMonths > 0
-                      ? `${formatDurationMonths(savedMonths)} sooner`
-                      : savedMonths === 0
-                        ? 'No change'
-                        : `${formatDurationMonths(Math.abs(savedMonths))} later`}
-                </span>
-              </div>
-
-              {moneyDeltaByBaselineDate != null && (
-                <div className="pt-1 text-sm">
-                  {isPro ? (
-                    <div className="text-ink-muted/70 dark:text-white/35">
-                      That’s{' '}
-                      <span className="font-semibold text-ink dark:text-white tabular-nums">
-                        £{Math.round(moneyDeltaByBaselineDate).toLocaleString()}
-                      </span>{' '}
-                      more by your original target date.
+            <div className="space-y-3">
+              {/* Dominant takeaway */}
+              {savedMonths != null && savedMonths > 0 ? (
+                <div>
+                  <div className="text-[15px] font-semibold text-ink dark:text-white leading-snug">
+                    {mode === 'monthly' ? `+£${amount}/mo` : `+£${amount} now`} reaches {activeTargetLabel}{' '}
+                    <span className="tabular-nums">{formatDurationMonths(savedMonths)}</span> sooner
+                  </div>
+                  {moneyDeltaByBaselineDate != null && (
+                    <div className="mt-1.5 text-sm">
+                      {isPro ? (
+                        <span className="text-ink-muted/70 dark:text-white/35">
+                          That's{' '}
+                          <span className="font-semibold text-ink dark:text-white tabular-nums">
+                            £{Math.round(moneyDeltaByBaselineDate).toLocaleString()}
+                          </span>{' '}
+                          more by your original target date.
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setPage('upgrade')}
+                          className="inline-flex items-center gap-2 text-xs font-semibold tracking-tightish text-accent hover:text-accent-dark transition-colors"
+                        >
+                          <Lock size={13} className="opacity-80" />
+                          Unlock projected gain impact
+                        </button>
+                      )}
                     </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setPage('upgrade')}
-                      className="inline-flex items-center gap-2 text-xs font-semibold tracking-tightish text-accent hover:text-accent-dark transition-colors"
-                    >
-                      <Lock size={13} className="opacity-80" />
-                      Unlock projected gain impact
-                    </button>
                   )}
+                </div>
+              ) : savedMonths === 0 || amount === 0 ? (
+                <div className="text-sm text-ink-muted/70 dark:text-white/35">
+                  {amount === 0 ? 'Adjust the amount to see the impact.' : 'No measurable difference at this amount.'}
+                </div>
+              ) : null}
+
+              {/* Secondary band */}
+              <div className="flex items-stretch rounded-lg bg-black/[.015] dark:bg-white/[.025] overflow-hidden">
+                <div className="flex-1 min-w-0 px-3 py-2.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-[.12em] text-ink-muted/40 dark:text-white/22">Current pace</div>
+                  <div className="mt-0.5 text-sm font-semibold tabular-nums text-ink dark:text-white">{formatDurationMonths(baselineMonths)}</div>
+                </div>
+                <div className="w-px bg-black/[.06] dark:bg-white/[.06] my-2 shrink-0" />
+                <div className="flex-1 min-w-0 px-3 py-2.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-[.12em] text-ink-muted/40 dark:text-white/22">With extra</div>
+                  <div className="mt-0.5 text-sm font-semibold tabular-nums text-ink dark:text-white">{formatDurationMonths(whatIfMonths)}</div>
+                </div>
+                <div className="w-px bg-black/[.06] dark:bg-white/[.06] my-2 shrink-0" />
+                <div className="flex-1 min-w-0 px-3 py-2.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-[.12em] text-ink-muted/40 dark:text-white/22">Time saved</div>
+                  <div className="mt-0.5 text-sm font-semibold tabular-nums text-ink dark:text-white">
+                    {savedMonths == null
+                      ? '—'
+                      : savedMonths > 0
+                        ? formatDurationMonths(savedMonths)
+                        : savedMonths === 0
+                          ? '—'
+                          : `+${formatDurationMonths(Math.abs(savedMonths))}`}
+                  </div>
+                </div>
+              </div>
+
+              {impactReading && (
+                <div className="text-xs text-ink-muted/50 dark:text-white/25 leading-relaxed">
+                  {impactReading}
                 </div>
               )}
             </div>
           )}
         </div>
+      </div>
+  )
+
+  if (bare) return controls
+
+  return (
+    <div className="rounded-3xl border border-black/[.06] dark:border-white/[.07] bg-card dark:bg-surface-dark-2 shadow-card p-6">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <div className="text-xs font-semibold tracking-tightish text-ink-muted/70 dark:text-white/35">
+            What-if
+          </div>
+          <div className="mt-1 text-lg font-semibold tracking-tightish text-ink dark:text-white">
+            Accelerate your plan
+          </div>
+          <div className="mt-1 text-sm text-ink-muted/70 dark:text-white/35">
+            Model contributions and see how much sooner you reach your target.
+          </div>
+        </div>
+
+        {!isPro && (
+          <button
+            type="button"
+            onClick={() => setPage('upgrade')}
+            className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-2xl border border-black/[.08] dark:border-white/[.10] bg-black/[.02] dark:bg-white/[.05] text-xs font-semibold text-ink dark:text-white hover:bg-black/[.04] dark:hover:bg-white/[.07] transition-colors"
+          >
+            <Lock size={14} className="opacity-75" />
+            Pro
+          </button>
+        )}
+      </div>
+
+      <div className="mt-5">
+        {controls}
       </div>
     </div>
   )

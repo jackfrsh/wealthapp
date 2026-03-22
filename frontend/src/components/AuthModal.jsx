@@ -425,7 +425,7 @@ export default function AuthModal({
     [
       'pb-3.5 px-5 text-sm font-semibold border-b-2 -mb-px min-h-[44px] transition-colors',
       active
-        ? 'text-ink dark:text-white border-ink dark:border-white'
+        ? 'text-ink dark:text-white border-ink dark:border-accent'
         : 'text-ink-muted dark:text-white/35 border-transparent hover:text-ink dark:hover:text-white/60',
     ].join(' ')
 

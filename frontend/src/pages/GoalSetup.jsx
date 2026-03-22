@@ -263,7 +263,7 @@ export default function GoalSetup({ onComplete }) {
       </div>
 
       <p className="text-center text-xs text-ink-muted/40 dark:text-white/20 mt-6">
-        You can refine contributions and assumptions anytime in Outlook.
+        You can refine contributions and assumptions anytime in Plan.
       </p>
 
       <button

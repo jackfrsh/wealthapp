@@ -21,6 +21,7 @@ export default {
       fontFamily: {
         display: ['"Inter"', 'system-ui', '-apple-system', 'sans-serif'],
         sans: ['"Inter"', 'system-ui', '-apple-system', 'sans-serif'],
+        serif: ['"Playfair Display"', 'Georgia', 'serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
       fontSize: {
@@ -87,6 +88,12 @@ export default {
         danger: {
           DEFAULT: 'rgb(var(--negative-rgb) / <alpha-value>)',
           light: 'rgb(var(--negative-soft-rgb) / <alpha-value>)',
+        },
+
+        gold: {
+          DEFAULT: 'rgb(var(--gold-rgb) / <alpha-value>)',
+          muted: 'rgb(var(--gold-muted-rgb) / <alpha-value>)',
+          soft: 'rgb(var(--gold-soft-rgb) / <alpha-value>)',
         },
       },
 

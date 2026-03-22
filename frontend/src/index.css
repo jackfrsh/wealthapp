@@ -64,16 +64,24 @@
 
   --negative-rgb: 178 74 58;
   --negative-soft-rgb: 250 237 234;
+
+  /* Gold — wealth highlight, impact numbers, positive delta */
+  --gold:           #B8862A;
+  --gold-muted:     #9A6E1E;
+  --gold-soft:      #FDF6E8;
+  --gold-rgb:       184 134 42;
+  --gold-muted-rgb: 154 110 30;
+  --gold-soft-rgb:  253 246 232;
 }
 
 .dark {
-  /* Surfaces (DARK) — lifted charcoal with warmth */
-  --bg:       #171A1F;
-  --bg-card:  #1D2128;
-  --bg-inset: #252A33;
+  /* Surfaces (DARK) — midnight navy */
+  --bg:       #0F141F;
+  --bg-card:  #1E2535;
+  --bg-inset: #1A2030;
 
-  --bg-hero:     linear-gradient(145deg, #1E232B 0%, #1D2128 45%, #191D24 100%);
-  --bg-strategy: linear-gradient(145deg, #1A1F27 0%, #1D2128 60%, #1E232B 100%);
+  --bg-hero:     linear-gradient(145deg, #242B3A 0%, #202836 45%, #1A2030 100%);
+  --bg-strategy: linear-gradient(145deg, #1E2535 0%, #1A2030 60%, #141A26 100%);
 
   /* Typography (DARK) — warm off-white */
   --text:       #F1F2F3;
@@ -82,12 +90,12 @@
   --text-muted: #707783;
 
   /* Accent (DARK) */
-  --accent:       #4B79A8;
-  --accent-dark:  #3A628E;
-  --accent-light: #0F1720;
+  --accent:       #78A9E6;
+  --accent-dark:  #5E88C7;
+  --accent-light: #141A26;
 
   /* Polarity (DARK) */
-  --positive:      #2A9A6E;
+  --positive:      #2FA676;
   --positive-soft: #0E1A14;
 
   --negative:      #C05A46;
@@ -103,9 +111,9 @@
   --shadow-inner-ring: inset 0 0 0 1px rgba(255,255,255,.06);
 
   /* RGB tokens */
-  --bg-rgb: 23 26 31;
-  --bg-card-rgb: 29 33 40;
-  --bg-inset-rgb: 37 42 51;
+  --bg-rgb: 15 20 31;
+  --bg-card-rgb: 30 37 53;
+  --bg-inset-rgb: 26 32 48;
 
   --border-rgb: 255 255 255;
 
@@ -114,15 +122,23 @@
   --text-3-rgb: 166 173 182;
   --text-muted-rgb: 112 119 131;
 
-  --accent-rgb: 75 121 168;
-  --accent-dark-rgb: 58 98 142;
-  --accent-light-rgb: 15 23 32;
+  --accent-rgb: 120 169 230;
+  --accent-dark-rgb: 94 136 199;
+  --accent-light-rgb: 20 26 38;
 
-  --positive-rgb: 42 154 110;
+  --positive-rgb: 47 166 118;
   --positive-soft-rgb: 14 26 20;
 
   --negative-rgb: 192 90 70;
   --negative-soft-rgb: 28 18 16;
+
+  /* Gold — dark mode */
+  --gold:           #D4AF37;
+  --gold-muted:     #B5941F;
+  --gold-soft:      #1C1608;
+  --gold-rgb:       212 175 55;
+  --gold-muted-rgb: 181 148 31;
+  --gold-soft-rgb:  28 22 8;
 }
 
 /* ─── Base ─────────────────────────────────────────────── */
@@ -161,14 +177,44 @@ button, a { -webkit-tap-highlight-color: transparent; }
   color: rgb(var(--text-muted-rgb) / 1);
 }
 
-/* Hero number */
+/* Hero number — primary wealth figure */
 .hero-number {
   font-family: "Inter", system-ui, -apple-system, sans-serif;
   font-weight: 700;
-  font-size: clamp(3.1rem, 7.5vw, 3.9rem);
+  font-size: clamp(3.4rem, 8vw, 4.8rem);
+  line-height: 1;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hero number — large variant for Plan page projection */
+.hero-number-lg {
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-weight: 700;
+  font-size: clamp(4rem, 10vw, 7rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Impact number — secondary gold figure (Decisions page) */
+.impact-number {
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-weight: 700;
+  font-size: clamp(2.6rem, 6vw, 3.8rem);
   line-height: 1;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
+  color: var(--gold);
+}
+
+/* Editorial serif heading — section titles on Plan / Decisions */
+.serif-heading {
+  font-family: "Playfair Display", Georgia, serif;
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
 }
 
 ::-webkit-scrollbar { width: 6px; }
@@ -2058,5 +2104,96 @@ button:focus:not(:focus-visible) {
 
   .hero-actions .btn {
     width: 100%;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   PADDOCK REDESIGN — index.css additions
+   Paste these blocks into the appropriate sections of
+   frontend/src/index.css (after existing declarations).
+   ═══════════════════════════════════════════════════════ */
+
+
+/* ── 1. Surface token additions (add inside :root block) ── */
+
+:root {
+  /* Tool workbench surface — warm off-white in light mode */
+  --surface-tool-rgb: 251, 249, 246;
+
+  /* Insight chip backgrounds (for CSS-only usage; Tailwind covers most cases) */
+  --insight-positive-bg: 240, 253, 244;
+  --insight-neutral-bg:  239, 246, 255;
+  --insight-warning-bg:  255, 251, 235;
+  --insight-discipline-bg: 245, 243, 255;
+
+  /* Insight accent lines */
+  --insight-positive-line: 22, 163, 74;
+  --insight-neutral-line:  75, 121, 168;
+  --insight-warning-line:  180, 83, 9;
+  --insight-discipline-line: 124, 58, 237;
+}
+
+/* Dark mode token overrides for tool surface */
+.dark {
+  --surface-tool-rgb: 22, 22, 26;
+}
+
+
+/* ── 2. Section entry animation (add to @layer utilities or after keyframes) ── */
+
+@keyframes sectionIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-section-in {
+  animation: sectionIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Stagger delays — apply as className alongside animate-section-in */
+.delay-75  { animation-delay: 75ms; }
+.delay-100 { animation-delay: 100ms; }
+.delay-150 { animation-delay: 150ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }
+
+
+/* ── 3. LedgerRow hover (if not handled via Tailwind group) ── */
+
+.ledger-row {
+  transition: background-color 120ms ease;
+}
+.ledger-row:hover {
+  background-color: rgba(0, 0, 0, 0.018);
+}
+.dark .ledger-row:hover {
+  background-color: rgba(255, 255, 255, 0.028);
+}
+
+
+/* ── 4. InsightRail scrollbar hide (cross-browser) ── */
+
+.insight-rail-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.insight-rail-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+
+/* ── 5. MetricRow responsive tightening on small screens ── */
+
+@media (max-width: 400px) {
+  .metric-row-value {
+    font-size: 1.05rem;
   }
 }

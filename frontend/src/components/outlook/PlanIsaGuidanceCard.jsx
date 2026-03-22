@@ -241,7 +241,7 @@ export default function PlanIsaStrategyCard({
                 style={{ width: `${currentProgressPct}%` }}
               />
               <div
-                className="absolute inset-y-0 rounded-full bg-[linear-gradient(90deg,rgba(107,160,216,0.72),rgba(107,160,216,0.95))]"
+                className="absolute inset-y-0 rounded-full bg-[linear-gradient(90deg,rgba(120,169,230,0.72),rgba(120,169,230,0.95))]"
                 style={{
                   left: `${currentProgressPct}%`,
                   width: `${extensionPct}%`,

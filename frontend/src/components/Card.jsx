@@ -1,3 +1,10 @@
+// frontend/src/components/Card.jsx
+// Final refinement pass.
+// Border aligned to system-wide dark token:
+//   dark:border-white/[.07]  (was /[.06])
+// This keeps Card consistent with MetricRow, sidebar, BottomNav,
+// and all page section separators across the redesigned app.
+
 import React from 'react'
 import clsx from 'clsx'
 
@@ -5,7 +12,7 @@ export default function Card({
   children,
   className = '',
   hover = false,
-  inset = false,     // subtle inset background
+  inset = false,
   pad = 'md',        // 'sm' | 'md' | 'lg' | 'none'
   ...props
 }) {
@@ -22,8 +29,8 @@ export default function Card({
           ? 'bg-surface-2 dark:bg-surface-dark-3'
           : 'bg-card dark:bg-surface-dark-2',
 
-        // Softer border = more luxury
-        'border-black/[.05] dark:border-white/[.06]',
+        // Aligned to system dark border token
+        'border-black/[.06] dark:border-white/[.07]',
 
         // Elevation base
         'shadow-card shadow-inner-ring',
@@ -36,7 +43,6 @@ export default function Card({
 
         padCls,
 
-        // Hover physics (only when explicitly enabled)
         hover &&
           'hover:-translate-y-[2px] hover:shadow-card-hover cursor-pointer ' +
           'active:translate-y-0 active:shadow-card',

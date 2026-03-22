@@ -219,11 +219,11 @@ export default function Insights() {
 
                     {ins.action === 'strategy' && (
                       <button
-                        onClick={() => setPage('outlook')}
+                        onClick={() => setPage('plan')}
                         className="flex items-center gap-1 text-xs font-semibold text-accent hover:text-accent-dark transition-colors whitespace-nowrap mt-1"
                         type="button"
                       >
-                        View in Outlook <ArrowRight size={13} className="opacity-85" />
+                        View in Plan <ArrowRight size={13} className="opacity-85" />
                       </button>
                     )}
 

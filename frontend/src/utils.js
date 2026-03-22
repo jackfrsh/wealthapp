@@ -96,3 +96,54 @@ export const CURRENCY_SYMBOLS = {
   JPY: '¥', SEK: 'kr', NOK: 'kr', SGD: 'S$', NZD: 'NZ$', HKD: 'HK$',
   INR: '₹', BTC: '₿', ETH: 'Ξ',
 }
+
+// ── Plan signal helpers ────────────────────────────────────────────────────
+
+/** Days remaining until the UK tax year ends (5 April). */
+export function daysUntilTaxYearEnd() {
+  const now = new Date()
+  const y = now.getFullYear(), m = now.getMonth(), d = now.getDate()
+  const endYear = m > 3 || (m === 3 && d >= 6) ? y + 1 : y
+  const end = new Date(endYear, 3, 5, 23, 59, 59)
+  return Math.max(0, Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
+}
+
+/**
+ * True when ISA urgency should be shown.
+ * Only uses backend-provided isaRemaining — returns false if null/undefined.
+ */
+export function isIsaUrgent(isaRemaining) {
+  if (isaRemaining == null) return false
+  return isaRemaining > 500 && daysUntilTaxYearEnd() <= 90
+}
+
+/** Calendar days elapsed since a snapshot date string or Date. */
+export function getDaysSinceSnapshot(snapshotDate) {
+  if (!snapshotDate) return Infinity
+  return Math.floor((Date.now() - new Date(snapshotDate).getTime()) / 86400000)
+}
+
+/** True when the snapshot is older than thresholdDays (default 30). */
+export function isSnapshotStale(snapshotDate, thresholdDays = 30) {
+  return getDaysSinceSnapshot(snapshotDate) >= thresholdDays
+}
+
+/**
+ * Maps a derived forecast object to a plan status string.
+ * Returns 'no_goal' when derived is absent.
+ */
+export function getPlanStatus(derived) {
+  if (!derived) return 'no_goal'
+  const s = derived.status
+  if (s === 'on_track') return 'on_track'
+  if (s === 'adjust') return 'adjust'
+  return 'no_goal'
+}
+
+/**
+ * Returns the default Decisions tab based on ISA urgency.
+ * Falls back to mortgage-overpayment when ISA data is absent or not urgent.
+ */
+export function getDecisionsDefaultTab(isaRemaining) {
+  return isIsaUrgent(isaRemaining) ? 'isa' : 'mortgage-overpayment'
+}

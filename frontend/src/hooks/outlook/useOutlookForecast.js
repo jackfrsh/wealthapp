@@ -265,7 +265,7 @@ export default function useOutlookForecast({
         })
 
         track('goal_updated', {
-          page: 'outlook',
+          page: 'plan',
           entityType: 'goal',
           entityId: goalId,
           source: 'assumptions_update',
@@ -364,7 +364,7 @@ export default function useOutlookForecast({
       await api(`/goals/${goalId}`, { method: 'PATCH', body: payload })
 
       track('goal_updated', {
-        page: 'outlook',
+        page: 'plan',
         entityType: 'goal',
         entityId: goalId,
         source: 'edit_plan_save',

@@ -3,12 +3,8 @@ import { useApp } from '../App'
 import Card from '../components/Card'
 import UpgradeButton from '../components/UpgradeButton'
 import { track } from '../track'
-import { invalidateCache } from '../api'
 import { CURRENCIES } from '../utils'
 import {
-  Sun,
-  Moon,
-  Monitor,
   RefreshCw,
   Save,
   Globe,
@@ -36,12 +32,6 @@ const CURRENCY_NAMES = {
   ETH: 'Ethereum',
 }
 
-const THEME_OPTIONS = [
-  { id: 'system', label: 'System', icon: Monitor },
-  { id: 'light', label: 'Light', icon: Sun },
-  { id: 'dark', label: 'Dark', icon: Moon },
-]
-
 function billingLabel(status) {
   if (!status) return ''
   if (status === 'active') return 'Active'
@@ -58,12 +48,9 @@ export default function Settings() {
   const {
     api,
     username,
-    dark,
     baseCurrency,
     setBaseCurrency,
     showToast,
-    themePref,
-    setThemePreference,
     isPro,
     setIsPro,
     refreshSettings,
@@ -71,7 +58,6 @@ export default function Settings() {
     logout,
   } = useApp()
 
-  const isDark = !!dark
   const [currency, setCurrency] = useState((baseCurrency || 'GBP').toUpperCase())
 
   useEffect(() => {
@@ -124,24 +110,6 @@ export default function Settings() {
     [setPage]
   )
 
-  const persistThemePreference = useCallback(
-    async (pref) => {
-      try {
-        await api('/settings', { method: 'PUT', body: { theme_preference: pref } })
-        invalidateCache()
-
-        track('settings_updated', {
-          page: 'settings',
-          source: 'theme_preference',
-        })
-      } catch (e) {
-        console.warn('Theme save failed:', e)
-        showToast?.('Could not save theme preference', 'error')
-      }
-    },
-    [api, showToast]
-  )
-
   const saveCurrency = async () => {
     setSaving(true)
     try {
@@ -162,7 +130,7 @@ export default function Settings() {
   }
 
   const refreshFx = async () => {
-    setFxStatus('Refreshing…')
+    setFxStatus('Updating…')
     try {
       const data = await api(`/fx/refresh?base=${currency}`)
       const rates = data?.rates || {}
@@ -203,7 +171,7 @@ export default function Settings() {
 
   const refreshProStatus = async () => {
     setBillingBusy(true)
-    setBillingMsg('Refreshing subscription status…')
+    setBillingMsg('Checking subscription status…')
     try {
       const r = await api('/billing/sync', { method: 'POST' })
       if (r && typeof r === 'object') {
@@ -255,41 +223,39 @@ export default function Settings() {
         `User: ${username || 'unknown'}`,
         `Pro: ${isPro ? 'true' : 'false'}`,
         `Currency: ${currency}`,
-        `Theme: ${themePref}`,
+        `Theme: dark`,
         `Browser: ${navigator.userAgent}`,
         ``,
       ].join('\n')
     )
     return `mailto:support@getpaddock.com?subject=${subject}&body=${body}`
-  }, [username, isPro, currency, themePref])
+  }, [username, isPro, currency])
 
   const inp =
     'w-full px-4 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] bg-white/70 dark:bg-white/5 text-base text-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all backdrop-blur'
   const lbl = 'block text-xs font-semibold text-ink-3 dark:text-white/50 mb-2'
 
   return (
-    <div className="space-y-7">
-      <div className="flex items-start justify-between gap-4">
+    <div className="space-y-5">
+      {/* Quiet header — infrastructure, not a peer to Plan/Decisions */}
+      <div className="flex items-center justify-between gap-4 pb-1">
         <div>
-          <h1 className="font-display text-3xl sm:text-4xl text-ink dark:text-white tracking-tight">
+          <div className="text-sm font-semibold tracking-[.08em] uppercase text-ink-muted/40 dark:text-white/22">
             Settings
-          </h1>
-          <p className="text-sm text-ink-muted dark:text-white/35 mt-1.5">
-            Configure your wealth planner.
-          </p>
+          </div>
           {!!username && (
-            <p className="text-xs text-ink-muted/60 dark:text-white/25 mt-1">
-              Signed in as {username}
-            </p>
+            <div className="mt-0.5 text-[11px] text-ink-muted/45 dark:text-white/22">
+              {username}
+            </div>
           )}
         </div>
 
         <button
           onClick={logout}
-          className="text-sm font-semibold px-4 py-2 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.04] dark:hover:bg-white/[.06] transition-colors"
+          className="text-xs font-semibold px-3 py-1.5 rounded-xl border border-black/[.07] dark:border-white/[.07] text-ink-muted/55 dark:text-white/30 hover:text-ink dark:hover:text-white hover:bg-black/[.03] dark:hover:bg-white/[.05] transition-colors"
           type="button"
         >
-          Log out
+          Sign out
         </button>
       </div>
 
@@ -306,7 +272,7 @@ export default function Settings() {
             </div>
             <button
               onClick={() => setPage('admin')}
-              className="inline-flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px]"
+              className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px]"
               type="button"
             >
               Open <ChevronRight size={16} />
@@ -314,6 +280,37 @@ export default function Settings() {
           </div>
         </Card>
       )}
+
+      <Card className="p-5">
+        <h3 className="text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35 mb-5 flex items-center gap-2">
+          <Globe size={14} /> Currency
+        </h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
+          <div>
+            <label className={lbl}>Base currency</label>
+            <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inp}>
+              {CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {c} — {CURRENCY_NAMES[c] || c}
+                </option>
+              ))}
+            </select>
+            <div className="text-xs text-ink-muted/50 dark:text-white/25 mt-1.5">
+              All totals shown in this currency.
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={saveCurrency}
+          disabled={saving}
+          className="flex items-center gap-2 text-sm font-semibold px-6 py-3 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-all disabled:opacity-50 min-h-[48px]"
+          type="button"
+        >
+          <Save size={15} /> {saving ? 'Saving…' : 'Save settings'}
+        </button>
+      </Card>
 
       <Card className="p-7 overflow-hidden relative">
         {isPro && (
@@ -358,26 +355,26 @@ export default function Settings() {
 
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <button
-                className="inline-flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px] disabled:opacity-50"
+                className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px] disabled:opacity-50"
                 onClick={openPortal}
                 disabled={billingBusy}
                 type="button"
               >
-                <CreditCard size={15} /> {billingBusy ? 'Opening…' : 'Manage billing'}
+                <CreditCard size={15} /> {billingBusy ? 'Opening…' : 'Billing'}
               </button>
 
               <button
                 onClick={refreshProStatus}
                 disabled={billingBusy}
-                className="inline-flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px] disabled:opacity-50"
+                className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px] disabled:opacity-50"
                 type="button"
               >
-                <RefreshCw size={15} /> Refresh status
+                <RefreshCw size={15} /> Check status
               </button>
 
               <a
                 href={reportProblemHref}
-                className="inline-flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px]"
+                className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px]"
               >
                 <Mail size={15} /> Report a problem
               </a>
@@ -386,7 +383,7 @@ export default function Settings() {
         ) : (
           <div className="space-y-4">
             <p className="text-sm text-ink-muted dark:text-white/45 leading-relaxed">
-              Unlock unlimited accounts, advanced projections, inflation modelling, deeper insights and more.
+              Pro shows you the full picture — freedom timeline, real-terms projections, and what your money needs to do to get there.
             </p>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -422,87 +419,20 @@ export default function Settings() {
         )}
       </Card>
 
-      <Card className="p-7">
+      <Card className="p-5">
         <h3 className="text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35 mb-5 flex items-center gap-2">
-          {isDark ? <Moon size={14} /> : <Sun size={14} />} Appearance
+          <RefreshCw size={14} /> Exchange rates
         </h3>
-
-        <div className="flex flex-wrap items-center gap-3">
-          {THEME_OPTIONS.map((opt) => {
-            const Icon = opt.icon
-            const active = themePref === opt.id
-            return (
-              <button
-                key={opt.id}
-                onClick={async () => {
-                  setThemePreference(opt.id)
-                  await persistThemePreference(opt.id)
-                }}
-                className={[
-                  'flex items-center gap-2.5 px-5 py-3.5 rounded-2xl border-2 transition-all text-sm font-medium min-h-[48px]',
-                  active
-                    ? 'border-accent bg-accent/5 dark:bg-accent/10 text-ink dark:text-white'
-                    : 'border-transparent bg-black/[.03] dark:bg-white/[.05] text-ink-muted dark:text-white/35 hover:border-black/10 dark:hover:border-white/10',
-                ].join(' ')}
-                type="button"
-              >
-                <Icon size={17} /> {opt.label}
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="mt-3 text-xs text-ink-muted/55 dark:text-white/25">
-          Changes apply instantly.
-        </div>
-      </Card>
-
-      <Card className="p-7">
-        <h3 className="text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35 mb-5 flex items-center gap-2">
-          <Globe size={14} /> Currency
-        </h3>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
-          <div>
-            <label className={lbl}>Base currency</label>
-            <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inp}>
-              {CURRENCIES.map((c) => (
-                <option key={c} value={c}>
-                  {c} — {CURRENCY_NAMES[c] || c}
-                </option>
-              ))}
-            </select>
-            <div className="text-xs text-ink-muted/50 dark:text-white/25 mt-1.5">
-              All totals shown in this currency.
-            </div>
-          </div>
-        </div>
-
-        <button
-          onClick={saveCurrency}
-          disabled={saving}
-          className="flex items-center gap-2 text-sm font-semibold px-6 py-3 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-all disabled:opacity-50 min-h-[48px]"
-          type="button"
-        >
-          <Save size={15} /> {saving ? 'Saving…' : 'Save settings'}
-        </button>
-      </Card>
-
-      <Card className="p-7">
-        <h3 className="text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35 mb-4">
-          Exchange Rates
-        </h3>
-
         <p className="text-sm text-ink-muted dark:text-white/35 mb-5 leading-relaxed">
-          Rates are cached daily. If APIs are unavailable, approximate fallback rates are used.
+          Cached daily. Falls back to approximate rates if APIs are unavailable.
         </p>
 
         <button
           onClick={refreshFx}
-          className="flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[48px]"
+          className="flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[48px]"
           type="button"
         >
-          <RefreshCw size={15} /> Refresh FX rates
+          <RefreshCw size={15} /> Update rates
         </button>
 
         {fxStatus && <div className="text-xs text-ink-muted dark:text-white/25 mt-4">{fxStatus}</div>}

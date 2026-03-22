@@ -1,14 +1,10 @@
 import React, { useEffect, useMemo, useRef } from 'react'
 import {
-  Crown,
   GitCompare,
   Lock,
   Pencil,
   Plus,
-  Sparkles,
   Trash2,
-  TrendingUp,
-  CalendarClock,
   X,
   ChevronDown,
   ChevronUp,
@@ -21,14 +17,6 @@ function numFrom(input, fallback = 0) {
   const n = Number(String(input ?? '').replace(/,/g, ''))
   return Number.isFinite(n) ? n : fallback
 }
-
-const innerPanel =
-  planTheme.innerPanel ||
-  'rounded-2xl border border-black/[.05] dark:border-white/[.06] bg-black/[.02] dark:bg-white/[.04] p-4 sm:p-5'
-
-const innerPanelCompact =
-  planTheme.innerPanelCompact ||
-  'rounded-2xl border border-black/[.05] dark:border-white/[.06] bg-black/[.02] dark:bg-white/[.04] p-4'
 
 export default function ScenarioCompareCard({
   settingsReady,
@@ -78,33 +66,46 @@ export default function ScenarioCompareCard({
     const winner = byFreedom && byFreedom.freedomYearsEarlier > 0 ? byFreedom : byProjected
     if (!winner) return null
 
-    const projectedDeltaPositive = winner.projectedDelta > 0
-    const projectedDeltaNegative = winner.projectedDelta < 0
+    // Threshold: is the delta meaningful?
+    const absDelta = Math.abs(winner.projectedDelta || 0)
+    const deltaRatio = winner.projected > 0 ? absDelta / winner.projected : 0
+    const isNegligible = deltaRatio < 0.01 // < 1% difference
+    const isSmall = deltaRatio < 0.05      // < 5% difference
 
-    let headline = `${winner.name} looks strongest`
+    let headline = ''
     let subline = `Projected at ${fmtCurrencyCompact(winner.projected, ccy)} by target age.`
 
-    if (winner.freedomYear && winner.freedomYearsEarlier > 0) {
+    if (isNegligible && !(winner.freedomYearsEarlier > 0)) {
+      headline = 'Scenarios project similar outcomes'
+      subline = 'The differences are marginal at this point.'
+    } else if (winner.freedomYear && winner.freedomYearsEarlier > 0) {
       headline = `${winner.name} gets you there sooner`
       subline = `${winner.freedomYearsEarlier} ${
         winner.freedomYearsEarlier === 1 ? 'year' : 'years'
       } earlier, with freedom projected in ${winner.freedomYear}.`
-    } else if (projectedDeltaPositive) {
+    } else if (winner.projectedDelta > 0) {
+      headline = isSmall
+        ? `${winner.name} edges ahead`
+        : `${winner.name} is the leading scenario`
       subline = `${fmtCurrencyCompact(
         winner.projectedDelta,
         ccy
       )} ahead of your current plan by target age.`
-    } else if (projectedDeltaNegative) {
+    } else if (winner.projectedDelta < 0) {
+      headline = `Current plan still leads`
       subline = `${fmtCurrencyCompact(
         Math.abs(winner.projectedDelta),
         ccy
       )} below your current plan by target age.`
+    } else {
+      headline = `${winner.name} is the leading scenario`
     }
 
     return {
       ...winner,
       headline,
       subline,
+      isNegligible,
     }
   }, [compareCards, ccy])
 
@@ -167,12 +168,11 @@ export default function ScenarioCompareCard({
           </span>
         </div>
   
-        <div className="mt-3 text-xl sm:text-2xl font-display text-ink dark:text-white tracking-tight">
+        <div className="mt-2 text-base font-semibold text-ink dark:text-white tracking-tight">
           Compare scenarios
         </div>
-  
-        <div className={`mt-2 ${planTheme.body}`}>
-          Compare contribution and return assumptions against your current plan.
+        <div className={`mt-1 ${planTheme.body}`}>
+          Test different assumptions against your current plan.
         </div>
       </div>
   
@@ -207,7 +207,7 @@ export default function ScenarioCompareCard({
   return (
     <PlanSectionFrame header={header}>
       {isPro && scenarioEditorOpen && (
-        <div ref={editorRef} className={`${planTheme.sectionCardSoft} mb-5 p-5 sm:p-6`}>
+        <div ref={editorRef} className="mb-5 pb-5 border-b border-black/[.05] dark:border-white/[.05]">
           <div className="flex items-start justify-between gap-4 mb-5">
             <div>
               <div className={planTheme.eyebrow}>
@@ -316,209 +316,179 @@ export default function ScenarioCompareCard({
       )}
 
       {!settingsReady ? null : !isPro ? (
-        <div className={`${planTheme.sectionCardSoft} p-5`}>
+        <div>
           <div className={planTheme.title}>Saved scenario planning</div>
           <div className={`mt-1 ${planTheme.body}`}>
             Build multiple future paths and see which one reaches your target sooner.
           </div>
         </div>
       ) : !isOpen ? null : scenariosLoading || compareLoading ? (
-        <div className="space-y-4">
-          <div className={`${planTheme.sectionCardSoft} p-5`}>
-            <div className="h-4 w-40 rounded skeleton mb-3" />
-            <div className="h-8 w-56 rounded skeleton mb-3" />
-            <div className="h-3 w-48 rounded skeleton" />
+        <div className="space-y-5">
+          <div>
+            <div className="h-4 w-48 rounded skeleton opacity-25 mb-3" />
+            <div className="h-3 w-64 rounded skeleton opacity-15" />
           </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="space-y-4">
             {[1, 2].map((i) => (
-              <div key={i} className={`${planTheme.sectionCardSoft} p-5`}>
-                <div className="h-4 w-32 rounded skeleton mb-3" />
-                <div className="h-8 w-40 rounded skeleton mb-3" />
-                <div className="h-3 w-24 rounded skeleton mb-2" />
-                <div className="h-3 w-32 rounded skeleton" />
+              <div key={i} className="py-3">
+                <div className="h-3.5 w-32 rounded skeleton opacity-20 mb-2" />
+                <div className="h-5 w-24 rounded skeleton opacity-18" />
               </div>
             ))}
           </div>
         </div>
       ) : !compareCards.length ? (
-        <div className={`${planTheme.sectionCardSoft} p-5`}>
+        <div>
           <div className={planTheme.title}>No saved scenarios yet</div>
           <div className={`mt-1 ${planTheme.body}`}>
             Start with a “Higher Contributions” or “Conservative Return” scenario.
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-6">
+          {/* ── Recommendation summary ── */}
           {winningScenarioInsight && (
             <div>
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className={planTheme.eyebrowAccent}>
-                    <span className="inline-flex items-center gap-2">
-                      <Sparkles size={13} />
-                      Best current path
-                    </span>
-                  </div>
-
-                  <div className="mt-3 text-[26px] sm:text-2xl font-display leading-[1.02] tracking-tight text-ink dark:text-white max-w-[18rem] sm:max-w-[32rem]">
-                    {winningScenarioInsight.headline}
-                  </div>
-
-                  <div className={`mt-2 ${planTheme.body} max-w-[30rem]`}>
-                    {winningScenarioInsight.subline}
-                  </div>
-                </div>
-
-                <div
-                  className={`hidden sm:flex items-center justify-center ${planTheme.innerCard} px-3 py-2 text-xs font-semibold text-ink dark:text-white shrink-0`}
-                >
-                  {winningScenarioInsight.name}
-                </div>
+              <div className="text-lg font-semibold leading-snug text-ink dark:text-white">
+                {winningScenarioInsight.headline}
+              </div>
+              <div className={`mt-1.5 ${planTheme.body} max-w-[34rem]`}>
+                {winningScenarioInsight.subline}
               </div>
 
-              <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div className={innerPanelCompact}>
-                  <div className={`${planTheme.statLabel} flex items-center gap-2`}>
-                    <TrendingUp size={11} />
-                    Projected
+              {/* Metric band — one soft grouped row, not separate cards */}
+              {!winningScenarioInsight.isNegligible && (
+                <div className="mt-4 flex items-stretch rounded-lg bg-black/[.015] dark:bg-white/[.025] overflow-hidden">
+                  <div className="flex-1 min-w-0 px-4 py-3">
+                    <div className="text-[10.5px] font-semibold tracking-[.12em] uppercase text-ink-muted/50 dark:text-white/25 mb-1">
+                      Projected
+                    </div>
+                    <div className="text-sm font-semibold tabular-nums text-ink dark:text-white">
+                      {fmtCurrencyCompact(winningScenarioInsight.projected, ccy)}
+                    </div>
                   </div>
-                  <div className="mt-2 font-display text-[28px] sm:text-xl leading-none text-ink dark:text-white">
-                    {fmtCurrencyCompact(winningScenarioInsight.projected, ccy)}
-                  </div>
-                </div>
-
-                <div className={innerPanelCompact}>
-                  <div className={`${planTheme.statLabel} flex items-center gap-2`}>
-                    <TrendingUp size={11} />
-                    Vs plan
-                  </div>
-                  <div
-                    className={`mt-2 font-display text-[28px] sm:text-xl leading-none ${
+                  <div className="w-px bg-black/[.06] dark:bg-white/[.06] my-2.5 shrink-0" />
+                  <div className="flex-1 min-w-0 px-4 py-3">
+                    <div className="text-[10.5px] font-semibold tracking-[.12em] uppercase text-ink-muted/50 dark:text-white/25 mb-1">
+                      vs plan
+                    </div>
+                    <div className={`text-sm font-semibold tabular-nums ${
                       winningScenarioInsight.projectedDelta >= 0
-                        ? 'text-gain dark:text-emerald-300'
-                        : 'text-red-500 dark:text-red-300'
-                    }`}
-                  >
-                    {winningScenarioInsight.projectedDelta >= 0 ? '+' : ''}
-                    {fmtCurrencyCompact(winningScenarioInsight.projectedDelta, ccy)}
+                        ? 'text-gain dark:text-emerald-300/80'
+                        : 'text-red-500 dark:text-red-300/80'
+                    }`}>
+                      {winningScenarioInsight.projectedDelta >= 0 ? '+' : ''}
+                      {fmtCurrencyCompact(winningScenarioInsight.projectedDelta, ccy)}
+                    </div>
+                  </div>
+                  <div className="w-px bg-black/[.06] dark:bg-white/[.06] my-2.5 shrink-0" />
+                  <div className="flex-1 min-w-0 px-4 py-3">
+                    <div className="text-[10.5px] font-semibold tracking-[.12em] uppercase text-ink-muted/50 dark:text-white/25 mb-1">
+                      Freedom
+                    </div>
+                    <div className="text-sm font-semibold text-ink dark:text-white">
+                      {winningScenarioInsight.freedomYear || 'Off target'}
+                    </div>
                   </div>
                 </div>
-
-                <div className={`${innerPanelCompact} col-span-2 sm:col-span-1`}>
-                  <div className={`${planTheme.statLabel} flex items-center gap-2`}>
-                    <CalendarClock size={11} />
-                    Freedom timing
-                  </div>
-                  <div className="mt-2 font-display text-[28px] sm:text-xl leading-none text-ink dark:text-white">
-                    {winningScenarioInsight.freedomYear
-                      ? winningScenarioInsight.freedomYear
-                      : 'Off target'}
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          {/* ── Scenario rows ── */}
+          <div className="divide-y divide-black/[.05] dark:divide-white/[.05]">
             {compareCards.map((card) => {
               const scenario = scenarios.find((s) => s.id === card.id)
               const isWinner = bestScenario?.id === card.id
 
               return (
-                <div
-                  key={card.id}
-                  className={`${innerPanel} transition-all ${
-                    isWinner
-                      ? 'border-accent/20 shadow-[0_10px_30px_rgba(75,121,168,0.06)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.18)]'
-                      : ''
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <div className="text-sm font-semibold text-ink dark:text-white">
-                          {card.name}
-                        </div>
-                        {isWinner && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold tracking-[.08em] uppercase bg-accent/10 text-accent dark:text-blue-300">
-                            <Sparkles size={11} />
-                            Best
-                          </span>
-                        )}
+                <div key={card.id} className="py-4 first:pt-0 last:pb-0">
+                  {/* Identity line: name + badge + actions */}
+                  <div className="flex items-center justify-between gap-3 mb-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="text-sm font-semibold text-ink dark:text-white truncate">
+                        {card.name}
                       </div>
-
-                      <div className="mt-1 text-xs text-ink-muted dark:text-white/35">
-                        {fmtCurrency(card.monthlyContribution, ccy)}/mo • {card.expectedReturn}% return
-                      </div>
+                      {isWinner && (
+                        <span className="text-[10px] font-semibold tracking-[.06em] uppercase text-accent/70 dark:text-blue-300/60 shrink-0">
+                          Best
+                        </span>
+                      )}
                     </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-0.5 shrink-0">
                       <button
                         type="button"
                         onClick={() => onEdit(scenario)}
                         className={planTheme.iconButton}
                         aria-label="Edit scenario"
                       >
-                        <Pencil size={15} className="text-ink-muted dark:text-white/45" />
+                        <Pencil size={14} className="text-ink-muted/45 dark:text-white/30" />
                       </button>
-
                       <button
                         type="button"
                         onClick={() => onDelete(card.id)}
                         className={planTheme.iconButton}
                         aria-label="Delete scenario"
                       >
-                        <Trash2 size={15} className="text-ink-muted dark:text-white/45" />
+                        <Trash2 size={14} className="text-ink-muted/45 dark:text-white/30" />
                       </button>
                     </div>
                   </div>
 
-                  <div className="mt-4">
-                    <div className="text-xs text-ink-muted/50 dark:text-white/25 mb-1">
-                      Projected at target age
-                    </div>
-                    <div className="font-display text-2xl text-ink dark:text-white tabular-nums">
-                      {fmtCurrencyCompact(card.projected, ccy)}
-                    </div>
-                    <div
-                      className={`mt-2 text-sm font-medium ${
-                        card.projectedDelta >= 0
-                          ? 'text-gain dark:text-emerald-300'
-                          : 'text-red-500 dark:text-red-300'
-                      }`}
-                    >
-                      {card.projectedDelta >= 0 ? '+' : ''}
-                      {fmtCurrencyCompact(card.projectedDelta, ccy)} vs current plan
-                    </div>
+                  {/* Assumptions */}
+                  <div className="text-xs text-ink-muted/50 dark:text-white/28 mb-2.5">
+                    {fmtCurrency(card.monthlyContribution, ccy)}/mo · {card.expectedReturn}% return
                   </div>
 
-                  <div className={`mt-4 pt-4 border-t ${planTheme.divider} text-sm`}>
-                    {card.freedomYear ? (
-                      <div className="text-ink-muted dark:text-white/40">
-                        Freedom year:{' '}
-                        <span className="font-medium text-ink dark:text-white">
-                          {card.freedomYear}
-                        </span>
-                        {card.freedomYearsEarlier > 0 && (
-                          <span className="ml-2 text-gain dark:text-emerald-300">
-                            ({card.freedomYearsEarlier}{' '}
-                            {card.freedomYearsEarlier === 1 ? 'year' : 'years'} earlier)
-                          </span>
+                  {/* Outcome grid — aligned columns across rows */}
+                  <div className="grid grid-cols-3 gap-x-4">
+                    <div>
+                      <div className="text-[10.5px] font-semibold tracking-[.12em] uppercase text-ink-muted/45 dark:text-white/22 mb-0.5">
+                        Projected
+                      </div>
+                      <div className="text-sm font-semibold tabular-nums text-ink dark:text-white">
+                        {fmtCurrencyCompact(card.projected, ccy)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10.5px] font-semibold tracking-[.12em] uppercase text-ink-muted/45 dark:text-white/22 mb-0.5">
+                        vs plan
+                      </div>
+                      <div className={`text-sm font-semibold tabular-nums ${
+                        card.projectedDelta >= 0
+                          ? 'text-gain/80 dark:text-emerald-300/70'
+                          : 'text-red-500/80 dark:text-red-300/70'
+                      }`}>
+                        {card.projectedDelta >= 0 ? '+' : ''}
+                        {fmtCurrencyCompact(card.projectedDelta, ccy)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10.5px] font-semibold tracking-[.12em] uppercase text-ink-muted/45 dark:text-white/22 mb-0.5">
+                        Freedom
+                      </div>
+                      <div className="text-sm font-semibold text-ink/80 dark:text-white/55">
+                        {card.freedomYear ? (
+                          <>
+                            {card.freedomYear}
+                            {card.freedomYearsEarlier > 0 && (
+                              <span className="text-gain/65 dark:text-emerald-300/50 text-xs ml-1">
+                                {card.freedomYearsEarlier}y earlier
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-ink-muted/40 dark:text-white/22 font-normal">Off target</span>
                         )}
                       </div>
-                    ) : (
-                      <div className="text-ink-muted dark:text-white/40">
-                        Still off target at this pace
-                      </div>
-                    )}
+                    </div>
                   </div>
 
-                  {card.notes ? (
-                    <div className="mt-3 text-xs text-ink-muted dark:text-white/30 leading-relaxed">
+                  {card.notes && (
+                    <div className="mt-2 text-xs text-ink-muted/40 dark:text-white/22 leading-relaxed">
                       {card.notes}
                     </div>
-                  ) : null}
+                  )}
                 </div>
               )
             })}

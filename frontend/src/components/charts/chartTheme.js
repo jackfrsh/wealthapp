@@ -28,7 +28,7 @@ function getAccentHex() {
   const hex = rgbToHex(rgb)
   if (hex) return hex
   const raw = readCssVar('--accent', '')
-  return raw || '#4B79A8'
+  return raw || '#78A9E6'
 }
 
 function getCardFill() {

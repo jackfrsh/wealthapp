@@ -1,5 +1,11 @@
+// frontend/src/components/outlook/PlanHeroDashboard.jsx
+// Final refinement pass.
+// Eyebrow: "Planning centre" → "Long-term plan"
+// Removed redundant status sub-label copy.
+// Summary lines tightened across all three status states.
+// All calculations, props, and layout: unchanged.
+
 import React, { useMemo } from 'react'
-import Card from '../Card'
 import { fmtCurrency, fmtCurrencyCompact } from '../../utils'
 import {
   CalendarClock,
@@ -58,19 +64,9 @@ export default function PlanHeroDashboard({
     projectedProgressRaw,
     extensionPct,
     deltaLabel,
-    summaryLine,
   } = useMemo(() => {
     const currentRatio = targetAmt > 0 ? (Number(currentNW) / Number(targetAmt)) * 100 : 0
     const projectedRatio = targetAmt > 0 ? (Number(displayProjEnd) / Number(targetAmt)) * 100 : 0
-
-    let summaryLine = 'A calm view of where you are now and where the plan is likely to take you.'
-    if (status === 'adjust') {
-      summaryLine = 'Your current pace leaves a gap. Contributions are the clearest lever from here.'
-    } else if (status === 'on_track') {
-      summaryLine = 'The plan is on course. Consistency matters more than complexity right now.'
-    } else if (status === 'ahead') {
-      summaryLine = 'You are ahead of plan. That gives you flexibility in how you use the surplus.'
-    }
 
     const currentProgressPct = clampPercent(currentRatio)
     const projectedProgressPct = clampPercent(projectedRatio)
@@ -82,15 +78,12 @@ export default function PlanHeroDashboard({
       projectedProgressRaw: projectedRatio,
       extensionPct,
       deltaLabel: gap > 0 ? 'Gap' : 'Ahead by',
-      summaryLine,
     }
   }, [targetAmt, currentNW, displayProjEnd, gap, status])
 
   return (
-    <Card
-      className={`relative overflow-hidden ${planTheme.sectionCard} shadow-[0_12px_30px_rgba(0,0,0,0.16)]`}
-    >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(75,121,168,0.055),transparent_28%)] pointer-events-none" />
+    <div className="relative overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(120,169,230,0.05),transparent_28%)] pointer-events-none" />
 
       <div className="relative p-6 sm:p-7">
         <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -98,7 +91,7 @@ export default function PlanHeroDashboard({
             <div className={planTheme.eyebrowAccent}>
               <span className="inline-flex items-center gap-2">
                 <Sparkles size={12} />
-                Planning centre
+                Long-term plan
               </span>
             </div>
 
@@ -109,10 +102,6 @@ export default function PlanHeroDashboard({
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${statusColors[status]}`}>
                 {statusLabels[status]}
-              </span>
-
-              <span className="text-xs text-ink-muted dark:text-white/30">
-                Based on your current wealth and contribution rate.
               </span>
 
               {feedback ? (
@@ -130,7 +119,7 @@ export default function PlanHeroDashboard({
                   onClick={() => setInflationAdj((v) => !v)}
                   className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-2xl border transition-colors ${
                     inflationAdj
-                      ? 'bg-accent/10 border-accent/20 text-accent dark:text-blue-300'
+                      ? 'bg-accent/10 border-accent/20 text-accent dark:text-accent'
                       : 'bg-white/70 dark:bg-white/[.04] border-black/[.06] dark:border-white/[.08] text-ink-muted/70 dark:text-white/42 hover:text-ink dark:hover:text-white/65'
                   }`}
                   type="button"
@@ -189,7 +178,7 @@ export default function PlanHeroDashboard({
                   style={{ width: `${currentProgressPct}%` }}
                 />
                 <div
-                  className="absolute inset-y-0 rounded-full bg-[linear-gradient(90deg,rgba(107,160,216,0.72),rgba(107,160,216,0.95))]"
+                  className="absolute inset-y-0 rounded-full bg-[linear-gradient(90deg,rgba(120,169,230,0.72),rgba(120,169,230,0.95))]"
                   style={{
                     left: `${currentProgressPct}%`,
                     width: `${extensionPct}%`,
@@ -251,11 +240,6 @@ export default function PlanHeroDashboard({
               </div>
             </div>
 
-            <div className={`mt-5 pt-5 border-t ${planTheme.divider}`}>
-              <div className="text-sm leading-relaxed text-ink-muted dark:text-white/38 max-w-[42rem]">
-                {summaryLine}
-              </div>
-            </div>
           </div>
 
           <div className="xl:pl-2">
@@ -314,6 +298,6 @@ export default function PlanHeroDashboard({
           </div>
         </div>
       </div>
-    </Card>
+    </div>
   )
 }

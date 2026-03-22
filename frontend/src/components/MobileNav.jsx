@@ -1,3 +1,13 @@
+// frontend/src/components/MobileNav.jsx
+// Coherence pass: dark header matching page system.
+//
+// Background: rgba(11,17,24,0.95) blur — matches dark page environments
+// Border: rgba(255,255,255,0.07)
+// Labels: "Outlook" → "Plan", "Strategy" → "Decisions"
+// Section badge: dark-surface appropriate
+// Pro badge: gold-tinted
+// Back link on Decisions → "Plan"
+
 import React, { useMemo } from 'react'
 import { useApp } from '../App'
 import { ChevronLeft, Crown } from 'lucide-react'
@@ -7,47 +17,80 @@ export default function MobileNav() {
 
   const section = useMemo(() => {
     const map = {
-      home: 'Home',
-      outlook: 'Outlook',
-      strategy: 'Strategy',
-      insights: 'Insights',
-      accounts: 'Accounts',
-      settings: 'Settings',
-      upgrade: 'Pro',
+      home:       'Home',
+      plan:       'Plan',
+      decisions:  'Decisions',
+      insights:   'Insights',
+      accounts:   'Accounts',
+      settings:   'Settings',
+      upgrade:    'Pro',
       goal_setup: 'Goal',
     }
     return map[page] || ''
   }, [page])
 
   return (
-    <div className="lg:hidden sticky top-0 z-40 border-b border-black/[.06] dark:border-white/[.07] bg-white/80 dark:bg-surface-dark/75 backdrop-blur-xl">
+    <div
+      className="lg:hidden sticky top-0 z-40"
+      style={{
+        background: 'rgba(10,15,26,0.95)',
+        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+      }}
+    >
       <div className="px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="font-display text-lg tracking-tighterish text-ink dark:text-white leading-none shrink-0">
-            Paddock<span className="text-accent">.</span>
-          </div>
+        {/* Left: wordmark + section pill */}
+        <div className="flex items-center gap-2.5 min-w-0">
+          <button
+            type="button"
+            onClick={() => setPage('home')}
+            className="font-display text-[17px] leading-none tracking-[-0.04em] text-white shrink-0"
+          >
+            Paddock<span style={{ color: 'var(--gold)', opacity: 0.80 }}>.</span>
+          </button>
 
           {!!section && section !== 'Home' && (
-            <div className="px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-tightish border border-black/[.08] dark:border-white/[.10] text-ink-muted dark:text-white/55 bg-black/[.02] dark:bg-white/[.05]">
+            <span
+              className="px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-tightish"
+              style={{
+                background: 'rgba(255,255,255,0.07)',
+                border: '1px solid rgba(255,255,255,0.10)',
+                color: 'rgba(255,255,255,0.55)',
+              }}
+            >
               {section}
-            </div>
+            </span>
           )}
 
           {isPro && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-tightish border border-black/[.08] dark:border-white/[.10] bg-black/[.04] dark:bg-white/[.06] text-ink dark:text-white">
-              <Crown size={12} className="opacity-80" />
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+              style={{
+                background: 'rgba(212,175,55,0.12)',
+                border: '1px solid rgba(212,175,55,0.20)',
+                color: 'rgba(212,175,55,0.85)',
+              }}
+            >
+              <Crown size={9} />
               Pro
             </span>
           )}
         </div>
 
-        {page === 'strategy' ? (
+        {/* Right: contextual back link on Decisions */}
+        {page === 'decisions' ? (
           <button
             type="button"
-            onClick={() => setPage('outlook')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-tightish border border-black/[.08] dark:border-white/[.10] text-ink dark:text-white bg-black/[.02] dark:bg-white/[.05] hover:bg-black/[.04] dark:hover:bg-white/[.08] transition-colors shrink-0"
+            onClick={() => setPage('plan')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-opacity hover:opacity-75 shrink-0"
+            style={{
+              background: 'rgba(255,255,255,0.07)',
+              border: '1px solid rgba(255,255,255,0.10)',
+              color: 'rgba(255,255,255,0.60)',
+            }}
           >
-            <ChevronLeft size={13} />
+            <ChevronLeft size={12} />
             Plan
           </button>
         ) : (

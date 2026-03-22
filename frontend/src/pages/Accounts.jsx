@@ -1,1156 +1,570 @@
 // frontend/src/pages/Accounts.jsx
+// Batch 10: Premium wealth ledger — richer rows, grouped sections, dark header.
+//
+// Architecture:
+//   Scene 1 — Header (full-bleed dark): net position + 5-stat grid
+//   Scene 2 — Ledger: semantic groups (Cash, Investments, Pensions, Property, Liabilities)
+//              4-zone rows: identity | monthly | rate | balance
+//   Scene 3 — Composition: flat horizontal strip
+//   Scene 4 — Snapshots: minimal, collapsed by default
+//
+// Unchanged: all CRUD, snapshot, free-tier, modal, API, state logic.
+
 import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react'
 import { api, invalidatePath } from '../api'
 import { useApp } from '../App'
-import Card from '../components/Card'
 import Modal from '../components/Modal'
 import ConfirmDialog from '../components/ConfirmDialog'
-import EmptyState from '../components/EmptyState'
 import ChangePill from '../components/ChangePill'
 import { track } from '../track'
-import UpgradeButton from '../components/UpgradeButton'
-import { fmtCurrency, fmtCurrencyCompact, fmtDate, ACCOUNT_TYPE_LABELS, CURRENCIES } from '../utils'
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  Settings,
-  Camera,
-  ChevronDown,
-  Clock,
-  Crown,
-  Sparkles,
-  Landmark,
-  Shield,
-  Building2,
-  Bitcoin,
-  TrendingUp,
-  Home as HomeIcon,
-  Hammer,
-  CreditCard,
-  Package,
-} from 'lucide-react'
+import { fmtCurrency, fmtCurrencyCompact, fmtDate, ACCOUNT_TYPE_LABELS, CURRENCIES, isSnapshotStale } from '../utils'
+import { Plus, Camera, ChevronDown, ChevronRight, Clock, Crown, Pencil, Trash2, MoreHorizontal, Landmark } from 'lucide-react'
+
+/* ── Wealth group taxonomy ────────────────────────── */
+
+const WEALTH_GROUPS = [
+  { key: 'cash',        label: 'Cash & Liquid',          types: ['bank'],                       isLiability: false },
+  { key: 'investments', label: 'Investments & Wrappers', types: ['isa', 'investment', 'crypto'], isLiability: false },
+  { key: 'pensions',    label: 'Pensions',               types: ['sipp'],                        isLiability: false },
+  { key: 'property',    label: 'Property',               types: ['property'],                    isLiability: false },
+  { key: 'other',       label: 'Other Assets',           types: ['other'],                       isLiability: false },
+  { key: 'liabilities', label: 'Liabilities',            types: ['mortgage', 'loan'],            isLiability: true  },
+]
+
+const TYPE_ACCENT = {
+  bank: '#78A9E6', isa: '#2FA676', investment: '#2FA676', crypto: '#C89B3C',
+  sipp: '#7C3AED', property: '#B46438', mortgage: '#C05A46', loan: '#C05A46', other: '#6B7280',
+}
+
+const RATE_LABEL    = { bank: 'Rate', isa: 'Yield', investment: 'Yield', crypto: 'Yield', sipp: 'Growth', property: 'Yield', mortgage: 'APR', loan: 'APR', other: 'Rate' }
+const MONTHLY_LABEL = { mortgage: 'Payment', loan: 'Payment' }
 
 const TYPES = ['bank', 'isa', 'sipp', 'crypto', 'investment', 'property', 'mortgage', 'loan', 'other']
+const LIABILITY_TYPES = new Set(['mortgage', 'loan'])
 
-const TYPE_ICON = {
-  bank: Landmark,
-  isa: Shield,
-  sipp: Building2,
-  crypto: Bitcoin,
-  investment: TrendingUp,
-  property: HomeIcon,
-  mortgage: Hammer,
-  loan: CreditCard,
-  other: Package,
-}
+const emptyForm = { name: '', type: 'bank', currency: 'GBP', balance: '', include_in_net_worth: true, notes: '', monthly_contribution: '', annual_interest_rate_percent: '' }
 
-const emptyForm = {
-  name: '',
-  type: 'bank',
-  currency: 'GBP',
-  balance: '',
-  include_in_net_worth: true,
-  notes: '',
-  monthly_contribution: '',
-  annual_interest_rate_percent: '',
-}
+/* ── Helpers ─────────────────────────────────────── */
 
 function accountNamePlaceholder(type) {
-  switch (type) {
-    case 'bank':
-      return 'e.g. Barclays Current Account'
-    case 'isa':
-      return 'e.g. Vanguard Stocks & Shares ISA'
-    case 'sipp':
-      return 'e.g. Pension / SIPP'
-    case 'investment':
-      return 'e.g. Trading 212 Portfolio'
-    case 'crypto':
-      return 'e.g. Coinbase'
-    case 'property':
-      return 'e.g. Home (estimated value)'
-    case 'mortgage':
-      return 'e.g. Mortgage balance'
-    case 'loan':
-      return 'e.g. Car loan'
-    default:
-      return 'e.g. Barclays Current Account'
-  }
+  return { bank:'e.g. Barclays Current Account', isa:'e.g. Vanguard Stocks & Shares ISA', sipp:'e.g. Pension / SIPP', investment:'e.g. Trading 212 Portfolio', crypto:'e.g. Coinbase', property:'e.g. Home (estimated value)', mortgage:'e.g. Mortgage balance', loan:'e.g. Car loan' }[type] || 'e.g. Account name'
+}
+function toNumber(input, fallback = 0) { const s=String(input??'').trim(); if(!s)return fallback; const n=Number(s.replace(/,/g,'')); return Number.isFinite(n)?n:fallback }
+function clamp(n,min,max){return Math.max(min,Math.min(max,n))}
+function snapBaseTotal(s){if(!s)return null;const n=Number(s.total_base);return Number.isFinite(n)?n:null}
+function asArray(v){return Array.isArray(v)?v:[]}
+
+
+/* ── LedgerEntryRow ──────────────────────────────── */
+
+function LedgerEntryRow({ account, isLiability, baseCurrency, onEdit, onDelete }) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const typeLabel = ACCOUNT_TYPE_LABELS?.[account.type] || account.type
+  const accentColor = TYPE_ACCENT[account.type] || TYPE_ACCENT.other
+  const balance = Number(account.balance || 0)
+  const displayCurrency = String(account.currency || 'GBP').toUpperCase()
+  const excluded = account.include_in_net_worth === false
+  const monthly = Number(account.monthly_contribution || 0)
+  const rate = Number(account.annual_interest_rate_percent || 0)
+  const rateLabel = RATE_LABEL[account.type] || 'Rate'
+  const monthlyLabel = MONTHLY_LABEL[account.type] || 'Monthly'
+  const foreignCurrency = displayCurrency !== (baseCurrency || 'GBP').toUpperCase()
+  const hasNotes = account.notes && String(account.notes).trim().length > 0
+
+  return (
+    <div onClick={onEdit} className={['group relative flex items-center border-b border-black/[.06] dark:border-white/[.06] transition-colors duration-100 cursor-pointer hover:bg-black/[.04] dark:hover:bg-white/[.055]', excluded ? 'opacity-40' : ''].join(' ')}>
+      <div className="absolute left-0 top-0 bottom-0 w-[2.5px] opacity-0 group-hover:opacity-100 transition-opacity duration-150 rounded-r" style={{background:accentColor}} aria-hidden="true"/>
+
+      {/* Zone 1: Identity */}
+      <div className="flex-1 min-w-0 flex items-center gap-4 py-5 pl-4 pr-3">
+        <div className="shrink-0 w-[8px] h-[8px] rounded-full" style={{background:accentColor, opacity:0.85, marginTop:1}} aria-hidden="true"/>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[14.5px] font-semibold text-ink dark:text-white leading-snug truncate">{account.name}</span>
+            {excluded && <span className="shrink-0 text-[10px] font-medium tracking-[.02em] px-1.5 py-0.5 rounded bg-black/[.05] dark:bg-white/[.07] text-ink-muted/55 dark:text-white/30">Excluded</span>}
+          </div>
+          <div className="mt-0.5 text-[12px] text-ink-muted/70 dark:text-white/52 leading-snug">
+            {typeLabel}
+            {foreignCurrency && <> · <span className="font-medium tabular-nums">{displayCurrency}</span></>}
+            {hasNotes && <> · {String(account.notes).slice(0,32)}{String(account.notes).length>32?'…':''}</>}
+          </div>
+        </div>
+      </div>
+
+      {/* Zone 2: Monthly */}
+      <div className="hidden sm:flex flex-col items-end w-[112px] shrink-0 py-5 pr-4">
+        {monthly > 0 ? (
+          <>
+            <span className="text-[13.5px] font-semibold tabular-nums text-ink dark:text-white leading-none">{fmtCurrencyCompact(monthly,displayCurrency)}<span className="text-[11px] font-normal text-ink-muted/50 dark:text-white/32">/mo</span></span>
+            <span className="mt-1 text-[11px] font-medium text-ink-muted/55 dark:text-white/40">{monthlyLabel}</span>
+          </>
+        ) : null}
+      </div>
+
+      {/* Zone 3: Rate */}
+      <div className="hidden sm:flex flex-col items-end w-[82px] shrink-0 py-5 pr-4">
+        {rate > 0 ? (
+          <>
+            <span className="text-[13.5px] font-semibold tabular-nums text-ink dark:text-white leading-none">{rate.toFixed(1)}%</span>
+            <span className="mt-1 text-[11px] font-medium text-ink-muted/55 dark:text-white/40">{rateLabel}</span>
+          </>
+        ) : null}
+      </div>
+
+      {/* Zone 4: Balance */}
+      <div className="shrink-0 flex flex-col items-end w-[114px] sm:w-[130px] py-5 pr-2">
+        <span className={['text-[15px] sm:text-[16px] font-semibold tabular-nums tracking-tight leading-none', isLiability?'text-loss dark:text-rose-400':'text-ink dark:text-white'].join(' ')}>
+          {isLiability?'−':''}{fmtCurrency(balance,displayCurrency)}
+        </span>
+        {foreignCurrency && balance > 0 && <span className="mt-1 text-[10px] text-ink-muted/40 dark:text-white/25 tabular-nums">{displayCurrency}</span>}
+      </div>
+
+      {/* Zone 5: Actions */}
+      <div className={['shrink-0 w-10 pr-2 relative opacity-0 group-hover:opacity-100 transition-opacity duration-150', menuOpen?'opacity-100':''].join(' ')} onClick={(e)=>e.stopPropagation()}>
+        <button type="button" onClick={()=>setMenuOpen(v=>!v)} className="w-7 h-7 rounded-xl flex items-center justify-center hover:bg-black/[.06] dark:hover:bg-white/[.09] transition-colors text-ink-muted/50 dark:text-white/35">
+          <MoreHorizontal size={14}/>
+        </button>
+        {menuOpen && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={()=>setMenuOpen(false)}/>
+            <div className="absolute right-0 top-8 z-20 w-36 rounded-2xl border border-black/[.07] dark:border-white/[.09] bg-white dark:bg-surface-dark-2 shadow-[0_8px_28px_rgba(0,0,0,0.13)] overflow-hidden">
+              {onEdit && <button type="button" onClick={()=>{setMenuOpen(false);onEdit()}} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-ink dark:text-white hover:bg-black/[.04] dark:hover:bg-white/[.05] transition-colors"><Pencil size={13} className="opacity-55"/> Edit</button>}
+              {onDelete && <button type="button" onClick={()=>{setMenuOpen(false);onDelete()}} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-loss dark:text-rose-400 hover:bg-loss-light/60 dark:hover:bg-rose-500/10 transition-colors"><Trash2 size={13} className="opacity-65"/> Delete</button>}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
 }
 
-function toNumber(input, fallback = 0) {
-  const s = String(input ?? '').trim()
-  if (!s) return fallback
-  const n = Number(s.replace(/,/g, ''))
-  return Number.isFinite(n) ? n : fallback
+/* ── WealthGroup ─────────────────────────────────── */
+
+function WealthGroup({ group, baseCurrency, totalAssetsForPct, onEdit, onDelete, onAdd, nudge }) {
+  const { label, accounts, subtotal, isLiability } = group
+  if (!accounts.length) return null
+  const allocationPct = !isLiability && totalAssetsForPct > 0 ? (subtotal / totalAssetsForPct) * 100 : null
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-4 pb-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="shrink-0 w-[3px] h-4 rounded-full" style={{background: isLiability?'rgba(192,90,70,0.55)':'rgba(120,169,230,0.45)'}} aria-hidden="true"/>
+          <span className="text-[11px] font-bold tracking-[.12em] uppercase text-ink dark:text-white/70">{label}</span>
+          {allocationPct != null && allocationPct > 0.5 && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold tabular-nums bg-black/[.04] dark:bg-white/[.07] text-ink-muted/60 dark:text-white/35">
+              {allocationPct.toFixed(0)}%
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <span className={['text-[14.5px] font-bold tabular-nums tracking-tight', isLiability?'text-loss dark:text-rose-400':'text-ink dark:text-white'].join(' ')}>
+            {isLiability?'−':''}{fmtCurrencyCompact(Math.abs(subtotal), baseCurrency)}
+          </span>
+          {onAdd && <button type="button" onClick={onAdd} className="text-[11px] font-semibold text-accent hover:text-accent-dark dark:text-blue-400 dark:hover:text-blue-300 transition-colors">+ Add</button>}
+        </div>
+      </div>
+      <div className="h-px bg-black/[.07] dark:bg-white/[.08] mb-0"/>
+      {accounts.map(a => (
+        <LedgerEntryRow key={a.id} account={a} isLiability={isLiability} baseCurrency={baseCurrency} onEdit={()=>onEdit(a)} onDelete={()=>onDelete(a)}/>
+      ))}
+      {/* Contextual nudge — rendered below rows when relevant */}
+      {nudge && (
+        <button type="button" onClick={nudge.onClick}
+          className="w-full text-left flex items-center gap-2.5 px-4 py-3 mt-1 transition-opacity hover:opacity-80"
+          style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}
+        >
+          <div className="shrink-0 w-[7px] h-[7px] rounded-full" style={{ background: nudge.dotColor || 'rgba(120,169,230,0.6)' }} />
+          <span className="flex-1 min-w-0 text-[13px] font-medium" style={{ color: nudge.color || 'rgba(120,169,230,0.85)' }}>
+            {nudge.label}
+          </span>
+          <ChevronRight size={12} className="shrink-0" style={{ color: nudge.color || 'rgba(120,169,230,0.85)', opacity: 0.5 }} />
+        </button>
+      )}
+    </div>
+  )
 }
 
-function clamp(n, min, max) {
-  return Math.max(min, Math.min(max, n))
+/* ── Column header ───────────────────────────────── */
+
+function LedgerColumnHeader() {
+  return (
+    <div className="flex items-center pb-2.5 border-b border-black/[.07] dark:border-white/[.08]">
+      <div className="flex-1 pl-[1.75rem]"><span className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/50 dark:text-white/30">Account</span></div>
+      <div className="hidden sm:block w-[112px] shrink-0 text-right pr-4"><span className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/50 dark:text-white/30">Monthly</span></div>
+      <div className="hidden sm:block w-[82px] shrink-0 text-right pr-4"><span className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/50 dark:text-white/30">Rate</span></div>
+      <div className="w-[114px] sm:w-[130px] shrink-0 text-right pr-2"><span className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/50 dark:text-white/30">Balance</span></div>
+      <div className="w-10 shrink-0"/>
+    </div>
+  )
 }
 
-function snapBaseTotal(s) {
-  if (!s) return null
-  const n = Number(s.total_base)
-  return Number.isFinite(n) ? n : null
-}
-
-function asArray(v) {
-  return Array.isArray(v) ? v : []
-}
-
-/**
- * ✅ Apple-grade chart isolation:
- * - NO top-level recharts import
- * - dynamic import after mount
- * - hard fallback if charts throw or fail to load
- */
-function DonutChart({ enabled, donutData, donutFills, donutStroke }) {
-  const [lib, setLib] = useState(null)
-  const [failed, setFailed] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    if (!enabled || failed || lib) return
-
-    ;(async () => {
-      try {
-        const mod = await import('recharts')
-        if (cancelled) return
-        setLib(mod)
-      } catch (e) {
-        if (cancelled) return
-        console.error('Charts bundle failed to load:', e)
-        setFailed(true)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [enabled, failed, lib])
-
-  if (!enabled || failed || !lib || !donutData?.length) {
-    return (
-      <div className="w-full h-full rounded-3xl bg-black/[.02] dark:bg-white/[.04] border border-black/[.06] dark:border-white/[.08]" />
-    )
-  }
-
-  const { ResponsiveContainer, PieChart, Pie, Cell } = lib
-
-  try {
-    return (
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={donutData}
-            dataKey="value"
-            nameKey="label"
-            cx="50%"
-            cy="50%"
-            innerRadius="62%"
-            outerRadius="88%"
-            paddingAngle={2}
-            stroke={donutStroke}
-            strokeWidth={1}
-            isAnimationActive={false}
-          >
-            {donutData.map((_, i) => (
-              <Cell key={i} fill={donutFills[i % donutFills.length]} />
-            ))}
-          </Pie>
-        </PieChart>
-      </ResponsiveContainer>
-    )
-  } catch (e) {
-    console.error('Charts render crashed:', e)
-    return (
-      <div className="w-full h-full rounded-3xl bg-black/[.02] dark:bg-white/[.04] border border-black/[.06] dark:border-white/[.08]" />
-    )
-  }
-}
+/* ── Main component ──────────────────────────────── */
 
 export default function Accounts() {
-  const { baseCurrency, showToast, setPage, bumpData, isPro, dark } = useApp()
-
+  const { baseCurrency, showToast, setPage, bumpData, isPro } = useApp()
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
-
   const [modal, setModal] = useState(false)
   const [editing, setEditing] = useState(null)
-  const [form, setForm] = useState({ ...emptyForm })
+  const [form, setForm] = useState({...emptyForm})
   const [saving, setSaving] = useState(false)
-
   const [snaps, setSnaps] = useState([])
   const [snapsLoading, setSnapsLoading] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [expandedSnap, setExpandedSnap] = useState(null)
-
   const [confirmState, setConfirmState] = useState(null)
   const [confirmLoading, setConfirmLoading] = useState(false)
-
-  const [chartsReady, setChartsReady] = useState(false)
-  useEffect(() => setChartsReady(true), [])
-
+  const [justRecorded, setJustRecorded] = useState(false)
   const cancelledRef = useRef(false)
-  useEffect(() => {
-    cancelledRef.current = false
-    return () => {
-      cancelledRef.current = true
-    }
-  }, [])
+  useEffect(()=>{cancelledRef.current=false;return()=>{cancelledRef.current=true}},[])
 
   const FREE_ACCOUNT_LIMIT = 3
   const accountCount = accounts.length
   const accountLimitReached = !isPro && accountCount >= FREE_ACCOUNT_LIMIT
+  const usage = useMemo(()=>{if(isPro)return null;return{used:accountCount,limit:FREE_ACCOUNT_LIMIT,pct:clamp((accountCount/FREE_ACCOUNT_LIMIT)*100,0,100)}},[isPro,accountCount])
 
-  const usage = useMemo(() => {
-    if (isPro) return null
-    const used = accountCount
-    const limit = FREE_ACCOUNT_LIMIT
-    const pct = clamp((used / limit) * 100, 0, 100)
-    return { used, limit, pct }
-  }, [isPro, accountCount])
+  const goUpgrade = useCallback(()=>{try{localStorage.setItem('upgrade_reason','account_limit')}catch{};track('upgrade_clicked',{page:'accounts',source:'account_limit'});setPage('upgrade')},[setPage])
 
-  const goUpgrade = useCallback(() => {
-    try {
-      localStorage.setItem('upgrade_reason', 'account_limit')
-    } catch {}
+  useEffect(()=>{track('page_view',{page:'accounts'})},[])
 
-    track('upgrade_clicked', {
-      page: 'accounts',
-      source: 'account_limit',
-    })
+  useEffect(()=>{
+    let c=false; setLoading(true)
+    ;(async()=>{try{const r=asArray(await api('/accounts'));if(!c)setAccounts(r)}catch(e){if(!c){showToast?.(e?.message||'Failed to load accounts','error');setAccounts([])}}finally{if(!c)setLoading(false)}})()
+    return()=>{c=true}
+  },[])
 
-    setPage('upgrade')
-  }, [setPage])
-
-  useEffect(() => {
-    track('page_view', { page: 'accounts' })
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-  
-    ;(async () => {
-      try {
-        const raw = asArray(await api('/accounts'))
-        if (cancelled) return
-        setAccounts(raw)
-      } catch (e) {
-        if (cancelled) return
-        console.error(e)
-        showToast?.(e?.message || 'Failed to load accounts', 'error')
-        setAccounts([])
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-  
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const loadSnaps = useCallback(async () => {
+  const loadSnaps = useCallback(async()=>{
     setSnapsLoading(true)
-    try {
-      const res = await api('/snapshots', { method: 'GET' })
-      if (cancelledRef.current) return
-      setSnaps(asArray(res))
-    } catch (e) {
-      if (cancelledRef.current) return
-      console.error(e)
-      setSnaps([])
-    } finally {
-      if (!cancelledRef.current) setSnapsLoading(false)
-    }
-  }, [])
+    try{const r=await api('/snapshots',{method:'GET'});if(!cancelledRef.current)setSnaps(asArray(r))}
+    catch{if(!cancelledRef.current)setSnaps([])}
+    finally{if(!cancelledRef.current)setSnapsLoading(false)}
+  },[])
 
-  const totalMonthlyContribution = useMemo(() => {
-    return accounts.reduce((sum, a) => {
-      const v =
-        a?.monthly_contribution ??
-        a?.monthlyContribution ??
-        a?.monthly ??
-        a?.contribution_monthly ??
-        0
-      return sum + (Number(v) || 0)
-    }, 0)
-  }, [accounts])
+  useEffect(()=>{if(historyOpen&&!snaps.length)loadSnaps()},[historyOpen,snaps.length,loadSnaps])
+  useEffect(()=>{ loadSnaps() },[loadSnaps])
 
-  useEffect(() => {
-    if (!historyOpen) return
-    if (snaps.length) return
-    loadSnaps()
-  }, [historyOpen, snaps.length, loadSnaps])
+  const recordSnapshot = useCallback(async()=>{
+    try{await api('/snapshots',{method:'POST'});showToast?.('Net worth recorded!');setJustRecorded(true);await loadSnaps();bumpData?.()}
+    catch(e){showToast?.(e?.message||'Failed to record','error')}
+  },[showToast,loadSnaps,bumpData])
 
-  const recordSnapshot = useCallback(async () => {
-    try {
-      await api('/snapshots', { method: 'POST' })
-      showToast?.('Net worth recorded!')
-      await loadSnaps()
-      bumpData?.()
-    } catch (e) {
-      showToast?.(e?.message || 'Failed to record', 'error')
-    }
-  }, [showToast, loadSnaps, bumpData])
+  const deleteSnap = useCallback(async(id)=>{
+    setConfirmState({title:'Delete this record?',message:'This snapshot will be permanently removed.',confirmLabel:'Delete',onConfirm:async()=>{
+      setConfirmLoading(true)
+      try{await api(`/snapshots/${id}`,{method:'DELETE'});showToast?.('Deleted');setExpandedSnap(p=>p===id?null:p);setConfirmState(null);await loadSnaps();bumpData?.()}
+      catch(e){showToast?.(e?.message||'Delete failed','error')}
+      finally{setConfirmLoading(false)}
+    }})
+  },[showToast,loadSnaps,bumpData])
 
-  const deleteSnap = useCallback(
-    async (id) => {
-      setConfirmState({
-        title: 'Delete this record?',
-        message: 'This snapshot will be permanently removed.',
-        confirmLabel: 'Delete',
-        onConfirm: async () => {
-          setConfirmLoading(true)
-          try {
-            await api(`/snapshots/${id}`, { method: 'DELETE' })
-            showToast?.('Deleted')
-            setExpandedSnap((prev) => (prev === id ? null : prev))
-            setConfirmState(null)
-            await loadSnaps()
-            bumpData?.()
-          } catch (e) {
-            showToast?.(e?.message || 'Delete failed', 'error')
-          } finally {
-            setConfirmLoading(false)
-          }
-        },
-      })
-    },
-    [showToast, loadSnaps, bumpData]
-  )
+  const sortedSnaps = useMemo(()=>[...snaps].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)),[snaps])
+  const snapCurrency = (sortedSnaps[0]?.base_currency||baseCurrency||'GBP').toUpperCase()
 
-  const sortedSnaps = useMemo(() => {
-    return [...snaps].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-  }, [snaps])
+  const {assetsTotal,liabilitiesTotal,netPosition} = useMemo(()=>{
+    const at=accounts.filter(a=>!LIABILITY_TYPES.has(a.type)&&a.include_in_net_worth!==false).reduce((s,a)=>s+(Number(a.balance)||0),0)
+    const lt=accounts.filter(a=>LIABILITY_TYPES.has(a.type)).reduce((s,a)=>s+(Number(a.balance)||0),0)
+    return{assetsTotal:at,liabilitiesTotal:lt,netPosition:at-lt}
+  },[accounts])
 
-  const latestSnap = sortedSnaps[0] || null
-  const snapCurrency = (latestSnap?.base_currency || baseCurrency || 'GBP').toUpperCase()
+  const wealthGroups = useMemo(()=>WEALTH_GROUPS.map(g=>{
+    const ga=accounts.filter(a=>g.types.includes(a.type))
+    const sub=ga.reduce((sum,a)=>{if(!g.isLiability&&a.include_in_net_worth===false)return sum;return sum+(Number(a.balance)||0)},0)
+    return{...g,accounts:ga,subtotal:sub}
+  }).filter(g=>g.accounts.length>0),[accounts])
 
-  const donutData = useMemo(() => {
-    const map = new Map()
-    for (const a of accounts) {
-      const t = a?.type || 'other'
-      map.set(t, (map.get(t) || 0) + 1)
-    }
-    const total = accounts.length || 1
-    const arr = Array.from(map.entries()).map(([type, count]) => ({
-      type,
-      count,
-      value: count,
-      pct: (count / total) * 100,
-      label: ACCOUNT_TYPE_LABELS?.[type] || type,
-    }))
-    arr.sort((a, b) => b.count - a.count)
-    return arr
-  }, [accounts])
+  const donutData = useMemo(()=>{
+    const map=new Map()
+    for(const a of accounts)map.set(a.type||'other',(map.get(a.type||'other')||0)+1)
+    return Array.from(map.entries()).map(([type,count])=>({type,count,label:ACCOUNT_TYPE_LABELS?.[type]||type})).sort((a,b)=>b.count-a.count)
+  },[accounts])
 
-  const donutStroke = dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)'
+  const openAdd = (defaultType) => { setEditing(null); setForm({...emptyForm,type:defaultType||'bank',currency:baseCurrency||'GBP'}); setModal(true) }
+  const openEdit = (a) => { setEditing(a.id); setForm({name:a.name||'',type:a.type||'bank',currency:(a.currency||'GBP').toUpperCase(),balance:String(a.balance??''),include_in_net_worth:!!a.include_in_net_worth,notes:a.notes||'',monthly_contribution:String(a.monthly_contribution??''),annual_interest_rate_percent:String(a.annual_interest_rate_percent??''),_nameHint:''}); setModal(true) }
 
-  const donutFills = useMemo(() => {
-    return dark
-      ? [
-          'rgba(255,255,255,0.70)',
-          'rgba(255,255,255,0.45)',
-          'rgba(255,255,255,0.28)',
-          'rgba(255,255,255,0.18)',
-          'rgba(255,255,255,0.12)',
-          'rgba(255,255,255,0.08)',
-          'rgba(255,255,255,0.06)',
-          'rgba(255,255,255,0.05)',
-        ]
-      : [
-          'rgba(0,0,0,0.65)',
-          'rgba(0,0,0,0.48)',
-          'rgba(0,0,0,0.36)',
-          'rgba(0,0,0,0.26)',
-          'rgba(0,0,0,0.18)',
-          'rgba(0,0,0,0.13)',
-          'rgba(0,0,0,0.10)',
-          'rgba(0,0,0,0.08)',
-        ]
-  }, [dark])
-
-  const colorByType = useMemo(() => {
-    const m = new Map()
-    donutData.forEach((d, i) => m.set(d.type, donutFills[i % donutFills.length]))
-    return m
-  }, [donutData, donutFills])
-
-  const openAdd = () => {
-    setEditing(null)
-    setForm({
-      ...emptyForm,
-      type: 'bank',
-      currency: baseCurrency || 'GBP',
-    })
-    setModal(true)
-  }
-
-  const openEdit = (a) => {
-    setEditing(a.id)
-    setForm({
-      name: a.name || '',
-      type: a.type || 'bank',
-      currency: (a.currency || 'GBP').toUpperCase(),
-      balance: String(a.balance ?? ''),
-      include_in_net_worth: !!a.include_in_net_worth,
-      notes: a.notes || '',
-      monthly_contribution: String(a.monthly_contribution ?? ''),
-      annual_interest_rate_percent: String(a.annual_interest_rate_percent ?? ''),
-      _nameHint: '',
-    })
-    setModal(true)
-  }
-
-
-  const save = async () => {
-    if (!form.name.trim()) {
-      showToast?.('Name is required', 'error')
-      return
-    }
-  
-    const body = {
-      name: form.name.trim(),
-      type: form.type,
-      currency: (form.currency || 'GBP').toUpperCase(),
-      balance: toNumber(form.balance, 0),
-      include_in_net_worth: !!form.include_in_net_worth,
-      notes: form.notes?.trim() ? form.notes.trim() : null,
-      monthly_contribution: toNumber(form.monthly_contribution, 0),
-      annual_interest_rate_percent: toNumber(form.annual_interest_rate_percent, 0),
-    }
-  
+  const save = async() => {
+    if(!form.name.trim()){showToast?.('Name is required','error');return}
+    const body={name:form.name.trim(),type:form.type,currency:(form.currency||'GBP').toUpperCase(),balance:toNumber(form.balance,0),include_in_net_worth:!!form.include_in_net_worth,notes:form.notes?.trim()||null,monthly_contribution:toNumber(form.monthly_contribution,0),annual_interest_rate_percent:toNumber(form.annual_interest_rate_percent,0)}
     setSaving(true)
     try {
-      if (editing) {
-        const editingId = editing
-  
-        await api(`/accounts/${editingId}`, { method: 'PUT', body })
-
-setAccounts((prev) =>
-  prev.map((a) =>
-    a.id === editingId
-      ? {
-          ...a,
-          ...body,
-        }
-      : a
-  )
-)
-
-invalidatePath('/accounts')
-invalidatePath('/dashboard')
-invalidatePath('/dashboard?range=3M')
-bumpData?.()
-
-track('account_updated', {
-  page: 'accounts',
-  entityType: 'account',
-  entityId: editingId,
-  account_type: body.type,
-  currency: body.currency,
-  source: 'accounts_edit',
-})
-
-showToast?.('Account updated')
-setModal(false)
-setEditing(null)
-return
-      }
-  
-      if (accountLimitReached) {
-        setModal(false)
-        goUpgrade()
-        return
-      }
-  
-      const created = await api('/accounts', { method: 'POST', body })
-
-const createdAccount = {
-  ...body,
-  ...(created || {}),
-  id: created?.id ?? crypto.randomUUID(),
-}
-
-setAccounts((prev) => [createdAccount, ...prev])
-
-invalidatePath('/accounts')
-invalidatePath('/dashboard')
-invalidatePath('/dashboard?range=3M')
-bumpData?.()
-
-showToast?.('Account added')
-track('account_added', {
-  page: 'accounts',
-  entityType: 'account',
-  entityId: createdAccount.id,
-  account_type: body.type,
-  currency: body.currency,
-  source: 'accounts_create',
-})
-
-setModal(false)
-setEditing(null)
-    } catch (e) {
-      if (e?.status === 403) {
-        setModal(false)
-        goUpgrade()
-        return
-      }
-      showToast?.(e?.message || 'Save failed', 'error')
-    } finally {
-      setSaving(false)
-    }
+      if(editing){const eid=editing;await api(`/accounts/${eid}`,{method:'PUT',body});setAccounts(prev=>prev.map(a=>a.id===eid?{...a,...body}:a));invalidatePath('/accounts');invalidatePath('/dashboard');invalidatePath('/dashboard?range=3M');bumpData?.();track('account_updated',{page:'accounts',entityType:'account',entityId:eid,account_type:body.type,currency:body.currency,source:'accounts_edit'});showToast?.('Account updated');setModal(false);setEditing(null);return}
+      if(accountLimitReached){setModal(false);goUpgrade();return}
+      const created=await api('/accounts',{method:'POST',body});const ca={...body,...(created||{}),id:created?.id??crypto.randomUUID()};setAccounts(prev=>[ca,...prev]);invalidatePath('/accounts');invalidatePath('/dashboard');invalidatePath('/dashboard?range=3M');bumpData?.();showToast?.('Account added');track('account_added',{page:'accounts',entityType:'account',entityId:ca.id,account_type:body.type,currency:body.currency,source:'accounts_create'});setModal(false);setEditing(null)
+    } catch(e) {if(e?.status===403){setModal(false);goUpgrade();return};showToast?.(e?.message||'Save failed','error')}
+    finally{setSaving(false)}
   }
 
-  const del = async (a) => {
-    setConfirmState({
-      title: `Delete "${a.name}"?`,
-      message: 'This account and its data will be permanently removed.',
-      confirmLabel: 'Delete',
-      onConfirm: async () => {
-        setConfirmLoading(true)
-        setSaving(true)
-        try {
-          await api(`/accounts/${a.id}`, { method: 'DELETE' })
-
-setAccounts((prev) => prev.filter((x) => x.id !== a.id))
-
-invalidatePath('/accounts')
-invalidatePath('/dashboard')
-invalidatePath('/dashboard?range=3M')
-bumpData?.()
-
-track('account_deleted', {
-  page: 'accounts',
-  entityType: 'account',
-  entityId: a.id,
-  account_type: a.type,
-  currency: a.currency,
-  source: 'accounts_delete',
-})
-
-showToast?.('Deleted')
-setConfirmState(null)
-        } catch (e) {
-          showToast?.(e?.message || 'Delete failed', 'error')
-        } finally {
-          setSaving(false)
-          setConfirmLoading(false)
-        }
-      },
-    })
+  const del = async(a) => {
+    setConfirmState({title:`Delete "${a.name}"?`,message:'This account and its data will be permanently removed.',confirmLabel:'Delete',onConfirm:async()=>{
+      setConfirmLoading(true);setSaving(true)
+      try{await api(`/accounts/${a.id}`,{method:'DELETE'});setAccounts(prev=>prev.filter(x=>x.id!==a.id));invalidatePath('/accounts');invalidatePath('/dashboard');invalidatePath('/dashboard?range=3M');bumpData?.();track('account_deleted',{page:'accounts',entityType:'account',entityId:a.id,account_type:a.type,currency:a.currency,source:'accounts_delete'});showToast?.('Deleted');setConfirmState(null)}
+      catch(e){showToast?.(e?.message||'Delete failed','error')}
+      finally{setSaving(false);setConfirmLoading(false)}
+    }})
   }
 
-  const inp =
-    'w-full px-4 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] bg-surface dark:bg-surface-dark text-base text-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all'
-  const lbl = 'block text-xs font-semibold text-ink-3 dark:text-white/50 mb-2'
+  const inp='w-full px-4 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] bg-surface dark:bg-surface-dark text-base text-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all'
+  const lbl='block text-xs font-semibold text-ink-3 dark:text-white/50 mb-2'
 
-  if (loading) {
-    return (
-      <div className="space-y-7 animate-fade-in">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="h-9 w-36 rounded-lg skeleton" />
-            <div className="h-4 w-64 rounded skeleton mt-2" />
-          </div>
-          <div className="h-11 w-20 rounded-2xl skeleton" />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="rounded-2xl p-5 border border-black/[.04] dark:border-white/[.05] bg-white dark:bg-surface-dark-2"
-            >
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-xl skeleton" />
-                  <div className="space-y-1.5 flex-1">
-                    <div className="h-4 w-28 rounded skeleton" />
-                    <div className="h-3 w-16 rounded skeleton" />
-                  </div>
-                </div>
-                <div className="h-7 w-24 rounded skeleton" />
-              </div>
-            </div>
-          ))}
-        </div>
+  if(loading){return(
+    <div className="animate-fade-in">
+      <div className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 pt-9 pb-9 sm:px-10" style={{background:'#141A26'}}>
+        <div className="h-2.5 w-20 rounded skeleton opacity-20 mb-3"/><div className="h-12 w-52 rounded-lg skeleton opacity-25 mb-7"/>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-xl">{[1,2,3,4].map(i=><div key={i}><div className="h-2 w-16 rounded skeleton opacity-15 mb-2"/><div className="h-6 w-24 rounded skeleton opacity-20"/></div>)}</div>
       </div>
-    )
-  }
+      <div className="pt-9 space-y-10">{[1,2].map(g=>(
+        <div key={g}><div className="flex items-center gap-3 pb-3"><div className="w-[3px] h-4 rounded-full skeleton"/><div className="h-3.5 w-36 rounded skeleton"/><div className="ml-auto h-4 w-16 rounded skeleton"/></div>
+        <div className="h-px bg-black/[.06] dark:bg-white/[.07]"/>
+        {[1,2,3].map(r=><div key={r} className="flex items-center py-5 border-b border-black/[.05] dark:border-white/[.05]"><div className="w-2 h-2 rounded-full skeleton mx-4 shrink-0"/><div className="flex-1 space-y-1.5"><div className="h-4 w-44 rounded skeleton"/><div className="h-3 w-28 rounded skeleton"/></div><div className="hidden sm:block w-20 h-4 rounded skeleton mr-4"/><div className="hidden sm:block w-14 h-4 rounded skeleton mr-4"/><div className="w-24 h-5 rounded skeleton mr-2"/><div className="w-10"/></div>)}
+        </div>
+      ))}</div>
+    </div>
+  )}
+
+  const hasAccounts = accounts.length > 0
 
   return (
-    <div className="space-y-7">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-[2rem] sm:text-4xl text-ink dark:text-white tracking-tight">
-            Accounts
-          </h1>
-          <p className="text-sm text-ink-muted dark:text-white/35 mt-1.5">
-            Connect the inputs for your net worth tracker.
-          </p>
-        </div>
+    <div className="animate-page-in">
+      <h1 className="text-sm font-semibold tracking-[.08em] uppercase text-ink-muted/40 dark:text-white/22">Accounts</h1>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setPage('settings')}
-            className="lg:hidden p-3 rounded-2xl border border-black/[.06] dark:border-white/[.06] text-ink-muted dark:text-white/35 hover:bg-surface-2 dark:hover:bg-white/5 transition-colors min-h-[44px]"
-            title="Settings"
-            aria-label="Settings"
-            disabled={saving}
-            type="button"
-          >
-            <Settings size={18} />
-          </button>
-
-          <button
-            onClick={() => {
-              if (accountLimitReached) return goUpgrade()
-              openAdd()
-            }}
-            className={[
-              'flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-2xl transition-all active:scale-[.97] touch-press min-h-[44px]',
-              accountLimitReached
-                ? 'bg-gradient-to-r from-accent to-accent-dark text-white hover:opacity-90'
-                : 'bg-accent text-white hover:bg-accent-dark',
-            ].join(' ')}
-            disabled={saving}
-            title={accountLimitReached ? 'Upgrade to add more accounts' : 'Add an account'}
-            type="button"
-          >
-            {accountLimitReached ? (
-              <>
-                <Crown size={16} /> Upgrade
-              </>
-            ) : (
-              <>
-                <Plus size={17} /> Add
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {!isPro && usage && !accountLimitReached && (
-        <Card className="p-5">
-          <div className="flex items-start justify-between gap-4">
+      {/* SCENE 1: HEADER */}
+      <div className="-mx-4 sm:-mx-6 lg:-mx-8 relative overflow-hidden" style={{background:'linear-gradient(160deg, #0A0F1A 0%, #141A26 50%, #0F141F 100%)'}}>
+        <div aria-hidden="true" className="absolute -top-20 -right-12 w-[340px] h-[340px] rounded-full pointer-events-none" style={{background:'radial-gradient(circle, rgba(120,169,230,0.06) 0%, transparent 60%)'}}/>
+        <div aria-hidden="true" className="absolute -bottom-14 -left-8 w-[240px] h-[240px] rounded-full pointer-events-none" style={{background:'radial-gradient(circle, rgba(212,175,55,0.04) 0%, transparent 60%)'}}/>
+        <div className="relative px-6 pt-9 pb-8 sm:px-10 sm:pt-10">
+          <div className="text-[10px] font-semibold tracking-[.18em] uppercase mb-3" style={{color:'rgba(255,255,255,0.25)'}}>Wealth ledger · {baseCurrency}</div>
+          <div className="flex items-start justify-between gap-6">
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-ink dark:text-white">
-                {usage.used} of {usage.limit} accounts used
-              </div>
-              <div className="text-xs text-ink-muted dark:text-white/35 mt-1">
-                Upgrade for unlimited accounts and longer projections.
-              </div>
-
-              <div className="mt-3 h-2 rounded-full bg-black/[.06] dark:bg-white/[.08] overflow-hidden">
-                <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${usage.pct}%` }} />
-              </div>
+              {hasAccounts ? (
+                <>
+                  <div className="hero-number text-white leading-none">{fmtCurrencyCompact(netPosition, baseCurrency)}</div>
+                  <div className="mt-1.5 text-xs" style={{color:'rgba(255,255,255,0.28)'}}>
+                    Net position
+                    {liabilitiesTotal > 0 && <span> · {fmtCurrencyCompact(assetsTotal,baseCurrency)} assets − {fmtCurrencyCompact(liabilitiesTotal,baseCurrency)} liabilities</span>}
+                  </div>
+                </>
+              ) : <div className="text-[1.5rem] font-semibold text-white/40">No accounts yet</div>}
             </div>
-
-            <UpgradeButton onClick={goUpgrade} size="sm" className="shrink-0" title="Upgrade to Pro">
-              Upgrade
-            </UpgradeButton>
+            <button onClick={()=>{if(accountLimitReached)return goUpgrade();openAdd()}}
+              className={['shrink-0 flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-2xl transition-all active:scale-[.97]',accountLimitReached?'bg-gradient-to-r from-accent to-accent-dark text-white hover:opacity-90':'bg-white/[.09] border border-white/[.13] text-white hover:bg-white/[.14]'].join(' ')}
+              disabled={saving} type="button">
+              {accountLimitReached?<><Crown size={13}/> Upgrade to Pro</>:<><Plus size={14}/> Add account</>}
+            </button>
           </div>
-        </Card>
-      )}
 
-      {accounts.length === 0 ? (
-        <Card>
-          <EmptyState
-            icon={Landmark}
-            title="Add your first account"
-            subtitle="Add one account to generate your first net worth view and long-term outlook."
-            action={
-              <button
-                onClick={() => {
-                  if (accountLimitReached) return goUpgrade()
-                  openAdd()
-                }}
-                className="flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-all min-h-[48px]"
-                type="button"
-              >
-                {accountLimitReached ? 'Upgrade to add more accounts' : 'Add Account'}
-              </button>
-            }
-          />
-        </Card>
-      ) : (
-        <>
-          {accountLimitReached && (
-            <div className="rounded-2xl border border-accent/15 dark:border-accent/20 bg-gradient-to-br from-accent/[.04] via-transparent to-accent/[.02] dark:from-accent/[.08] dark:via-transparent dark:to-accent/[.03] p-6 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-48 h-48 bg-accent/[.04] dark:bg-accent/[.06] rounded-full blur-[80px] -translate-y-1/2 translate-x-1/4 pointer-events-none" />
-
-              <div className="relative flex items-start gap-5">
-                <div className="hidden sm:flex shrink-0 w-11 h-11 rounded-2xl bg-accent/10 dark:bg-accent/15 items-center justify-center">
-                  <Sparkles size={20} className="text-accent" />
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-ink dark:text-white">
-                    You&apos;ve used all {FREE_ACCOUNT_LIMIT} free accounts
-                  </div>
-                  <p className="text-xs text-ink-muted dark:text-white/40 mt-1 leading-relaxed">
-                    Upgrade to Pro for unlimited accounts, 40-year projections, inflation modelling, and the Optimiser.
-                  </p>
-
-                  <div className="mt-3 flex items-center gap-3">
-                    <div className="h-2 flex-1 max-w-[200px] rounded-full bg-accent/15 dark:bg-accent/20 overflow-hidden">
-                      <div className="h-full w-full rounded-full bg-accent" />
-                    </div>
-                    <span className="text-xs font-semibold text-accent tabular-nums">
-                      {FREE_ACCOUNT_LIMIT}/{FREE_ACCOUNT_LIMIT}
-                    </span>
+          {hasAccounts && (
+            <div className="mt-7 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-5">
+              {[
+                {label:'Total assets',value:fmtCurrencyCompact(assetsTotal,baseCurrency),show:true},
+                {label:'Liabilities',value:'−'+fmtCurrencyCompact(liabilitiesTotal,baseCurrency),show:liabilitiesTotal>0,color:'rgba(192,90,70,0.85)'},
+                {label:'Last recorded',value:sortedSnaps[0]?fmtDate(sortedSnaps[0].created_at):null,show:true,empty:'Not yet',stale:!!(sortedSnaps[0]&&isSnapshotStale(sortedSnaps[0].created_at))},
+              ].filter(s=>s.show).map(stat=>(
+                <div key={stat.label}>
+                  <div className="text-[9.5px] font-semibold tracking-[.13em] uppercase mb-1.5" style={{color:'rgba(255,255,255,0.22)'}}>{stat.label}</div>
+                  <div className="text-[1.3rem] font-semibold tabular-nums tracking-tight leading-tight" style={{color:stat.stale?'rgba(217,119,6,0.85)':stat.color||'white'}}>
+                    {stat.value || <span className="text-sm font-normal" style={{color:'rgba(255,255,255,0.30)'}}>{stat.empty}</span>}
                   </div>
                 </div>
-
-                <button
-                  onClick={goUpgrade}
-                  className="shrink-0 flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl bg-accent text-white hover:bg-accent-dark transition-colors"
-                  type="button"
-                >
-                  <Crown size={14} /> Upgrade
-                </button>
-              </div>
+              ))}
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {accounts.map((a) => {
-              const Icon = TYPE_ICON?.[a.type] || TYPE_ICON.other
-              const label = ACCOUNT_TYPE_LABELS?.[a.type] || a.type
+          {!isPro&&usage&&!accountLimitReached&&hasAccounts&&(
+            <div className="mt-5 flex items-center gap-3">
+              <div className="h-1 w-20 rounded-full overflow-hidden" style={{background:'rgba(255,255,255,0.10)'}}><div className="h-full rounded-full bg-accent" style={{width:`${usage.pct}%`}}/></div>
+              <span className="text-[10px]" style={{color:'rgba(255,255,255,0.30)'}}>{usage.used} of {usage.limit} free · <button onClick={goUpgrade} className="underline" type="button">Upgrade for unlimited</button></span>
+            </div>
+          )}
+          {accountLimitReached&&<div className="mt-4 text-[10px]" style={{color:'rgba(255,255,255,0.35)'}}>Free limit reached · <button onClick={goUpgrade} className="font-semibold underline" style={{color:'var(--gold)'}} type="button">Upgrade for unlimited accounts</button></div>}
+        </div>
+      </div>
+
+      {/* SCENE 2: LEDGER */}
+      {!hasAccounts ? (
+        <div className="pt-14 pb-6 text-center max-w-xs mx-auto">
+          <Landmark size={24} className="text-ink-muted/20 dark:text-white/12 mx-auto mb-4"/>
+          <div className="text-sm font-semibold text-ink dark:text-white mb-1.5">Add your first account</div>
+          <p className="text-xs text-ink-muted/55 dark:text-white/30 leading-relaxed mb-5">ISA, pension, bank, property, crypto — anything that counts toward your net worth.</p>
+          <button onClick={()=>{if(accountLimitReached)return goUpgrade();openAdd()}} className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-all" type="button"><Plus size={14}/> Add account</button>
+        </div>
+      ) : (
+        <div className="pt-8">
+          <LedgerColumnHeader/>
+          <div className="mt-7 space-y-10">
+            {wealthGroups.map(g=>{
+              // Contextual nudge — at most 1 per group, priority order
+              let nudge = null
+
+              if (g.key === 'liabilities') {
+                const first = g.accounts.find(a => a.type === 'mortgage' && Number(a.balance || 0) > 0)
+                if (first) nudge = {
+                  label: 'Model overpayment savings in Decisions',
+                  onClick: () => setPage('decisions'),
+                  color: 'rgba(192,90,70,0.75)',
+                  dotColor: 'rgba(192,90,70,0.50)',
+                }
+              }
+
+              if (g.key === 'investments' && !nudge) {
+                const first = g.accounts.find(a => (a.type === 'isa' || a.type === 'investment') && Number(a.monthly_contribution || 0) === 0)
+                if (first) nudge = {
+                  label: 'Add a monthly contribution to improve your forecast',
+                  onClick: () => openEdit(first),
+                  color: 'rgba(120,169,230,0.80)',
+                  dotColor: 'rgba(120,169,230,0.50)',
+                }
+              }
+
+              if (g.key === 'investments' && !nudge) {
+                const first = g.accounts.find(a => (a.type === 'isa' || a.type === 'investment') && Number(a.annual_interest_rate_percent || 0) === 0)
+                if (first) nudge = {
+                  label: 'Add an expected return to improve your forecast',
+                  onClick: () => openEdit(first),
+                  color: 'rgba(120,169,230,0.80)',
+                  dotColor: 'rgba(120,169,230,0.50)',
+                }
+              }
+
+              if (g.key === 'pensions' && !nudge) {
+                const first = g.accounts.find(a => a.type === 'sipp' && Number(a.monthly_contribution || 0) === 0)
+                if (first) nudge = {
+                  label: 'Add a pension contribution to your forecast',
+                  onClick: () => openEdit(first),
+                  color: 'rgba(124,58,237,0.75)',
+                  dotColor: 'rgba(124,58,237,0.50)',
+                }
+              }
+
+              if (g.key === 'pensions' && !nudge) {
+                const first = g.accounts.find(a => a.type === 'sipp' && Number(a.annual_interest_rate_percent || 0) === 0)
+                if (first) nudge = {
+                  label: 'Add an expected growth rate to improve your forecast',
+                  onClick: () => openEdit(first),
+                  color: 'rgba(124,58,237,0.75)',
+                  dotColor: 'rgba(124,58,237,0.50)',
+                }
+              }
+
+              if (!nudge) {
+                const first = g.accounts.find(a => a.include_in_net_worth === false)
+                if (first) nudge = {
+                  label: 'This account is excluded from net worth',
+                  onClick: () => openEdit(first),
+                  color: 'rgba(107,114,128,0.70)',
+                  dotColor: 'rgba(107,114,128,0.45)',
+                }
+              }
 
               return (
-                <Card
-                  key={a.id}
-                  className='p-5'
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-xl bg-black/[.03] dark:bg-white/[.05] grid place-items-center shrink-0">
-                          <Icon size={16} strokeWidth={1.75} className="text-ink/70 dark:text-white/45" />
-                        </div>
-
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold text-ink dark:text-white truncate leading-tight">
-                            {a.name}
-                          </div>
-                          <div className="text-xs text-ink-muted dark:text-white/35 mt-0.5">
-                            {label} · {String(a.currency || '').toUpperCase()}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={() => openEdit(a)}
-                        className="p-2.5 rounded-xl bg-black/[.03] dark:bg-white/[.05] hover:bg-black/[.06] dark:hover:bg-white/[.08] transition-colors"
-                        title="Edit"
-                        aria-label="Edit"
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={() => del(a)}
-                        className="p-2.5 rounded-xl bg-black/[.03] dark:bg-white/[.05] hover:bg-black/[.06] dark:hover:bg-white/[.08] transition-colors"
-                        title="Delete"
-                        aria-label="Delete"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex items-end justify-between gap-3">
-                    <div>
-                      <div className="text-xs text-ink-muted dark:text-white/35">Balance</div>
-                      <div className="mt-1 text-[22px] font-semibold tracking-[-0.02em] text-ink dark:text-white tabular-nums">
-                        {fmtCurrency(a.balance || 0, a.currency || 'GBP')}
-                      </div>
-                    </div>
-
-                    <span
-                      className={[
-                        'text-[11px] px-2.5 py-1 rounded-full border',
-                        'bg-black/[.02] dark:bg-white/[.04]',
-                        'border-black/[.06] dark:border-white/[.10]',
-                        a.include_in_net_worth ? 'text-ink-muted dark:text-white/45' : 'text-ink-muted/60 dark:text-white/30',
-                      ].join(' ')}
-                    >
-                      {a.include_in_net_worth ? 'Included' : 'Excluded'}
-                    </span>
-                  </div>
-
-                  {a.monthly_contribution || a.annual_interest_rate_percent ? (
-                    <div className="mt-4 pt-4 border-t border-black/[.06] dark:border-white/[.07] text-xs text-ink-muted dark:text-white/35 space-y-1">
-                      {!!a.monthly_contribution && (
-                        <div className="flex justify-between">
-                          <span>Monthly contribution</span>
-                          <span className="text-ink dark:text-white/70">
-                            {fmtCurrency(a.monthly_contribution, a.currency || 'GBP')}
-                          </span>
-                        </div>
-                      )}
-                      {!!a.annual_interest_rate_percent && (
-                        <div className="flex justify-between">
-                          <span>Interest rate</span>
-                          <span className="text-ink dark:text-white/70">
-                            {Number(a.annual_interest_rate_percent).toFixed(2)}%
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
-                </Card>
+                <WealthGroup key={g.key} group={g} baseCurrency={baseCurrency} totalAssetsForPct={assetsTotal}
+                  onEdit={openEdit} onDelete={del}
+                  onAdd={!g.isLiability&&!accountLimitReached?()=>openAdd(g.types[0]):undefined}
+                  nudge={nudge}
+                />
               )
             })}
           </div>
-
-          <Card className="p-6">
-            <div className="flex items-start justify-between gap-6">
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-ink dark:text-white">Account mix</div>
-                <div className="text-xs text-ink-muted dark:text-white/35 mt-1">
-                  A compact overview of what you’re tracking.
-                </div>
-
-                <div className="mt-3 flex items-baseline justify-between">
-                  <div className="text-xs text-ink-muted dark:text-white/50">Total monthly contributions</div>
-                  <div className="text-sm font-semibold text-ink dark:text-white">
-                    {fmtCurrencyCompact(totalMonthlyContribution, baseCurrency)}
-                    <span className="text-xs font-medium text-ink-muted dark:text-white/40">/mo</span>
-                  </div>
-                </div>
-
-                <div className="mt-4 space-y-2">
-                  {donutData.slice(0, 3).map((d) => (
-                    <div key={d.type} className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          className="inline-block w-2.5 h-2.5 rounded-full"
-                          style={{ background: colorByType.get(d.type) || donutFills[0] }}
-                        />
-                        <div className="text-sm text-ink dark:text-white/80 truncate">{d.label}</div>
-                      </div>
-                      <div className="text-xs text-ink-muted dark:text-white/35 tabular-nums">
-                        {d.count} · {d.pct.toFixed(0)}%
-                      </div>
-                    </div>
-                  ))}
-                  {donutData.length > 3 ? (
-                    <div className="text-xs text-ink-muted dark:text-white/35">+{donutData.length - 3} more</div>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="shrink-0 w-[132px] h-[132px] min-w-[132px] min-h-[132px]">
-                <DonutChart
-                  enabled={chartsReady}
-                  donutData={donutData}
-                  donutFills={donutFills}
-                  donutStroke={donutStroke}
-                />
-
-                <div className="pointer-events-none -mt-[132px] w-[132px] h-[132px] grid place-items-center">
-                  <div className="text-center">
-                    <div className="text-xs text-ink-muted dark:text-white/35">Total</div>
-                    <div className="text-lg font-semibold text-ink dark:text-white tabular-nums">{accounts.length}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          <div className="pt-2 space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold text-ink dark:text-white">Snapshots</div>
-                <div className="text-xs text-ink-muted dark:text-white/35">
-                  Record net worth over time. Your total lives on Home.
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={recordSnapshot}
-                  disabled={saving}
-                  className="flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-2xl border border-black/[.08] dark:border-white/[.10] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px]"
-                  type="button"
-                  title="Record snapshot"
-                >
-                  <Camera size={16} className="opacity-80" />
-                  Record
-                </button>
-
-                <button
-                  onClick={() => setHistoryOpen((v) => !v)}
-                  className="flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-2xl border border-black/[.08] dark:border-white/[.10] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px]"
-                  type="button"
-                  title="Toggle history"
-                >
-                  <Clock size={16} className="opacity-80" />
-                  History{' '}
-                  <ChevronDown size={16} className={`opacity-70 transition-transform ${historyOpen ? 'rotate-180' : ''}`} />
-                </button>
-              </div>
-            </div>
-
-            <Card className="p-5">
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="text-xs text-ink-muted dark:text-white/35">Last recorded</div>
-                  <div className="mt-1 text-sm font-semibold text-ink dark:text-white">
-                    {sortedSnaps[0] ? fmtDate(sortedSnaps[0].created_at) : snaps.length ? '—' : 'Not yet'}
-                  </div>
-                </div>
-                <div className="text-xs text-ink-muted dark:text-white/35 tabular-nums">
-                  {sortedSnaps[0]?.excluded_accounts > 0 ? `${sortedSnaps[0].excluded_accounts} excluded` : ''}
-                </div>
-              </div>
-            </Card>
-
-            {historyOpen && (
-              <Card className="p-5">
-                {snapsLoading ? (
-                  <div className="space-y-2">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="h-10 rounded-xl skeleton" />
-                    ))}
-                  </div>
-                ) : sortedSnaps.length === 0 ? (
-                  <div className="text-sm text-ink-muted dark:text-white/35">
-                    No snapshots yet. Record one to start building history.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {sortedSnaps.map((s, idx) => {
-                      const prev = sortedSnaps[idx + 1]
-                      const v = snapBaseTotal(s)
-                      const pv = prev ? snapBaseTotal(prev) : null
-                      const d = v != null && pv != null ? v - pv : null
-                      const pct = d != null && pv != null && pv !== 0 ? (d / Math.abs(pv)) * 100 : null
-
-                      const isOpen = expandedSnap === s.id
-                      const hasBreakdown = Array.isArray(s.breakdown) && s.breakdown.length > 0
-                      const cur = (s.base_currency || snapCurrency || 'GBP').toUpperCase()
-
-                      return (
-                        <div key={s.id} className="rounded-2xl border border-black/[.06] dark:border-white/[.07] overflow-hidden">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedSnap((prevId) => (prevId === s.id ? null : s.id))}
-                            className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-black/[.02] dark:hover:bg-white/[.04] transition-colors text-left"
-                          >
-                            <div className="min-w-0">
-                              <div className="text-sm font-semibold text-ink dark:text-white">{fmtDate(s.created_at)}</div>
-                              <div className="text-xs text-ink-muted dark:text-white/35">
-                                {idx === sortedSnaps.length - 1 ? 'First snapshot' : 'Compared to previous'}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-3 shrink-0">
-                              {d != null && pct != null ? (
-                                <ChangePill change={d} changePct={pct} currency={cur} size="sm" />
-                              ) : (
-                                <span className="text-xs text-ink-muted dark:text-white/25 font-medium">—</span>
-                              )}
-                              <ChevronDown size={16} className={`opacity-60 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                            </div>
-                          </button>
-
-                          {isOpen && (
-                            <div className="px-4 pb-4 pt-2 bg-black/[.01] dark:bg-white/[.03] border-t border-black/[.06] dark:border-white/[.07]">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="text-xs text-ink-muted dark:text-white/35">
-                                  {hasBreakdown ? 'Breakdown' : 'Snapshot'}
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => deleteSnap(s.id)}
-                                  className="text-xs font-semibold text-ink-muted dark:text-white/35 hover:text-ink dark:hover:text-white transition-colors"
-                                >
-                                  Delete
-                                </button>
-                              </div>
-
-                              {hasBreakdown ? (
-                                <div className="mt-3 space-y-2.5">
-                                  {s.breakdown.map((b) => (
-                                    <div
-                                      key={b.id || `${b.name}-${b.currency}`}
-                                      className="flex justify-between items-center text-sm"
-                                    >
-                                      <span className="text-ink-muted dark:text-white/45">
-                                        {b.name}{' '}
-                                        <span className="text-ink-muted/40 dark:text-white/20">({b.currency})</span>
-                                      </span>
-                                      <span className="text-ink dark:text-white font-medium tabular-nums">
-                                        {fmtCurrency(Number.isFinite(Number(b.value_base)) ? Number(b.value_base) : 0, cur)}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : null}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </Card>
-            )}
-          </div>
-        </>
+        </div>
       )}
 
-      <Modal open={modal} onClose={() => (!saving ? setModal(false) : null)} title={editing ? 'Edit account' : 'Add account'}>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            save()
-          }}
-          className="space-y-4"
-        >
-          <div>
-            <label className={lbl}>Name</label>
-            <input
-              className={inp}
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder={accountNamePlaceholder(form?.type)}
-            />
-            <p className="text-[11px] text-ink-muted/50 dark:text-white/25 mt-1">
-              Use a name you'll recognise later.
-            </p>
+      {/* SCENE 3: COMPOSITION */}
+      {hasAccounts&&donutData.length>0&&(
+        <div className="mt-10 pt-6 border-t border-black/[.06] dark:border-white/[.07]">
+          <div className="text-[10.5px] font-semibold tracking-[.14em] uppercase text-ink-muted/45 dark:text-white/25 mb-5">Composition</div>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            {donutData.map(d=>(
+              <div key={d.type} className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{background:TYPE_ACCENT[d.type]||TYPE_ACCENT.other}}/>
+                <span className="text-sm text-ink dark:text-white/70">{d.label}</span>
+                <span className="text-[12px] text-ink-muted/55 dark:text-white/38 tabular-nums">{d.count}</span>
+              </div>
+            ))}
           </div>
+        </div>
+      )}
 
+      {/* SCENE 4: SNAPSHOTS */}
+      <div className="mt-8 pt-6 border-t border-black/[.06] dark:border-white/[.07] pb-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-[10.5px] font-semibold tracking-[.14em] uppercase text-ink-muted/45 dark:text-white/25">Snapshots</span>
+            {sortedSnaps[0]?(
+              <span className="text-xs text-ink-muted/65 dark:text-white/45">Last: <span className="font-semibold text-ink dark:text-white">{fmtDate(sortedSnaps[0].created_at)}</span>{sortedSnaps.length>1&&<> · {sortedSnaps.length} total</>}</span>
+            ):(
+              <span className="text-xs text-ink-muted/60 dark:text-white/38">Record to start tracking net worth over time</span>
+            )}
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            {sortedSnaps[0]&&isSnapshotStale(sortedSnaps[0].created_at)&&!justRecorded&&(
+              <span className="text-[10.5px] font-medium text-amber-600/80 dark:text-amber-400/65">Over 30 days since last record.</span>
+            )}
+            <div className="flex items-center gap-2">
+              <button onClick={recordSnapshot} disabled={saving} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border border-black/[.07] dark:border-white/[.08] text-ink-muted dark:text-white/40 hover:text-ink dark:hover:text-white hover:bg-black/[.03] dark:hover:bg-white/[.04] transition-colors" type="button"><Camera size={12} className="opacity-65"/> Record</button>
+              <button onClick={()=>setHistoryOpen(v=>!v)} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border border-black/[.07] dark:border-white/[.08] text-ink-muted dark:text-white/40 hover:text-ink dark:hover:text-white hover:bg-black/[.03] dark:hover:bg-white/[.04] transition-colors" type="button"><Clock size={12} className="opacity-65"/> History <ChevronDown size={11} className={`opacity-40 transition-transform duration-200 ${historyOpen?'rotate-180':''}`}/></button>
+            </div>
+            {justRecorded&&(
+              <button type="button" onClick={()=>setPage('plan')} className="text-[11px] font-semibold text-accent hover:text-accent-dark dark:text-blue-400 dark:hover:text-blue-300 transition-colors">
+                View your updated plan →
+              </button>
+            )}
+          </div>
+        </div>
+
+        {historyOpen&&(
+          <div className="mt-4 rounded-2xl border border-black/[.06] dark:border-white/[.07] overflow-hidden">
+            {snapsLoading?(<div className="p-4 space-y-2">{[1,2,3].map(i=><div key={i} className="h-10 rounded-xl skeleton"/>)}</div>)
+            :sortedSnaps.length===0?(<div className="p-4 text-sm text-ink-muted/55 dark:text-white/30">No snapshots yet.</div>)
+            :(<div className="divide-y divide-black/[.04] dark:divide-white/[.04]">
+              {sortedSnaps.map((s,idx)=>{
+                const prev=sortedSnaps[idx+1],v=snapBaseTotal(s),pv=prev?snapBaseTotal(prev):null
+                const d=v!=null&&pv!=null?v-pv:null,pct=d!=null&&pv!=null&&pv!==0?(d/Math.abs(pv))*100:null
+                const isOpen=expandedSnap===s.id,hasBreakdown=Array.isArray(s.breakdown)&&s.breakdown.length>0
+                const cur=(s.base_currency||snapCurrency||'GBP').toUpperCase()
+                return(
+                  <div key={s.id}>
+                    <button type="button" onClick={()=>setExpandedSnap(p=>p===s.id?null:s.id)} className="w-full flex items-center justify-between gap-3 px-4 py-3.5 hover:bg-black/[.02] dark:hover:bg-white/[.02] transition-colors text-left">
+                      <div className="min-w-0"><div className="text-sm font-semibold text-ink dark:text-white">{fmtDate(s.created_at)}</div><div className="text-xs text-ink-muted/50 dark:text-white/30">{idx===sortedSnaps.length-1?'First snapshot':'vs. previous'}</div></div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        {d!=null&&pct!=null?<ChangePill change={d} changePct={pct} currency={cur} size="sm"/>:<span className="text-xs text-ink-muted/35 dark:text-white/20">—</span>}
+                        <ChevronDown size={12} className={`opacity-40 transition-transform duration-200 ${isOpen?'rotate-180':''}`}/>
+                      </div>
+                    </button>
+                    {isOpen&&(
+                      <div className="px-4 pb-4 pt-2 bg-black/[.015] dark:bg-white/[.02] border-t border-black/[.04] dark:border-white/[.04]">
+                        <div className="flex items-center justify-between gap-3 mb-3"><div className="text-xs text-ink-muted/55 dark:text-white/32">{hasBreakdown?'Breakdown':'Snapshot'}</div><button type="button" onClick={()=>deleteSnap(s.id)} className="text-xs font-semibold text-loss/70 hover:text-loss dark:text-rose-400/70 dark:hover:text-rose-400 transition-colors">Delete</button></div>
+                        {hasBreakdown&&(<div className="space-y-2">{s.breakdown.map(b=>(<div key={b.id||`${b.name}-${b.currency}`} className="flex justify-between items-center text-sm"><span className="text-ink-muted/60 dark:text-white/45">{b.name} <span className="text-ink-muted/40 dark:text-white/25">({b.currency})</span></span><span className="text-ink dark:text-white font-medium tabular-nums">{fmtCurrency(Number.isFinite(Number(b.value_base))?Number(b.value_base):0,cur)}</span></div>))}</div>)}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>)}
+          </div>
+        )}
+      </div>
+
+      {/* Modal */}
+      <Modal open={modal} onClose={()=>(!saving?setModal(false):null)} title={editing?'Edit account':'Add account'}>
+        <form onSubmit={e=>{e.preventDefault();save()}} className="space-y-4">
+          <div><label className={lbl}>Name</label><input className={inp} value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder={accountNamePlaceholder(form?.type)}/><p className="text-[11px] text-ink-muted/50 dark:text-white/25 mt-1">Use a name you'll recognise later.</p></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className={lbl}>Type</label>
-              <select className={inp} value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
-                {TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {ACCOUNT_TYPE_LABELS?.[t] || t}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className={lbl}>Currency</label>
-              <select
-                className={inp}
-                value={form.currency}
-                onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
-              >
-                {CURRENCIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <div><label className={lbl}>Type</label><select className={inp} value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>{TYPES.map(t=><option key={t} value={t}>{ACCOUNT_TYPE_LABELS?.[t]||t}</option>)}</select></div>
+            <div><label className={lbl}>Currency</label><select className={inp} value={form.currency} onChange={e=>setForm(f=>({...f,currency:e.target.value}))}>{CURRENCIES.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
           </div>
-
-          <div>
-            <label className={lbl}>Balance</label>
-            <input
-              className={inp}
-              value={form.balance}
-              onChange={(e) => setForm((f) => ({ ...f, balance: e.target.value }))}
-              inputMode="decimal"
-              placeholder="e.g. 12,500"
-            />
-          </div>
-
-          <div className="flex items-center justify-between gap-3">
-            <label className="text-sm font-semibold text-ink dark:text-white">Include in net worth</label>
-            <input
-              type="checkbox"
-              checked={!!form.include_in_net_worth}
-              onChange={(e) => setForm((f) => ({ ...f, include_in_net_worth: e.target.checked }))}
-              className="h-5 w-5 rounded border-black/[.20] dark:border-white/[.20]"
-            />
-          </div>
-
-          <div>
-            <label className={lbl}>Notes (optional)</label>
-            <textarea
-              className={inp}
-              value={form.notes}
-              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-              rows={3}
-              placeholder="Optional notes about this account, e.g Emergency fund"
-            />
-          </div>
-
+          <div><label className={lbl}>Balance</label><input className={inp} value={form.balance} onChange={e=>setForm(f=>({...f,balance:e.target.value}))} inputMode="decimal" placeholder="e.g. 12,500"/></div>
+          <div className="flex items-center justify-between gap-3"><label className="text-sm font-semibold text-ink dark:text-white">Include in net worth</label><input type="checkbox" checked={!!form.include_in_net_worth} onChange={e=>setForm(f=>({...f,include_in_net_worth:e.target.checked}))} className="h-5 w-5 rounded border-black/[.20] dark:border-white/[.20]"/></div>
+          <div><label className={lbl}>Notes (optional)</label><textarea className={inp} value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} rows={2} placeholder="Optional notes about this account"/></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-            <label className={lbl}>Monthly contribution (optional, per month)</label>
-              <input
-                className={inp}
-                value={form.monthly_contribution}
-                onChange={(e) => setForm((f) => ({ ...f, monthly_contribution: e.target.value }))}
-                inputMode="decimal"
-                placeholder="e.g. 500"
-              />
-            </div>
-            <div>
-              <label className={lbl}>Expected annual return % (optional)</label>
-              <input
-                className={inp}
-                value={form.annual_interest_rate_percent}
-                onChange={(e) => setForm((f) => ({ ...f, annual_interest_rate_percent: e.target.value }))}
-                inputMode="decimal"
-                placeholder="e.g. 5.2"
-              />
-            </div>
+            <div><label className={lbl}>Monthly contribution (optional)</label><input className={inp} value={form.monthly_contribution} onChange={e=>setForm(f=>({...f,monthly_contribution:e.target.value}))} inputMode="decimal" placeholder="e.g. 500"/></div>
+            <div><label className={lbl}>Expected annual return / rate % (optional)</label><input className={inp} value={form.annual_interest_rate_percent} onChange={e=>setForm(f=>({...f,annual_interest_rate_percent:e.target.value}))} inputMode="decimal" placeholder="e.g. 5.2"/></div>
           </div>
-
-          <div className="sticky bottom-0 z-10 -mx-5 sm:-mx-7 mt-2 px-5 sm:px-7 pt-3 pb-1 bg-white/95 dark:bg-surface-dark-2/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:supports-[backdrop-filter]:bg-surface-dark-2/80 border-t border-black/[.06] dark:border-white/[.07] flex items-center justify-end gap-2">
-            <button
-              type="button"
-              className="px-4 py-3 rounded-2xl text-sm font-semibold border border-black/[.08] dark:border-white/[.10] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors"
-              onClick={() => setModal(false)}
-              disabled={saving}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-3 rounded-2xl text-sm font-semibold bg-accent text-white hover:bg-accent-dark transition-colors disabled:opacity-60"
-              disabled={saving}
-            >
-              {saving ? 'Saving…' : editing ? 'Update account' : 'Add account'}
-            </button>
+          <div className="sticky bottom-0 z-10 -mx-5 sm:-mx-7 mt-2 px-5 sm:px-7 pt-3 pb-1 bg-white/95 dark:bg-surface-dark-2/95 backdrop-blur border-t border-black/[.06] dark:border-white/[.07] flex items-center justify-end gap-2">
+            <button type="button" className="px-4 py-3 rounded-2xl text-sm font-semibold border border-black/[.08] dark:border-white/[.10] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors" onClick={()=>setModal(false)} disabled={saving}>Cancel</button>
+            <button type="submit" className="px-5 py-3 rounded-2xl text-sm font-semibold bg-accent text-white hover:bg-accent-dark transition-colors disabled:opacity-60" disabled={saving}>{saving?'Saving…':editing?'Update account':'Add account'}</button>
           </div>
         </form>
       </Modal>
 
-      <ConfirmDialog
-        open={!!confirmState}
-        title={confirmState?.title}
-        message={confirmState?.message}
-        confirmLabel={confirmState?.confirmLabel || 'Delete'}
-        destructive
-        loading={confirmLoading}
-        onConfirm={confirmState?.onConfirm}
-        onCancel={() => {
-          setConfirmState(null)
-          setConfirmLoading(false)
-        }}
-      />
+      <ConfirmDialog open={!!confirmState} title={confirmState?.title} message={confirmState?.message} confirmLabel={confirmState?.confirmLabel||'Delete'} destructive loading={confirmLoading} onConfirm={confirmState?.onConfirm} onCancel={()=>{setConfirmState(null);setConfirmLoading(false)}}/>
     </div>
   )
 }
