@@ -6,11 +6,11 @@ import AuthModal from '../components/AuthModal'
 import { useSEO } from '../useSEO'
 
 import homeShot from '../assets/landing/paddock-home.png'
-import outlookShot from '../assets/landing/paddock-outlook.png'
-import insightsShot from '../assets/landing/paddock-insights.png'
+import outlookShot from '../assets/landing/paddock-plan.png'
+import insightsShot from '../assets/landing/paddock-decisions.png'
 import homeShotWebp from '../assets/landing/paddock-home.webp'
-import outlookShotWebp from '../assets/landing/paddock-outlook.webp'
-import insightsShotWebp from '../assets/landing/paddock-insights.webp'
+import outlookShotWebp from '../assets/landing/paddock-plan.webp'
+import insightsShotWebp from '../assets/landing/paddock-decisions.webp'
 
 function hasRecoveryIntent() {
   try {

@@ -383,7 +383,7 @@ export default function Plan() {
                       <Area
   type="monotone"
   dataKey="required"
-  name="Required"
+  name="Required pace"
   stroke="currentColor"
   strokeWidth={1.5}
   strokeOpacity={0.13}
@@ -397,7 +397,7 @@ export default function Plan() {
   <Area
     type="monotone"
     dataKey="compareProjected"
-    name="Scenario"
+    name="Best scenario"
     stroke="#2FA676"
     strokeWidth={2}
     strokeDasharray="8 5"
@@ -411,7 +411,7 @@ export default function Plan() {
 <Area
   type="monotone"
   dataKey="projected"
-  name="Projected"
+  name="Current plan"
   stroke={ACCENT_STROKE}
   strokeWidth={2.5}
   fill="url(#planTrajFill)"
