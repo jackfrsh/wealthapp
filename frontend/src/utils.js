@@ -97,6 +97,29 @@ export const CURRENCY_SYMBOLS = {
   INR: '₹', BTC: '₿', ETH: 'Ξ',
 }
 
+export function fmtCurrencyCompactStable(amount, ccy = 'GBP') {
+  const n = Number(amount)
+  if (!Number.isFinite(n)) return fmtCurrencyCompact(amount, ccy)
+
+  const c = ccy || 'GBP'
+  const abs = Math.abs(n)
+  const sign = n < 0 ? '-' : ''
+  const symbol = CURRENCY_SYMBOLS[c] || `${c} `
+
+  const trimMillions = (v) =>
+    String(v).replace(/\.0$/, '').replace(/(\.\d*[1-9])0$/, '$1')
+
+  if (abs >= 1_000_000) {
+    return `${sign}${symbol}${trimMillions((abs / 1_000_000).toFixed(2))}M`
+  }
+
+  if (abs >= 10_000) {
+    return `${sign}${symbol}${(abs / 1_000).toFixed(1)}K`
+  }
+
+  return fmtCurrency(n, c)
+}
+
 // ── Plan signal helpers ────────────────────────────────────────────────────
 
 /** Days remaining until the UK tax year ends (5 April). */
@@ -128,6 +151,20 @@ export function isSnapshotStale(snapshotDate, thresholdDays = 30) {
   return getDaysSinceSnapshot(snapshotDate) >= thresholdDays
 }
 
+export function getSnapshotFreshnessState(
+  snapshotDate,
+  { agingDays = 7, staleDays = 30 } = {}
+) {
+  if (!snapshotDate) return { state: 'missing', days: Infinity }
+
+  const days = getDaysSinceSnapshot(snapshotDate)
+
+  if (days >= staleDays) return { state: 'stale', days }
+  if (days >= agingDays) return { state: 'aging', days }
+
+  return { state: 'fresh', days }
+}
+
 /**
  * Maps a derived forecast object to a plan status string.
  * Returns 'no_goal' when derived is absent.
@@ -135,6 +172,7 @@ export function isSnapshotStale(snapshotDate, thresholdDays = 30) {
 export function getPlanStatus(derived) {
   if (!derived) return 'no_goal'
   const s = derived.status
+  if (s === 'ahead') return 'ahead'
   if (s === 'on_track') return 'on_track'
   if (s === 'adjust') return 'adjust'
   return 'no_goal'

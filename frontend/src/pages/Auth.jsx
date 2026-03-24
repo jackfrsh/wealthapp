@@ -407,17 +407,17 @@ export default function AuthPage({ onLogin }) {
   const lbl =
     'block text-xs font-semibold text-ink-3 dark:text-white/50 mb-2 tracking-[0.02em]'
 
-  const headline = recovery
+    const headline = recovery
     ? 'Reset your password.'
     : mode === 'register'
-      ? 'Create your account.'
+      ? 'Start planning.'
       : 'Welcome back.'
-
+  
   const subcopy = recovery
     ? 'Choose a new password to regain access to your account.'
     : mode === 'register'
-      ? 'Create your account to track net worth and plan long-term wealth with more clarity.'
-      : 'Sign in to continue to your dashboard.'
+      ? 'Create your account to model ISA deadlines, long-term projections and next steps in one calm, private dashboard.'
+      : 'Sign in to continue planning with clarity.'
 
   return (
     <div className="min-h-screen overflow-x-hidden brand-auth-bg text-ink dark:text-white">
@@ -450,7 +450,7 @@ export default function AuthPage({ onLogin }) {
               className="text-sm font-semibold text-ink dark:text-white hover:text-accent dark:hover:text-accent transition-colors"
               type="button"
             >
-              {recovery ? 'Reset' : 'Continue'}
+              {recovery ? 'Reset password' : mode === 'register' ? 'Create account' : 'Sign in'}
             </button>
           </div>
         </header>
@@ -463,7 +463,7 @@ export default function AuthPage({ onLogin }) {
               }`}
             >
               <p className="text-sm font-semibold tracking-[.12em] uppercase text-ink-muted/55 dark:text-white/25">
-                Personal wealth dashboard
+              Private wealth planning
               </p>
 
               <h1 className="font-display text-[2.35rem] sm:text-[3.5rem] lg:text-[4rem] font-semibold leading-[1.04] text-ink dark:text-white tracking-tighterish">
@@ -484,37 +484,37 @@ export default function AuthPage({ onLogin }) {
                       variant="primary"
                       disabled={loading}
                     >
-                      {mode === 'register' ? 'Create account' : 'Continue securely'}
+                      {mode === 'register' ? 'Create account' : 'Sign in securely'}
                     </UpgradeButton>
 
                     <span className="text-sm text-ink-muted/60 dark:text-white/25">
-                      Secure sign-in • No ads • No card required
-                    </span>
+  Private by design • No bank linking • No card required
+</span>
                   </div>
 
                   <div className="hidden lg:grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-                    <FeatureCard
-                      icon={BarChart2}
-                      title="See everything clearly"
-                      body="Track accounts, assets and liabilities in one calm dashboard."
-                    />
-                    <FeatureCard
-                      icon={Globe}
-                      title="Built for long-term wealth"
-                      body="Follow progress over time with multi-currency support and long-term thinking."
-                    />
+                  <FeatureCard
+  icon={BarChart2}
+  title="Built for decisions"
+  body="Model the next move with clearer projections and long-term context."
+/>
+<FeatureCard
+  icon={Globe}
+  title="Private by design"
+  body="No bank linking. No ad clutter. Just a calmer way to plan wealth."
+/>
                   </div>
 
                   <div className="hidden lg:flex items-center gap-5 pt-2 text-xs text-ink-muted/50 dark:text-white/20">
-                    <span className="flex items-center gap-1.5">
-                      <Lock size={13} /> Secure sign-in
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <Globe size={13} /> Multi-currency
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <Shield size={13} /> Private by design
-                    </span>
+                  <span className="flex items-center gap-1.5">
+  <Lock size={13} /> Secure sign-in
+</span>
+<span className="flex items-center gap-1.5">
+  <BarChart2 size={13} /> Built for decisions
+</span>
+<span className="flex items-center gap-1.5">
+  <Shield size={13} /> Private by design
+</span>
                   </div>
                 </>
               ) : null}
@@ -689,16 +689,16 @@ export default function AuthPage({ onLogin }) {
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FeatureCard
-                          icon={BarChart2}
-                          title="See everything clearly"
-                          body="Track accounts, assets and liabilities in one calm dashboard."
-                        />
-                        <FeatureCard
-                          icon={Globe}
-                          title="Plan with confidence"
-                          body="Follow progress over time with long-term thinking and multi-currency support."
-                        />
+                      <FeatureCard
+  icon={BarChart2}
+  title="Built for decisions"
+  body="Model the next move with clearer projections and long-term context."
+/>
+<FeatureCard
+  icon={Globe}
+  title="Private by design"
+  body="No bank linking. No ad clutter. Just a calmer way to plan wealth."
+/>
                       </div>
                     </div>
                   </>
@@ -797,7 +797,7 @@ export default function AuthPage({ onLogin }) {
               Paddock<span className="text-accent">.</span>
             </button>
 
-            <div className="flex items-center gap-5 text-xs text-ink-muted/40 dark:text-white/15">
+            <div className="flex items-center gap-5 text-xs text-ink-muted/40 dark:text-white/40">
               <button
                 type="button"
                 onClick={() => setPage?.('terms')}

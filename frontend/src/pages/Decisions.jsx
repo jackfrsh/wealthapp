@@ -361,6 +361,8 @@ export default function Decisions() {
   const trackedViewRef = useRef(false)
   const workbenchRef = useRef(null)
   const tabInitialisedRef = useRef(false)
+  const [labOpen, setLabOpen] = useState(false)
+  const [accountsLoaded, setAccountsLoaded] = useState(false)
   const [isaUsedYtd, setIsaUsedYtd] = useState('')
   const [isaMonthly, setIsaMonthly] = useState('')
   const [activeTab, setActiveTab] = useState('isa')
@@ -403,7 +405,11 @@ export default function Decisions() {
       try {
         const rows = await api('/accounts')
         if (!cancelled) setAccounts(Array.isArray(rows) ? rows : [])
-      } catch { /* WhatIfCard degrades gracefully with empty array */ }
+      } catch {
+        if (!cancelled) setAccounts([])
+      } finally {
+        if (!cancelled) setAccountsLoaded(true)
+      }
     })()
     return () => { cancelled = true }
   }, [])
@@ -411,13 +417,43 @@ export default function Decisions() {
   const isaRemainingBackend = forecast?.isa_remaining ?? null
   const isaUrgent = isIsaUrgent(isaRemainingBackend)
 
+  const hasMortgage = useMemo(
+    () => (accounts || []).some((a) => a.type === 'mortgage' && Number(a.balance || 0) > 0),
+    [accounts]
+  )
+  
+  const getRecommendedTab = useCallback(() => {
+    if (isaUrgent) return 'isa'
+    if (hasMortgage) return 'mortgage-overpayment'
+    if (status === 'adjust') return 'what-if'
+    return 'isa'
+  }, [isaUrgent, hasMortgage, status])
+  
+  const openDecisionLab = useCallback(() => {
+    const nextTab = getRecommendedTab()
+    setActiveTab(nextTab)
+    setLabOpen(true)
+  
+    window.setTimeout(() => {
+      workbenchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  
+      window.setTimeout(() => {
+        workbenchRef.current
+          ?.querySelector('input, select, textarea, button')
+          ?.focus()
+      }, 420)
+    }, 20)
+  }, [getRecommendedTab])
+  
+  const closeDecisionLab = useCallback(() => {
+    setLabOpen(false)
+  }, [])
+
   useEffect(() => {
-    if (tabInitialisedRef.current || !forecast) return
+    if (tabInitialisedRef.current || !forecast || !accountsLoaded) return
     tabInitialisedRef.current = true
-    if (isaUrgent) setActiveTab('isa')
-    else if (derived?.status === 'adjust') setActiveTab('what-if')
-    else setActiveTab('mortgage-overpayment')
-  }, [forecast, isaUrgent, derived?.status])
+    setActiveTab(getRecommendedTab())
+  }, [forecast, accountsLoaded, getRecommendedTab])
 
   const markTabUsed = useCallback((tabId) => {
     setUsedTabs((prev) => {
@@ -452,23 +488,106 @@ export default function Decisions() {
   }
 
   /* ── No goal state ── */
-  if (primaryGoal === null) {
-    return (
-      <div className="space-y-5">
-        <h1 className="text-sm font-semibold tracking-[.08em] uppercase text-ink-muted/40 dark:text-white/22">Decisions</h1>
-        <div className="rounded-3xl border border-black/[.06] dark:border-white/[.07] bg-white dark:bg-surface-dark-2 p-10 text-center">
-          <p className="text-sm text-ink-muted dark:text-white/40 mb-5">Set a goal to unlock your decision guidance.</p>
-          <button
-            onClick={() => setPage('plan')}
-            className="text-sm font-semibold px-6 py-2.5 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-colors"
-            type="button"
-          >
-            Set up goal
-          </button>
+if (primaryGoal === null) {
+  return (
+    <div className="space-y-5 animate-page-in">
+      <h1 className="text-sm font-semibold tracking-[.08em] uppercase text-ink-muted/40 dark:text-white/22">
+        Decisions
+      </h1>
+
+      <div
+        className="-mx-4 sm:-mx-6 lg:-mx-8 relative overflow-hidden"
+        style={{ background: 'linear-gradient(160deg, #0A0F1A 0%, #141A26 45%, #0F141F 100%)' }}
+      >
+        <div
+          aria-hidden="true"
+          className="absolute -top-24 -right-14 w-[340px] h-[340px] rounded-full pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(212,175,55,0.06) 0%, transparent 62%)' }}
+        />
+        <div
+          aria-hidden="true"
+          className="absolute -bottom-16 -left-10 w-[240px] h-[240px] rounded-full pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(120,169,230,0.05) 0%, transparent 62%)' }}
+        />
+
+        <div className="relative px-6 pt-9 pb-8 sm:px-10 sm:pt-10 sm:pb-9">
+          <div className="max-w-[42rem]">
+            <div
+              className="text-[10px] font-semibold tracking-[.18em] uppercase mb-4"
+              style={{ color: 'rgba(255,255,255,0.28)' }}
+            >
+              Decisions
+            </div>
+
+            <h2 className="text-[28px] sm:text-[34px] font-bold text-white tracking-tight leading-tight">
+              Set a goal before you compare moves.
+            </h2>
+
+            <p
+              className="mt-3 text-sm leading-relaxed max-w-[34rem]"
+              style={{ color: 'rgba(255,255,255,0.42)' }}
+            >
+              Your target gives Decisions context — so Paddock can show whether the next pounds
+              should go to ISA, mortgage, or your long-term plan.
+            </p>
+
+            <div className="mt-6">
+              
+
+            <button
+  onClick={() => setPage('plan')}
+  className="text-sm font-semibold px-6 py-2.5 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-colors"
+  style={{ background: 'var(--gold)', color: '#0A0F1A' }}
+                type="button"
+>
+  Set up goal in Plan
+</button>
+            </div>
+          </div>
+
+          <div className="mt-8 pt-6" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                {
+                  icon: Shield,
+                  title: 'ISA guidance',
+                  body: 'See when wrappers should come first.',
+                },
+                {
+                  icon: Landmark,
+                  title: 'Mortgage trade-offs',
+                  body: 'Model overpayments against other uses.',
+                },
+                {
+                  icon: Sparkles,
+                  title: 'Plan acceleration',
+                  body: 'See what closes the gap faster.',
+                },
+              ].map(({ icon: Icon, title, body }) => (
+                <div
+                  key={title}
+                  className="rounded-2xl px-4 py-4"
+                  style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.07)',
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Icon size={13} style={{ color: 'rgba(255,255,255,0.55)' }} />
+                    <div className="text-[12.5px] font-semibold text-white">{title}</div>
+                  </div>
+                  <div className="text-[12px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                    {body}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
-    )
-  }
+    </div>
+  )
+}
 
   /* ── Error state ── */
   if (error && !forecast) {
@@ -493,7 +612,6 @@ export default function Decisions() {
 
   /* ── Derived values (unchanged) ── */
   const goal = derived.goal
-  const status = derived.status
   const isaAllowance = 20000
   const isaUsed = Math.max(0, numFrom(isaUsedYtd, 0))
   const isaRemaining = Math.max(0, isaAllowance - isaUsed)
@@ -548,7 +666,7 @@ export default function Decisions() {
   ]
 
   return (
-    <div className="space-y-5 animate-page-in">
+    <div className="space-y-5">
 
       <h1 className="text-sm font-semibold tracking-[.08em] uppercase text-ink-muted/40 dark:text-white/22">Decisions</h1>
 
@@ -688,151 +806,141 @@ export default function Decisions() {
                 </div>
               </div>
               <button
-                type="button"
-                onClick={() => {
-                  if (isaUrgent) setActiveTab('isa')
-                  else if (status === 'adjust') setActiveTab('what-if')
-                  else setActiveTab('mortgage-overpayment')
-                  workbenchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                  setTimeout(() => {
-                    workbenchRef.current?.querySelector('input')?.focus()
-                  }, 500)
-                }}
-                className="mt-6 inline-flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-2xl transition-opacity hover:opacity-80"
-                style={{ background: 'var(--gold)', color: '#0A0F1A' }}
-              >
-                Open decision lab <ChevronRight size={14} />
-              </button>
+  type="button"
+  onClick={openDecisionLab}
+  className="mt-6 inline-flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-2xl transition-opacity hover:opacity-80"
+  style={{ background: 'var(--gold)', color: '#0A0F1A' }}
+>
+  Open decision lab <ChevronRight size={14} />
+</button>
             </div>
           </div>
         </div>
       </div>
 
       {/* ══════ SCENE 2: DECISION LAB ══════ */}
+<div
+  ref={workbenchRef}
+  className="relative overflow-hidden rounded-3xl"
+  style={{
+    background: 'linear-gradient(160deg, #1E2535 0%, #141A26 100%)',
+    border: '1px solid rgba(255,255,255,0.07)',
+    boxShadow: '0 4px 32px rgba(0,0,0,0.32)',
+  }}
+>
+  <div
+    aria-hidden="true"
+    className="absolute -top-20 -right-10 w-[280px] h-[280px] rounded-full pointer-events-none"
+    style={{ background: 'radial-gradient(circle, rgba(212,175,55,0.04) 0%, transparent 65%)' }}
+  />
+
+<div
+  className={`relative px-7 pt-7 pb-7 sm:px-9 ${!labOpen ? 'cursor-pointer' : ''}`}
+  onClick={!labOpen ? openDecisionLab : undefined}
+>
+    <div className="flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <div
+          className="text-[10px] font-semibold tracking-[.18em] uppercase mb-2"
+          style={{ color: 'rgba(255,255,255,0.25)' }}
+        >
+          Decision lab
+        </div>
+        <h3 className="text-[20px] sm:text-[22px] font-semibold text-white tracking-tight">
+          Model before you move.
+        </h3>
+        <p className="mt-2 text-sm leading-relaxed max-w-[42rem]" style={{ color: 'rgba(255,255,255,0.38)' }}>
+          {labOpen
+            ? 'Use the tool below to test the most relevant next move before committing.'
+            : 'Start with the recommendation above, then open the lab when you want to test the numbers.'}
+        </p>
+      </div>
+
+      {labOpen ? (
+  <button
+    type="button"
+    onClick={closeDecisionLab}
+    className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl transition-colors"
+    style={{
+      background: 'rgba(255,255,255,0.06)',
+      border: '1px solid rgba(255,255,255,0.09)',
+      color: 'rgba(255,255,255,0.42)',
+    }}
+  >
+    Hide lab
+  </button>
+) : null}
+    </div>
+  </div>
+
+  {labOpen && (
+    <>
+      <div className="relative px-7 pt-0 pb-0 sm:px-9">
+        <div className="flex flex-wrap gap-2">
+          {TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[12px] font-semibold transition-all"
+              style={activeTab === id
+                ? { background: 'rgba(120,169,230,0.28)', border: '1px solid rgba(120,169,230,0.42)', color: 'rgba(243,245,247,0.92)' }
+                : { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.09)', color: 'rgba(255,255,255,0.40)' }}
+            >
+              <Icon size={13} style={{ opacity: 0.75 }} /> {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div
-        ref={workbenchRef}
-        className="relative overflow-hidden rounded-3xl"
-        style={{
-          background: 'linear-gradient(160deg, #1E2535 0%, #141A26 100%)',
-          border: '1px solid rgba(255,255,255,0.07)',
-          boxShadow: '0 4px 32px rgba(0,0,0,0.32)',
-        }}
+        className="relative px-7 pt-7 pb-8 sm:px-9"
+        onPointerDown={() => markTabUsed(activeTab)}
       >
-        <div
-          aria-hidden="true"
-          className="absolute -top-20 -right-10 w-[280px] h-[280px] rounded-full pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(212,175,55,0.04) 0%, transparent 65%)' }}
-        />
-
-        <div className="relative px-7 pt-7 pb-0 sm:px-9">
-          <div
-            className="text-[10px] font-semibold tracking-[.18em] uppercase mb-2"
-            style={{ color: 'rgba(255,255,255,0.25)' }}
-          >
-            Decision lab
-          </div>
-          <h3 className="text-[20px] sm:text-[22px] font-semibold text-white mb-6 tracking-tight">
-            Model before you move.
-          </h3>
-
-          <div className="flex flex-wrap gap-2">
-            {TABS.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setActiveTab(id)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[12px] font-semibold transition-all"
-                style={activeTab === id
-                  ? { background: 'rgba(120,169,230,0.28)', border: '1px solid rgba(120,169,230,0.42)', color: 'rgba(243,245,247,0.92)' }
-                  : { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.09)', color: 'rgba(255,255,255,0.40)' }}
-              >
-                <Icon size={13} style={{ opacity: 0.75 }} /> {label}
-              </button>
-            ))}
-          </div>
+        <div style={activeTab === 'isa' ? undefined : { display: 'none' }} aria-hidden={activeTab !== 'isa'} inert={activeTab !== 'isa' ? '' : undefined}>
+          <ToolWorkbench title="ISA strategy" proOnly={false} isPro={isPro}>
+            <PlanIsaStrategyCard
+              goal={goal}
+              derived={derived}
+              status={status}
+              localContrib={localContrib}
+              isaUsedYtd={isaUsedYtd}
+              setIsaUsedYtd={setIsaUsedYtd}
+              isaMonthly={isaMonthly}
+              setIsaMonthly={setIsaMonthly}
+              track={track}
+            />
+          </ToolWorkbench>
         </div>
 
-        <div
-          className="relative px-7 pt-7 pb-8 sm:px-9"
-          onPointerDown={() => markTabUsed(activeTab)}
-        >
-          <div style={activeTab === 'isa' ? undefined : { display: 'none' }} aria-hidden={activeTab !== 'isa'} inert={activeTab !== 'isa' ? '' : undefined}>
-            <ToolWorkbench title="ISA strategy" proOnly={false} isPro={isPro}>
-              <PlanIsaStrategyCard
-                goal={goal}
-                derived={derived}
-                status={status}
-                localContrib={localContrib}
-                isaUsedYtd={isaUsedYtd}
-                setIsaUsedYtd={setIsaUsedYtd}
-                isaMonthly={isaMonthly}
-                setIsaMonthly={setIsaMonthly}
-                track={track}
-              />
-            </ToolWorkbench>
-          </div>
-          <div style={activeTab === 'mortgage-overpayment' ? undefined : { display: 'none' }} aria-hidden={activeTab !== 'mortgage-overpayment'} inert={activeTab !== 'mortgage-overpayment' ? '' : undefined}>
-            <ToolWorkbench title="Mortgage overpayment" proOnly={false} isPro={isPro}>
-              <MortgageOverpaymentTool baseCurrency={baseCurrency} accounts={accounts} />
-            </ToolWorkbench>
-          </div>
-          <div style={activeTab === 'mortgage-vs-savings' ? undefined : { display: 'none' }} aria-hidden={activeTab !== 'mortgage-vs-savings'} inert={activeTab !== 'mortgage-vs-savings' ? '' : undefined}>
-            <ToolWorkbench title="Where next pounds go" proOnly={false} isPro={isPro}>
-              <MortgageVsSavingsTool baseCurrency={baseCurrency} accounts={accounts} />
-            </ToolWorkbench>
-          </div>
-          <div style={activeTab === 'what-if' ? undefined : { display: 'none' }} aria-hidden={activeTab !== 'what-if'} inert={activeTab !== 'what-if' ? '' : undefined}>
-            <ToolWorkbench title="Accelerate your plan" proOnly={false} isPro={isPro}>
-              <WhatIfCard
-                goalTarget={goalTarget}
-                goalName={goalName}
-                milestoneTarget={milestoneTarget}
-                accounts={accounts}
-                portfolioAnnualReturnPct={Number(forecast?.annual_return_pct || 7)}
-                bare
-              />
-            </ToolWorkbench>
-          </div>
+        <div style={activeTab === 'mortgage-overpayment' ? undefined : { display: 'none' }} aria-hidden={activeTab !== 'mortgage-overpayment'} inert={activeTab !== 'mortgage-overpayment' ? '' : undefined}>
+          <ToolWorkbench title="Mortgage overpayment" proOnly={false} isPro={isPro}>
+            <MortgageOverpaymentTool baseCurrency={baseCurrency} accounts={accounts} />
+          </ToolWorkbench>
+        </div>
+
+        <div style={activeTab === 'mortgage-vs-savings' ? undefined : { display: 'none' }} aria-hidden={activeTab !== 'mortgage-vs-savings'} inert={activeTab !== 'mortgage-vs-savings' ? '' : undefined}>
+          <ToolWorkbench title="Where next pounds go" proOnly={false} isPro={isPro}>
+            <MortgageVsSavingsTool baseCurrency={baseCurrency} accounts={accounts} />
+          </ToolWorkbench>
+        </div>
+
+        <div style={activeTab === 'what-if' ? undefined : { display: 'none' }} aria-hidden={activeTab !== 'what-if'} inert={activeTab !== 'what-if' ? '' : undefined}>
+          <ToolWorkbench title="Accelerate your plan" proOnly={false} isPro={isPro}>
+            <WhatIfCard
+              goalTarget={goalTarget}
+              goalName={goalName}
+              milestoneTarget={milestoneTarget}
+              accounts={accounts}
+              portfolioAnnualReturnPct={Number(forecast?.annual_return_pct || 7)}
+              bare
+            />
+          </ToolWorkbench>
         </div>
       </div>
-
-      {/* Nudges */}
-      {(usedTabs.has('isa') || usedTabs.has('mortgage-overpayment') || usedTabs.has('mortgage-vs-savings')) && (
-        <div className="flex flex-col gap-1.5 pt-1">
-          {usedTabs.has('isa') && (
-            <button
-              type="button"
-              onClick={() => setPage('accounts')}
-              className="text-left inline-flex items-center gap-1 text-xs font-semibold text-ink-muted/50 dark:text-white/28 hover:text-ink dark:hover:text-white/55 transition-colors"
-            >
-              Update your ISA contribution in Accounts <ChevronRight size={11} className="opacity-55 shrink-0" />
-            </button>
-          )}
-          {(usedTabs.has('mortgage-overpayment') || usedTabs.has('mortgage-vs-savings')) && (
-            <button
-              type="button"
-              onClick={() => setPage('accounts')}
-              className="text-left inline-flex items-center gap-1 text-xs font-semibold text-ink-muted/50 dark:text-white/28 hover:text-ink dark:hover:text-white/55 transition-colors"
-            >
-              Update your mortgage balance in Accounts <ChevronRight size={11} className="opacity-55 shrink-0" />
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* ══════ SCENE 3: BACK TO PLAN ══════ */}
-      <div className="flex items-center justify-between gap-4 pt-1 pb-2">
-        <div className="text-xs text-ink-muted/45 dark:text-white/28 max-w-[36rem]">
-          Adjustments here feed into your long-term plan.
-        </div>
-        <button
-          onClick={() => setPage('plan')}
-          className="shrink-0 inline-flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-2xl transition-colors border border-black/[.06] dark:border-white/[.08] text-ink-muted dark:text-white/45 bg-white/50 dark:bg-white/[.04] hover:bg-white dark:hover:bg-white/[.07] hover:text-ink dark:hover:text-white"
-          type="button"
-        >
-          View plan <ArrowRight size={13} className="opacity-60" />
-        </button>
-      </div>
+    </>
+  )}
+</div>
     </div>
   )
 }

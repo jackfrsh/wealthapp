@@ -9,6 +9,7 @@ import {
 } from 'recharts'
 import { useApp } from '../App'
 import { track } from '../track'
+import GoalSetup from './GoalSetup'
 import { fmtCurrency, fmtCurrencyCompact } from '../utils'
 import WealthTooltip from '../components/charts/WealthTooltip'
 import {
@@ -21,8 +22,16 @@ import PlanHeroDashboard from '../components/outlook/PlanHeroDashboard'
 import useScenarioCompare from '../hooks/outlook/useScenarioCompare'
 import useOutlookForecast from '../hooks/outlook/useOutlookForecast'
 import {
-  AlertTriangle, RefreshCw, ArrowRight,
-  ChevronDown, ChevronUp, Sparkles,
+  AlertTriangle,
+  RefreshCw,
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
+  ChevronRight,
+  Shield,
+  Landmark,
+  X,
 } from 'lucide-react'
 
 const INFLATION_RATE = 0.025
@@ -127,6 +136,8 @@ export default function Plan() {
   const [inflationAdj, setInflationAdj] = useState(false)
   const [scenarioCompareOpen, setScenarioCompareOpen] = useState(true)
 
+  const [goalSetupOpen, setGoalSetupOpen] = useState(false)
+
   const deflate = useCallback(
     (value, yearsFromNow) => {
       if (!settingsReady) return value
@@ -204,6 +215,17 @@ export default function Plan() {
     String(editForm.target_age || '').trim() &&
     String(editForm.target_amount || '').trim()
 
+
+    useEffect(() => {
+      try {
+        const shouldOpen = sessionStorage.getItem('paddock:open-goal-setup') === '1'
+        if (shouldOpen && primaryGoal === null) {
+          setGoalSetupOpen(true)
+          sessionStorage.removeItem('paddock:open-goal-setup')
+        }
+      } catch {}
+    }, [primaryGoal])  
+
   const trajectoryCompareData = useMemo(() => {
     if (!chartData?.length) return []
     if (compareLoading || !bestScenario?.forecast?.projected_points?.length) {
@@ -247,20 +269,137 @@ export default function Plan() {
     )
   }
 
-  if (primaryGoal === null) {
-    return (
-      <div className="space-y-5">
-        <h1 className="text-sm font-semibold tracking-[.08em] uppercase text-ink-muted/40 dark:text-white/22">Plan</h1>
-        <div className="rounded-3xl border border-black/[.06] dark:border-white/[.07] bg-white dark:bg-surface-dark-2 p-10 text-center">
-          <p className="text-sm text-ink-muted dark:text-white/40 mb-5">Set a goal to unlock your planning centre.</p>
-          <button onClick={openEdit}
-            className="text-sm font-semibold px-6 py-2.5 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-colors" type="button">
-            Set up goal
-          </button>
+
+/* ── No goal state ── */
+if (primaryGoal === null) {
+  return (
+    <div className="space-y-5 animate-page-in">
+      <h1 className="text-sm font-semibold tracking-[.08em] uppercase text-ink-muted/40 dark:text-white/22">
+        Plan
+      </h1>
+
+      <div
+        className="-mx-4 sm:-mx-6 lg:-mx-8 relative overflow-hidden"
+        style={{ background: 'linear-gradient(160deg, #0A0F1A 0%, #141A26 45%, #0F141F 100%)' }}
+      >
+        <div
+          aria-hidden="true"
+          className="absolute -top-24 -right-14 w-[340px] h-[340px] rounded-full pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(212,175,55,0.06) 0%, transparent 62%)' }}
+        />
+        <div
+          aria-hidden="true"
+          className="absolute -bottom-16 -left-10 w-[240px] h-[240px] rounded-full pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(120,169,230,0.05) 0%, transparent 62%)' }}
+        />
+
+        <div className="relative px-6 pt-9 pb-9 sm:px-10 sm:pt-10 sm:pb-10">
+          <div className="max-w-[42rem]">
+            <div
+              className="text-[10px] font-semibold tracking-[.18em] uppercase mb-4"
+              style={{ color: 'rgba(255,255,255,0.28)' }}
+            >
+              Plan
+            </div>
+
+            <h2 className="text-[28px] sm:text-[34px] font-bold text-white tracking-tight leading-tight">
+              Set your target
+            </h2>
+
+            <p
+              className="mt-3 text-sm leading-relaxed max-w-[34rem]"
+              style={{ color: 'rgba(255,255,255,0.42)' }}
+            >
+              Add a long-term goal to see your projected path, gap to target, and when your plan becomes achievable.
+            </p>
+
+            <div className="mt-6">
+              <button
+                onClick={() => setGoalSetupOpen((v) => !v)}
+                className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-2xl transition-colors"
+                style={{ background: 'var(--gold)', color: '#0A0F1A' }}
+                type="button"
+              >
+                {goalSetupOpen ? 'Hide goal setup' : 'Set up goal'}
+                <ChevronRight
+                  size={14}
+                  className={`transition-transform duration-200 ${goalSetupOpen ? 'rotate-90' : ''}`}
+                />
+              </button>
+            </div>
+          </div>
+
+          <div
+            className={[
+              'transition-all duration-300 ease-out overflow-hidden',
+              goalSetupOpen ? 'max-h-[1400px] opacity-100 mt-8' : 'max-h-0 opacity-0 mt-0',
+            ].join(' ')}
+          >
+            <div className="max-w-[760px]">
+              <div
+                className="rounded-[28px] overflow-hidden border border-white/[.08]"
+                style={{
+                  background: 'linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.015) 100%)',
+                  boxShadow: '0 24px 80px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.03)',
+                }}
+              >
+                <GoalSetup
+                  embedded
+                  onComplete={() => {
+                    bumpData?.()
+                    setGoalSetupOpen(false)
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {!goalSetupOpen && (
+            <div className="mt-8 pt-6" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  {
+                    icon: Shield,
+                    title: 'Projected path',
+                    body: 'See where your current pace leads over time.',
+                  },
+                  {
+                    icon: Landmark,
+                    title: 'Gap to target',
+                    body: 'Understand how far you are from your goal.',
+                  },
+                  {
+                    icon: Sparkles,
+                    title: 'Freedom timeline',
+                    body: 'See when your plan becomes achievable.',
+                  },
+                ].map(({ icon: Icon, title, body }) => (
+                  <div
+                    key={title}
+                    className="rounded-2xl px-4 py-4"
+                    style={{
+                      background: 'rgba(255,255,255,0.04)',
+                      border: '1px solid rgba(255,255,255,0.07)',
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <Icon size={13} style={{ color: 'rgba(255,255,255,0.55)' }} />
+                      <div className="text-[12.5px] font-semibold text-white">{title}</div>
+                    </div>
+                    <div className="text-[12px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                      {body}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
-    )
-  }
+    </div>
+  )
+}
+
 
   if (error && !forecast) {
     return (
@@ -335,11 +474,18 @@ export default function Plan() {
                 </span>
               )}
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-4 h-[2px] rounded-full inline-block" style={{ background: 'rgba(255,255,255,0.18)' }} />
+              <span className="w-4 h-[2px] rounded-full inline-block" style={{ background: 'rgba(255,255,255,0.28)' }} />
                 Required pace
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 border-[1.5px] border-amber-400 rounded-full inline-block" />
+              <span
+  className="w-4 h-[2px] inline-block"
+  style={{
+    background: '#C89B3C',
+    opacity: 0.82,
+    borderRadius: 9999,
+  }}
+/>
                 Target
               </span>
             </div>
@@ -366,59 +512,87 @@ export default function Plan() {
               <div className="mt-5 px-3 sm:px-4">
                 <div className="h-[420px] sm:h-[500px] lg:h-[540px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={trajectoryCompareData} margin={chartMargin}>
-                      <defs>
-                        <linearGradient id="planTrajFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor={ACCENT_STROKE} stopOpacity={0.22} />
-                          <stop offset="60%" stopColor={ACCENT_STROKE} stopOpacity={0.06} />
-                          <stop offset="100%" stopColor={ACCENT_STROKE} stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid {...gridProps} />
-                      <XAxis dataKey="date" {...xAxisProps}
-                        tickFormatter={(d) => new Date(d).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })} />
-                      <YAxis {...yAxisProps} tickFormatter={compactTickFormatter} />
-                      <Tooltip content={<WealthTooltip currency={ccy} />} {...tooltipProps} />
-                      <ReferenceLine y={derived.displayTarget} stroke="#C89B3C" strokeDasharray="4 6" strokeOpacity={0.45} />
-                      <Area
-  type="monotone"
-  dataKey="required"
-  name="Required pace"
-  stroke="currentColor"
-  strokeWidth={1.5}
-  strokeOpacity={0.13}
-  strokeDasharray="6 4"
-  fill="none"
-  dot={false}
-  connectNulls
-/>
+                  <AreaChart data={trajectoryCompareData} margin={chartMargin}>
+  <defs>
+    <linearGradient id="planTrajFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stopColor={ACCENT_STROKE} stopOpacity={0.26} />
+      <stop offset="55%" stopColor={ACCENT_STROKE} stopOpacity={0.10} />
+      <stop offset="100%" stopColor={ACCENT_STROKE} stopOpacity={0} />
+    </linearGradient>
+  </defs>
 
-{!compareLoading && bestScenario && (
+  <CartesianGrid
+    {...gridProps}
+    vertical={false}
+    strokeOpacity={0.08}
+  />
+
+  <XAxis
+    dataKey="date"
+    {...xAxisProps}
+    tickFormatter={(d) =>
+      new Date(d).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
+    }
+  />
+
+  <YAxis
+    {...yAxisProps}
+    tickFormatter={compactTickFormatter}
+  />
+
+  <Tooltip content={<WealthTooltip currency={ccy} />} {...tooltipProps} />
+
+  <ReferenceLine
+    y={derived.displayTarget}
+    stroke="#C89B3C"
+    strokeWidth={1.75}
+    strokeDasharray="4 4"
+    strokeOpacity={0.82}
+  />
+
   <Area
     type="monotone"
-    dataKey="compareProjected"
-    name="Best scenario"
-    stroke="#2FA676"
-    strokeWidth={2}
-    strokeDasharray="8 5"
-    strokeOpacity={0.80}
+    dataKey="required"
+    name="Required pace"
+    stroke="rgba(255,255,255,0.28)"
+    strokeWidth={1.75}
+    strokeDasharray="5 5"
     fill="none"
     dot={false}
     connectNulls
+    isAnimationActive={false}
   />
-)}
 
-<Area
-  type="monotone"
-  dataKey="projected"
-  name="Current plan"
-  stroke={ACCENT_STROKE}
-  strokeWidth={2.5}
-  fill="url(#planTrajFill)"
-  dot={false}
-  activeDot={activeDotStyle}
-/>
-                    </AreaChart>
+  {!compareLoading && bestScenario && (
+    <Area
+      type="monotone"
+      dataKey="compareProjected"
+      name="Best scenario"
+      stroke="#2FA676"
+      strokeWidth={2.1}
+      strokeDasharray="7 5"
+      strokeOpacity={0.72}
+      fill="none"
+      dot={false}
+      connectNulls
+      isAnimationActive={false}
+    />
+  )}
+
+  <Area
+    type="monotone"
+    dataKey="projected"
+    name="Current plan"
+    stroke={ACCENT_STROKE}
+    strokeWidth={3}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    fill="url(#planTrajFill)"
+    dot={false}
+    activeDot={activeDotStyle}
+    isAnimationActive={false}
+  />
+</AreaChart>
                   </ResponsiveContainer>
                 </div>
               </div>

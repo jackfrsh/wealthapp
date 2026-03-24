@@ -1,21 +1,47 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../api'
 
 const FREE_HORIZON = 1
+const DEFAULT_PRO_HORIZON = 25
+const PRO_HORIZONS_BASE = [1, 5, 10, 15, 20, 25, 30, 40]
+
+function clampProjectionYears(years, isPro, fallback = DEFAULT_PRO_HORIZON) {
+  const n = Number(years)
+  if (!Number.isFinite(n)) return isPro ? fallback : FREE_HORIZON
+  if (!isPro) return FREE_HORIZON
+  return Math.max(1, Math.min(40, Math.round(n)))
+}
 
 export default function useProjectionData({
   settingsReady,
   isPro,
   projOpen,
   deflate,
+  defaultProjYears,
 }) {
   const [projData, setProjData] = useState(null)
   const [projHistory, setProjHistory] = useState([])
-  const [projYears, setProjYears] = useState(25)
+  const [projYearsState, setProjYearsState] = useState(DEFAULT_PRO_HORIZON)
   const [projLoading, setProjLoading] = useState(false)
 
-  const HORIZONS = settingsReady && isPro ? [1, 5, 10, 15, 20, 25, 30, 40] : [1]
+  const userSetProjYearsRef = useRef(false)
+
+  const seededProjYears = useMemo(() => {
+    return clampProjectionYears(defaultProjYears, isPro, DEFAULT_PRO_HORIZON)
+  }, [defaultProjYears, isPro])
+
+  const HORIZONS = useMemo(() => {
+    if (!(settingsReady && isPro)) return [1]
+    return Array.from(new Set([...PRO_HORIZONS_BASE, seededProjYears])).sort((a, b) => a - b)
+  }, [settingsReady, isPro, seededProjYears])
+
+  const projYears = settingsReady && isPro ? projYearsState : FREE_HORIZON
   const effectiveProjYears = settingsReady && isPro ? projYears : FREE_HORIZON
+
+  const setProjYears = useCallback((years) => {
+    userSetProjYearsRef.current = true
+    setProjYearsState(clampProjectionYears(years, isPro, DEFAULT_PRO_HORIZON))
+  }, [isPro])
 
   const loadProjections = useCallback(async (years) => {
     const horizon = years ?? FREE_HORIZON
@@ -38,9 +64,9 @@ export default function useProjectionData({
 
   useEffect(() => {
     if (!settingsReady) return
-    if (isPro) setProjYears((prev) => (prev && prev !== FREE_HORIZON ? prev : 25))
-    else setProjYears((prev) => prev || 25)
-  }, [settingsReady, isPro])
+    if (userSetProjYearsRef.current) return
+    setProjYearsState(seededProjYears)
+  }, [settingsReady, seededProjYears])
 
   useEffect(() => {
     if (!projOpen) return

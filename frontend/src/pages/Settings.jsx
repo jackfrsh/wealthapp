@@ -55,7 +55,6 @@ export default function Settings() {
     setIsPro,
     refreshSettings,
     setPage,
-    logout,
   } = useApp()
 
   const [currency, setCurrency] = useState((baseCurrency || 'GBP').toUpperCase())
@@ -78,6 +77,12 @@ export default function Settings() {
   const IS_DEV = !!import.meta?.env?.DEV
   const subLabel = useMemo(() => billingLabel(subStatus), [subStatus])
 
+  const settingsPanelStyle = {
+    background: 'linear-gradient(180deg, rgba(255,255,255,0.018) 0%, rgba(255,255,255,0.012) 100%)',
+    border: '1px solid rgba(255,255,255,0.055)',
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.018)',
+  }
+
   const adminEmails = useMemo(() => {
     const raw = (import.meta?.env?.VITE_ADMIN_EMAILS || '').trim()
     if (!raw) return new Set()
@@ -93,6 +98,13 @@ export default function Settings() {
     if (!username) return false
     return adminEmails.has(String(username).toLowerCase())
   }, [adminEmails, username])
+
+  const utilityGridClass = useMemo(() => {
+    const count = 1 + (isAdmin ? 1 : 0) + (IS_DEV ? 1 : 0)
+    if (count === 1) return 'grid grid-cols-1 gap-4'
+    if (count === 2) return 'grid grid-cols-1 lg:grid-cols-2 gap-4'
+    return 'grid grid-cols-1 lg:grid-cols-3 gap-4'
+  }, [isAdmin, IS_DEV])
 
   const goUpgrade = useCallback(
     (source = 'settings_cta') => {
@@ -232,61 +244,34 @@ export default function Settings() {
   }, [username, isPro, currency])
 
   const inp =
-    'w-full px-4 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] bg-white/70 dark:bg-white/5 text-base text-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all backdrop-blur'
+  'w-full px-4 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.07] bg-black/[.02] dark:bg-white/[.045] text-base text-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all backdrop-blur'
   const lbl = 'block text-xs font-semibold text-ink-3 dark:text-white/50 mb-2'
 
   return (
-    <div className="space-y-5">
-      {/* Quiet header — infrastructure, not a peer to Plan/Decisions */}
-      <div className="flex items-center justify-between gap-4 pb-1">
-        <div>
-          <div className="text-sm font-semibold tracking-[.08em] uppercase text-ink-muted/40 dark:text-white/22">
-            Settings
-          </div>
-          {!!username && (
-            <div className="mt-0.5 text-[11px] text-ink-muted/45 dark:text-white/22">
-              {username}
-            </div>
-          )}
+    <div className="space-y-6">
+      <div className="pb-1">
+        <div className="text-sm font-semibold tracking-[.08em] uppercase text-ink-muted/40 dark:text-white/22">
+          Settings
         </div>
-
-        <button
-          onClick={logout}
-          className="text-xs font-semibold px-3 py-1.5 rounded-xl border border-black/[.07] dark:border-white/[.07] text-ink-muted/55 dark:text-white/30 hover:text-ink dark:hover:text-white hover:bg-black/[.03] dark:hover:bg-white/[.05] transition-colors"
-          type="button"
-        >
-          Sign out
-        </button>
+        {!!username && (
+          <div className="mt-0.5 text-[11px] text-ink-muted/45 dark:text-white/22">
+            {username}
+          </div>
+        )}
       </div>
 
-      {isAdmin && (
-        <Card className="p-7">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <div className="text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35 mb-1">
-                Admin
-              </div>
-              <div className="text-sm text-ink-muted dark:text-white/45">
-                Funnel + users + upgrades
-              </div>
-            </div>
-            <button
-              onClick={() => setPage('admin')}
-              className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px]"
-              type="button"
-            >
-              Open <ChevronRight size={16} />
-            </button>
+      <div className="grid grid-cols-1 xl:grid-cols-[1.08fr_0.92fr] gap-5">
+      <div
+  className="rounded-3xl p-6 sm:p-7"
+  style={settingsPanelStyle}
+>
+          <div className="flex items-center gap-2 mb-5">
+            <Globe size={14} className="text-ink-muted dark:text-white/35" />
+            <h3 className="text-xs font-semibold tracking-[.14em] uppercase text-ink-muted/40 dark:text-white/24">
+              Preferences
+            </h3>
           </div>
-        </Card>
-      )}
 
-      <Card className="p-5">
-        <h3 className="text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35 mb-5 flex items-center gap-2">
-          <Globe size={14} /> Currency
-        </h3>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
           <div>
             <label className={lbl}>Base currency</label>
             <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inp}>
@@ -296,173 +281,245 @@ export default function Settings() {
                 </option>
               ))}
             </select>
-            <div className="text-xs text-ink-muted/50 dark:text-white/25 mt-1.5">
-              All totals shown in this currency.
+            <div className="mt-1.5 text-xs text-ink-muted/50 dark:text-white/25">
+              All totals are shown in this currency.
             </div>
+
+            <button
+              onClick={saveCurrency}
+              disabled={saving}
+              className="mt-4 inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-all disabled:opacity-50 min-h-[44px]"
+              type="button"
+            >
+              <Save size={14} /> {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+
+          <div className="mt-6 h-px bg-black/[.05] dark:bg-white/[.045]" />
+
+          <div className="mt-6">
+            <div className="flex items-center gap-2 mb-2">
+              <RefreshCw size={14} className="text-ink-muted dark:text-white/35" />
+              <h4 className="text-xs font-semibold tracking-[.14em] uppercase text-ink-muted/40 dark:text-white/24">
+                Exchange rates
+              </h4>
+            </div>
+
+            <p className="text-sm text-ink-muted dark:text-white/35 leading-relaxed mb-4">
+              Cached daily. Falls back to approximate rates if APIs are unavailable.
+            </p>
+
+            <button
+              onClick={refreshFx}
+              className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px]"
+              type="button"
+            >
+              <RefreshCw size={14} /> Update rates
+            </button>
+
+            {fxStatus && (
+              <div className="text-xs text-ink-muted dark:text-white/25 mt-3">
+                {fxStatus}
+              </div>
+            )}
           </div>
         </div>
 
-        <button
-          onClick={saveCurrency}
-          disabled={saving}
-          className="flex items-center gap-2 text-sm font-semibold px-6 py-3 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-all disabled:opacity-50 min-h-[48px]"
-          type="button"
+        <div
+          className="rounded-3xl p-6 sm:p-7"
+          style={settingsPanelStyle}
         >
-          <Save size={15} /> {saving ? 'Saving…' : 'Save settings'}
-        </button>
-      </Card>
+          {isPro && (
+            <div className="absolute top-[-10px] right-[-16px] w-28 h-28 opacity-[.018] pointer-events-none">
+              <Crown size={112} className="text-accent" />
+            </div>
+          )}
 
-      <Card className="p-7 overflow-hidden relative">
-        {isPro && (
-          <div className="absolute top-0 right-0 w-32 h-32 opacity-[.035] pointer-events-none">
-            <Crown size={128} className="text-accent" />
+          <div className="flex items-center gap-2 mb-5">
+            <Crown size={14} className={isPro ? 'text-accent' : 'text-ink-muted dark:text-white/35'} />
+            <h3 className="text-xs font-semibold tracking-[.14em] uppercase text-ink-muted/40 dark:text-white/24">
+              Subscription
+            </h3>
           </div>
-        )}
 
-        <h3 className="text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35 mb-5 flex items-center gap-2">
-          <Crown size={14} className={isPro ? 'text-accent' : ''} /> Subscription
-        </h3>
+          {isPro ? (
+            <div className="space-y-5">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/[.03] dark:bg-white/[.06] border border-black/[.06] dark:border-white/[.10]">
+                  <Crown size={14} className="text-accent" />
+                  <span className="text-sm font-semibold text-ink dark:text-white">
+                    Pro
+                  </span>
+                </div>
 
-        {isPro ? (
-          <div className="space-y-5">
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/[.03] dark:bg-white/[.06] border border-black/[.06] dark:border-white/[.10]">
-                <Crown size={14} className="text-accent" />
-                <span className="text-sm font-semibold text-ink dark:text-white tracking-tightish">
-                  Pro
-                </span>
+                {!!subLabel && (
+                  <span
+                    className={[
+                      'text-xs font-medium',
+                      subStatus === 'past_due'
+                        ? 'text-loss/80 dark:text-loss/70'
+                        : 'text-ink-muted/60 dark:text-white/25',
+                    ].join(' ')}
+                  >
+                    {subLabel}
+                  </span>
+                )}
               </div>
 
-              {!!subLabel && (
-                <span
-                  className={[
-                    'text-xs font-medium',
-                    subStatus === 'past_due'
-                      ? 'text-loss/80 dark:text-loss/70'
-                      : 'text-ink-muted/60 dark:text-white/25',
-                  ].join(' ')}
+              <p className="text-sm text-ink-muted dark:text-white/40 leading-relaxed max-w-[34rem]">
+                Manage billing, confirm your current status, and keep your subscription in good standing.
+              </p>
+
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <button
+                  className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px] disabled:opacity-50"
+                  onClick={openPortal}
+                  disabled={billingBusy}
+                  type="button"
                 >
-                  {subLabel}
-                </span>
-              )}
+                  <CreditCard size={15} /> {billingBusy ? 'Opening…' : 'Billing'}
+                </button>
+
+                <button
+                  onClick={refreshProStatus}
+                  disabled={billingBusy}
+                  className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px] disabled:opacity-50"
+                  type="button"
+                >
+                  <RefreshCw size={15} /> Check status
+                </button>
+              </div>
 
               {!!billingMsg && (
-                <span className="text-xs text-ink-muted/60 dark:text-white/25">
-                  · {billingMsg}
-                </span>
+                <div className="text-xs text-ink-muted/60 dark:text-white/25">
+                  {billingMsg}
+                </div>
               )}
             </div>
+          ) : (
+            <div className="space-y-5">
+              <p className="text-sm text-ink-muted dark:text-white/45 leading-relaxed">
+                Pro shows you the full picture — freedom timeline, real-terms projections, and what your money needs to do to get there.
+              </p>
 
-            <div className="flex flex-wrap items-center gap-3 pt-1">
-              <button
-                className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px] disabled:opacity-50"
-                onClick={openPortal}
-                disabled={billingBusy}
-                type="button"
-              >
-                <CreditCard size={15} /> {billingBusy ? 'Opening…' : 'Billing'}
-              </button>
+              <div className="rounded-2xl border border-black/[.06] dark:border-white/[.08] bg-black/[.02] dark:bg-white/[.04] px-4 py-4">
+                <div className="text-sm font-semibold text-ink dark:text-white">
+                  From £6/month
+                </div>
+                <div className="mt-1 text-xs text-ink-muted/55 dark:text-white/28">
+                  Cancel anytime · Processed securely by Stripe
+                </div>
+              </div>
 
-              <button
-                onClick={refreshProStatus}
-                disabled={billingBusy}
-                className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px] disabled:opacity-50"
-                type="button"
-              >
-                <RefreshCw size={15} /> Check status
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <UpgradeButton
+                  onClick={() => goUpgrade('settings_cta')}
+                  disabled={billingBusy}
+                  className="min-h-[48px]"
+                >
+                  Upgrade to Pro
+                </UpgradeButton>
 
-              <a
-                href={reportProblemHref}
-                className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px]"
-              >
-                <Mail size={15} /> Report a problem
-              </a>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <p className="text-sm text-ink-muted dark:text-white/45 leading-relaxed">
-              Pro shows you the full picture — freedom timeline, real-terms projections, and what your money needs to do to get there.
-            </p>
+                <button
+                  onClick={refreshProStatus}
+                  disabled={billingBusy}
+                  className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px] disabled:opacity-50"
+                  type="button"
+                >
+                  <RefreshCw size={15} /> Check status
+                </button>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <UpgradeButton
-                onClick={() => goUpgrade('settings_cta')}
-                disabled={billingBusy}
-                className="min-h-[48px]"
-              >
-                Upgrade to Pro
-              </UpgradeButton>
-
-              <button
-                onClick={() => goUpgrade('settings_view_plans')}
-                className="text-sm font-semibold text-ink-muted dark:text-white/45 hover:text-ink dark:hover:text-white transition-colors"
-                type="button"
-              >
-                View plans
-              </button>
+                <button
+                  onClick={() => goUpgrade('settings_view_plans')}
+                  className="text-sm font-semibold text-ink-muted dark:text-white/45 hover:text-ink dark:hover:text-white transition-colors"
+                  type="button"
+                >
+                  View plans
+                </button>
+              </div>
 
               {!!billingMsg ? (
-                <span className="text-xs text-ink-muted/50 dark:text-white/25">{billingMsg}</span>
+                <div className="text-xs text-ink-muted/50 dark:text-white/25">
+                  {billingMsg}
+                </div>
               ) : (
-                <span className="text-xs text-ink-muted/50 dark:text-white/25">
-                  From £6/month · Cancel anytime
-                </span>
+                <div className="text-xs text-ink-muted/50 dark:text-white/25">
+                  Encrypted checkout · Cancel anytime
+                </div>
               )}
             </div>
+          )}
+        </div>
+      </div>
 
-            <div className="mt-3 text-xs text-ink-muted/60 dark:text-white/30">
-              Encrypted checkout · Processed by Stripe · Cancel anytime
+      <div className={utilityGridClass}>
+      <div
+  className="rounded-3xl p-6 sm:p-7"
+  style={settingsPanelStyle}
+>
+          <div className="flex items-center gap-2 mb-3">
+            <Mail size={14} className="text-ink-muted dark:text-white/35" />
+            <h3 className="text-xs font-semibold tracking-[.14em] uppercase text-ink-muted/40 dark:text-white/24">
+              Support
+            </h3>
+          </div>
+
+          <p className="text-sm text-ink-muted dark:text-white/40 leading-relaxed mb-4">
+            Report a problem and include device details automatically so issues are easier to diagnose.
+          </p>
+
+          <a
+            href={reportProblemHref}
+            className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px]"
+          >
+            <Mail size={14} /> Report a problem
+          </a>
+        </div>
+
+        {isAdmin && (
+          <div
+          className="rounded-3xl p-6 sm:p-7"
+          style={settingsPanelStyle}
+        >
+            <div className="text-xs font-semibold tracking-[.14em] uppercase text-ink-muted/40 dark:text-white/24 mb-3">
+              Admin
             </div>
+
+            <p className="text-sm text-ink-muted dark:text-white/40 leading-relaxed mb-4">
+              Open internal metrics for funnel, users, and upgrades.
+            </p>
+
+            <button
+              onClick={() => setPage('admin')}
+              className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[44px]"
+              type="button"
+            >
+              Open <ChevronRight size={15} />
+            </button>
           </div>
         )}
-      </Card>
 
-      <Card className="p-5">
-        <h3 className="text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35 mb-5 flex items-center gap-2">
-          <RefreshCw size={14} /> Exchange rates
-        </h3>
-        <p className="text-sm text-ink-muted dark:text-white/35 mb-5 leading-relaxed">
-          Cached daily. Falls back to approximate rates if APIs are unavailable.
-        </p>
-
-        <button
-          onClick={refreshFx}
-          className="flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] text-ink dark:text-white hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors min-h-[48px]"
-          type="button"
-        >
-          <RefreshCw size={15} /> Update rates
-        </button>
-
-        {fxStatus && <div className="text-xs text-ink-muted dark:text-white/25 mt-4">{fxStatus}</div>}
-      </Card>
-
-      {IS_DEV && (
-        <Card className="p-7 border-dashed border-black/[.08] dark:border-white/[.08]">
-          <h3 className="text-xs font-semibold tracking-tightish text-ink-muted dark:text-white/35 mb-4">
-            Developer
-          </h3>
-
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <div className="text-sm font-medium text-ink dark:text-white">Pro Simulation</div>
-              <div className="text-xs text-ink-muted dark:text-white/35 mt-1">
-                Toggle Pro access for testing (dev only).
-              </div>
+        {IS_DEV && (
+          <Card className="p-5 sm:p-6 border-dashed border-black/[.08] dark:border-white/[.08]">
+            <div className="text-xs font-semibold tracking-[.14em] uppercase text-ink-muted/40 dark:text-white/24 mb-3">
+              Developer
             </div>
+
+            <p className="text-sm text-ink-muted dark:text-white/40 leading-relaxed mb-4">
+              Toggle Pro access for testing in development.
+            </p>
 
             <button
               onClick={devTogglePro}
               disabled={billingBusy}
-              className="px-4 py-2 rounded-2xl text-sm font-semibold transition-all bg-black/[.03] dark:bg-white/[.06] text-ink dark:text-white border border-black/[.06] dark:border-white/[.10] hover:bg-black/[.05] dark:hover:bg-white/[.08] disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all bg-black/[.03] dark:bg-white/[.06] text-ink dark:text-white border border-black/[.06] dark:border-white/[.10] hover:bg-black/[.05] dark:hover:bg-white/[.08] disabled:opacity-50 min-h-[44px]"
               type="button"
             >
-              {billingBusy ? '…' : isPro ? 'Disable Pro' : 'Enable Pro'}
+              {billingBusy ? 'Updating…' : isPro ? 'Disable Pro' : 'Enable Pro'}
             </button>
-          </div>
-        </Card>
-      )}
+          </Card>
+        )}
+      </div>
     </div>
   )
 }

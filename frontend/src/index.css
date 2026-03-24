@@ -382,17 +382,17 @@ input, select, textarea { font-size: 1rem; }
 .brand-auth-bg {
   position: relative;
   background:
-    radial-gradient(1200px 620px at 20% 8%, rgba(var(--accent-rgb), 0.08), transparent 55%),
-    radial-gradient(900px 480px at 80% 0%, rgba(0, 0, 0, 0.035), transparent 60%),
-    linear-gradient(180deg, rgba(255,255,255,0.60), rgba(255,255,255,0.20)),
+    radial-gradient(980px 560px at 18% 18%, rgba(var(--accent-rgb), 0.05), transparent 58%),
+    radial-gradient(760px 420px at 82% 82%, rgba(0, 0, 0, 0.02), transparent 62%),
+    linear-gradient(180deg, rgba(255,255,255,0.32), rgba(255,255,255,0.12)),
     rgb(var(--bg-rgb));
 }
 
 .dark .brand-auth-bg {
   background:
-    radial-gradient(1200px 620px at 20% 8%, rgba(var(--accent-rgb), 0.10), transparent 55%),
-    radial-gradient(900px 480px at 80% 0%, rgba(255,255,255,0.04), transparent 60%),
-    linear-gradient(180deg, rgba(255,255,255,0.03), transparent 55%),
+    radial-gradient(980px 560px at 18% 18%, rgba(var(--accent-rgb), 0.07), transparent 58%),
+    radial-gradient(760px 420px at 82% 82%, rgba(255,255,255,0.02), transparent 62%),
+    linear-gradient(180deg, rgba(255,255,255,0.018), transparent 46%),
     rgb(var(--bg-rgb));
 }
 

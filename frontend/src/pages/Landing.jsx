@@ -116,9 +116,9 @@ export default function Landing() {
   const { setPage } = useApp()
 
   useSEO({
-    title: 'Paddock — Personal Wealth Dashboard',
+    title: 'Paddock — Private Wealth Planning',
     description:
-      'Track net worth, understand progress, and model your long-term future with multi-currency tracking, visible assumptions, and projections that show the path ahead.',
+      'Model ISA deadlines, mortgage trade-offs, pensions and long-term projections in one calm, private dashboard built for decisions, not just balance checking.',
     canonicalPath: '/',
   })
 
@@ -195,20 +195,19 @@ export default function Landing() {
       {/* HERO */}
       <section className="mx-auto max-w-6xl px-5 sm:px-6 pt-24 sm:pt-32 lg:pt-40 pb-12 sm:pb-16">
         <div className="max-w-[820px]">
-          <div className="text-sm font-semibold tracking-[.12em] uppercase text-ink-muted/60 dark:text-white/30 mb-4">
-            Personal wealth dashboard
-          </div>
+        <div className="text-sm font-semibold tracking-[.12em] uppercase text-ink-muted/60 dark:text-white/30 mb-4">
+  Private wealth planning
+</div>
 
-          <h1 className="font-display text-[2.85rem] sm:text-6xl lg:text-[4.35rem] font-semibold tracking-[-0.03em] leading-[1.03] text-ink dark:text-white">
-            A net worth tracker.
-            <br />
-            For long-term wealth.
-          </h1>
+<h1 className="font-display text-[2.85rem] sm:text-6xl lg:text-[4.35rem] font-semibold tracking-[-0.03em] leading-[1.03] text-ink dark:text-white">
+  Your wealth.
+  <br />
+  Planned.
+</h1>
 
-          <p className="mt-5 sm:mt-6 text-lg sm:text-xl text-ink-3/90 dark:text-white/50 tracking-[-0.01em] max-w-[46rem]">
-            Track cash, investments, pensions and property in one calm dashboard — with
-            multi-currency support, long-term projections, and privacy-first manual tracking.
-          </p>
+<p className="mt-5 sm:mt-6 text-lg sm:text-xl text-ink-3/90 dark:text-white/50 tracking-[-0.01em] max-w-[46rem]">
+  Model ISA deadlines, mortgage trade-offs, pensions and long-term projections in one calm, private dashboard — built for decisions, not just balance checking.
+</p>
 
           <div className="mt-8 sm:mt-10 flex flex-wrap items-center gap-3">
             <Button variant="primary" className="h-12 px-6 rounded-2xl" onClick={() => openAuth('register')}>
@@ -225,65 +224,45 @@ export default function Landing() {
           </div>
 
           <p className="mt-4 text-xs text-ink-muted/55 dark:text-white/20">
-            Free to start • No credit card required • Setup takes under 2 minutes
-          </p>
+  Free to start • No credit card required • Private by design • No bank linking
+</p>
 
-          <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-ink-muted/55 dark:text-white/20">
-            <button
-              type="button"
-              onClick={() => setPage('net_worth_tracker')}
-              className="hover:text-ink dark:hover:text-white/50 transition-colors"
-            >
-              Net worth tracking
-            </button>
-            <button
-              type="button"
-              onClick={() => setPage('guide_multi_currency')}
-              className="hover:text-ink dark:hover:text-white/50 transition-colors"
-            >
-              Multi-currency support
-            </button>
-            <button
-              type="button"
-              onClick={() => setPage('track_isas_pensions_savings')}
-              className="hover:text-ink dark:hover:text-white/50 transition-colors"
-            >
-              Track ISAs and pensions
-            </button>
-            <span>No ads</span>
-            <span>No bank linking</span>
-            <span>Private by design</span>
-          </div>
+<div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-ink-muted/55 dark:text-white/20">
+  <span>ISA deadline awareness</span>
+  <span>Mortgage trade-off modelling</span>
+  <span>Long-term projections</span>
+  <span>No bank linking</span>
+  <span>Private by design</span>
+</div>
         </div>
       </section>
 
       {/* SCREENSHOT 1 */}
       <section className="mx-auto max-w-6xl px-5 sm:px-6 pb-10">
-        <Reveal>
-          <Screenshot
-            src={homeShot}
-            webp={homeShotWebp}
-            alt="Paddock dashboard showing total wealth, milestones and plan progress"
-            loading="eager"
-          />
-          <p className="mt-5 text-sm text-ink-muted/50 dark:text-white/20">
-            Net worth dashboard with milestones, trajectory and plan progress.
-          </p>
-        </Reveal>
-      </section>
+  <Reveal>
+    <Screenshot
+      src={insightsShot}
+      webp={insightsShotWebp}
+      alt="Paddock decisions view showing planning tools and next-step modelling"
+      loading="eager"
+    />
+    <p className="mt-5 text-sm text-ink-muted/50 dark:text-white/20">
+      Decision tools for ISA timing, contribution changes and long-term trade-offs.
+    </p>
+  </Reveal>
+</section>
 
       {/* USE PAGES */}
       <section className="border-t border-black/[.03] dark:border-white/[.03]">
         <div className="mx-auto max-w-6xl px-5 sm:px-6 py-16 sm:py-20">
           <Reveal>
-            <SectionLabel>Use Paddock for</SectionLabel>
-            <h2 className="mt-3 font-display text-3xl sm:text-4xl font-semibold text-ink dark:text-white tracking-tight">
-              Built for real wealth tracking.
-            </h2>
-            <p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-xl leading-relaxed">
-              Explore the core ways people use Paddock to track wealth more clearly and stay focused
-              on long-term progress.
-            </p>
+          <SectionLabel>Use Paddock for</SectionLabel>
+<h2 className="mt-3 font-display text-3xl sm:text-4xl font-semibold text-ink dark:text-white tracking-tight">
+  Built for real wealth planning.
+</h2>
+<p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-xl leading-relaxed">
+  Explore the core ways people use Paddock to see wealth clearly, plan ahead, and stay focused on long-term progress.
+</p>
 
             <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[
@@ -329,29 +308,29 @@ export default function Landing() {
       {/* PRODUCT */}
       <section id="product" className="mx-auto max-w-6xl px-5 sm:px-6 py-16 sm:py-20">
         <Reveal>
-          <SectionLabel>Product</SectionLabel>
-          <h2 className="mt-3 font-display text-3xl sm:text-4xl font-semibold text-ink dark:text-white tracking-tight">
-            Everything that matters, in one place.
-          </h2>
-          <p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-xl leading-relaxed">
-            Built for clarity: one long-term goal, visible assumptions, and a dashboard you&apos;ll actually check.
-          </p>
+        <SectionLabel>Why Paddock</SectionLabel>
+<h2 className="mt-3 font-display text-3xl sm:text-4xl font-semibold text-ink dark:text-white tracking-tight">
+  From balances to decisions.
+</h2>
+<p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-xl leading-relaxed">
+  Paddock helps you see where your wealth is heading, what is getting in the way, and what to do next — without the clutter of a generic finance app.
+</p>
 
           <div className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-10 lg:gap-14">
-            {[
-              {
-                title: 'One target. Always visible.',
-                body: 'A single long-term goal anchors the model. Your projection evolves as your net worth and contributions change.',
-              },
-              {
-                title: 'Multi-currency portfolios.',
-                body: 'Track ISAs, SIPPs, cash, property and more across currencies with a clear base-currency view.',
-              },
-              {
-                title: 'Assumptions in plain sight.',
-                body: 'Contribution, return and time horizon sit next to the model — not buried in menus or hidden settings.',
-              },
-            ].map(({ title, body }) => (
+          {[
+  {
+    title: 'One plan, always visible.',
+    body: 'A named long-term goal anchors the model, so progress is measured against something real — not just a changing balance.',
+  },
+  {
+    title: 'UK wealth context built in.',
+    body: 'ISAs, pensions, property and wrapper-aware decisions are part of the experience — not bolted on later.',
+  },
+  {
+    title: 'See the impact before you move.',
+    body: 'Model contribution changes, compare paths, and understand trade-offs before you commit new money.',
+  },
+].map(({ title, body }) => (
               <div key={title}>
                 <h3 className="font-display text-base font-semibold text-ink dark:text-white tracking-tight">
                   {title}
@@ -364,44 +343,18 @@ export default function Landing() {
         </Reveal>
       </section>
 
-      {/* PROJECTION */}
-      <section className="border-t border-black/[.03] dark:border-white/[.03]">
-        <div className="mx-auto max-w-6xl px-5 sm:px-6 py-16 sm:py-20">
-          <Reveal>
-            <SectionLabel>Projection</SectionLabel>
-            <h2 className="mt-3 font-display text-3xl sm:text-4xl font-semibold text-ink dark:text-white tracking-tight">
-              See where your wealth is heading.
-            </h2>
-            <p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-xl leading-relaxed">
-              A long-horizon model that shows both the gap and the path — so your progress is easier to understand and easier to act on.
-            </p>
-          </Reveal>
-
-          <Reveal className="mt-10">
-            <Screenshot
-              src={outlookShot}
-              webp={outlookShotWebp}
-              alt="Paddock projection view showing trajectory graph with projected and required net worth curves over time"
-            />
-            <p className="mt-5 text-sm text-ink-muted/50 dark:text-white/20">
-              Long-term projection with visible assumptions and trajectory.
-            </p>
-          </Reveal>
-        </div>
-      </section>
-
       {/* SCENARIOS */}
       <section className="border-t border-black/[.03] dark:border-white/[.03]">
         <div className="mx-auto max-w-6xl px-5 sm:px-6 py-16 sm:py-20">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
             <Reveal>
-              <SectionLabel>Scenarios</SectionLabel>
-              <h2 className="mt-3 font-display text-3xl sm:text-4xl font-semibold text-ink dark:text-white tracking-tight">
-                See the impact before you commit.
-              </h2>
-              <p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-md leading-relaxed">
-                Adjust contributions, compare timelines, and understand the trade-offs before you make the next move.
-              </p>
+            <SectionLabel>Decisions</SectionLabel>
+<h2 className="mt-3 font-display text-3xl sm:text-4xl font-semibold text-ink dark:text-white tracking-tight">
+  Know what the next pounds should do.
+</h2>
+<p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-md leading-relaxed">
+  Use Paddock to model ISA timing, contribution changes, and long-term trade-offs before you make the next move.
+</p>
 
               <div className="mt-6 flex flex-wrap items-center gap-2">
                 <button
@@ -431,12 +384,40 @@ export default function Landing() {
             <Reveal>
               <Screenshot src={insightsShot} webp={insightsShotWebp} alt="Paddock insights showing scenario modelling" />
               <p className="mt-5 text-sm text-ink-muted/50 dark:text-white/20">
-                Scenario modelling and deeper planning views.
+              Decision tools for ISA timing, contribution changes and long-term trade-offs.
               </p>
             </Reveal>
           </div>
         </div>
       </section>
+
+      {/* PROJECTION */}
+      <section className="border-t border-black/[.03] dark:border-white/[.03]">
+        <div className="mx-auto max-w-6xl px-5 sm:px-6 py-16 sm:py-20">
+          <Reveal>
+          <SectionLabel>Projection</SectionLabel>
+<h2 className="mt-3 font-display text-3xl sm:text-4xl font-semibold text-ink dark:text-white tracking-tight">
+  See the path, not just the total.
+</h2>
+<p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-xl leading-relaxed">
+  Project your current path, compare it to the pace required, and understand the gap long before it becomes a surprise.
+</p>
+          </Reveal>
+
+          <Reveal className="mt-10">
+            <Screenshot
+              src={outlookShot}
+              webp={outlookShotWebp}
+              alt="Paddock projection view showing trajectory graph with projected and required net worth curves over time"
+            />
+            <p className="mt-5 text-sm text-ink-muted/50 dark:text-white/20">
+            Long-term projection with visible assumptions, target path and trajectory.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+    
 
       {/* TRUST */}
       <section className="border-t border-black/[.03] dark:border-white/[.03]">
@@ -447,8 +428,8 @@ export default function Landing() {
               Private by design.
             </h2>
             <p className="mt-4 text-sm sm:text-base text-ink-muted/65 dark:text-white/35 max-w-xl leading-relaxed">
-              No ads. No trackers. No bank linking. Just a deliberate, premium space to understand and build wealth.
-            </p>
+  No ads. No trackers. No bank linking. Paddock is intentionally manual, so your data stays private and your numbers stay deliberate.
+</p>
 
             <div className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-10 lg:gap-14">
               {[
@@ -508,74 +489,80 @@ export default function Landing() {
               Simple.
             </h2>
             <p className="mt-4 text-sm text-ink-muted/65 dark:text-white/35 max-w-xl leading-relaxed">
-              Start with structured tracking. Upgrade when you&apos;re ready to plan decades ahead.
-            </p>
+  Start free to track your wealth clearly. Upgrade when you want to plan years ahead and model what to do next.
+</p>
           </Reveal>
 
-          <Reveal className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card className="p-7 sm:p-8 bg-white/70 dark:bg-white/[.04] backdrop-blur-xl border border-black/[.06] dark:border-white/[.08] shadow-card">
-              <div className="text-sm font-semibold text-ink-muted/70 dark:text-white/40">Free</div>
-              <div className="mt-3 text-3xl font-semibold text-ink dark:text-white tracking-tight">£0</div>
-              <p className="mt-1.5 text-sm text-ink-muted/55 dark:text-white/25">Structured wealth tracking</p>
+          <Reveal className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+  <Card className="p-7 sm:p-8 bg-white/70 dark:bg-white/[.04] backdrop-blur-xl border border-black/[.06] dark:border-white/[.08] shadow-card flex flex-col h-full">
+    <div className="text-sm font-semibold text-ink-muted/70 dark:text-white/40">Free</div>
+    <div className="mt-3 text-3xl font-semibold text-ink dark:text-white tracking-tight">£0</div>
+    <p className="mt-3 text-sm text-ink dark:text-white/85 font-medium">See your wealth clearly.</p>
+    <p className="mt-2 text-sm text-ink-muted/55 dark:text-white/25">
+      Private by design. Most people update once after payday.
+    </p>
 
-              <div className="mt-6 space-y-2 text-sm text-ink-muted/65 dark:text-white/35">
-                <p>Net worth dashboard</p>
-                <p>Snapshots + milestones</p>
-                <p>Multi-currency accounts</p>
-                <p>Daily FX checking</p>
-                <p>Monthly what-if contribution modelling</p>
-                <p>1-year projection</p>
-                <p>Up to 3 accounts</p>
-              </div>
+    <div className="mt-7 space-y-2.5 text-sm text-ink-muted/70 dark:text-white/40">
+      <p>Net worth dashboard</p>
+      <p>Snapshots + milestones</p>
+      <p>Multi-currency accounts</p>
+      <p>Daily FX checking</p>
+      <p>Monthly what-if contribution modelling</p>
+      <p>1-year projection</p>
+      <p>Up to 3 accounts</p>
+    </div>
 
-              <div className="mt-8">
-                <button
-                  type="button"
-                  onClick={() => openAuth('register')}
-                  className="h-11 px-5 rounded-2xl text-sm font-semibold border border-black/[.08] dark:border-white/[.10] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors text-ink dark:text-white"
-                >
-                  Create account
-                </button>
-              </div>
-            </Card>
+    <div className="mt-auto pt-8">
+      <button
+        type="button"
+        onClick={() => openAuth('register')}
+        className="h-11 px-5 rounded-2xl text-sm font-semibold border border-black/[.08] dark:border-white/[.10] hover:bg-black/[.03] dark:hover:bg-white/[.06] transition-colors text-ink dark:text-white"
+      >
+        Create account
+      </button>
+    </div>
+  </Card>
 
-            <Card className="p-7 sm:p-8 bg-white/70 dark:bg-white/[.04] backdrop-blur-xl border border-accent/15 dark:border-accent/20 shadow-card">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-ink dark:text-white">Pro</div>
-                <div className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold leading-none bg-accent/10 text-accent dark:bg-accent/15">
-                  Recommended
-                </div>
-              </div>
+  <Card className="p-7 sm:p-8 bg-white/70 dark:bg-white/[.04] backdrop-blur-xl border border-accent/20 dark:border-accent/25 shadow-card flex flex-col h-full">
+    <div className="flex items-center justify-between">
+      <div className="text-sm font-semibold text-ink dark:text-white">Pro</div>
+      <div className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold leading-none bg-accent/10 text-accent dark:bg-accent/15">
+        Recommended
+      </div>
+    </div>
 
-              <div className="mt-3 flex items-baseline gap-1.5">
-                <span className="text-3xl font-semibold text-ink dark:text-white tracking-tight">£6</span>
-                <span className="text-sm font-semibold text-ink-muted/55 dark:text-white/25">/month</span>
-              </div>
+    <div className="mt-3 flex items-baseline gap-1.5">
+      <span className="text-3xl font-semibold text-ink dark:text-white tracking-tight">£6</span>
+      <span className="text-sm font-semibold text-ink-muted/55 dark:text-white/25">/month</span>
+    </div>
 
-              <p className="mt-1.5 text-sm text-ink-muted/55 dark:text-white/25">
-                or £60/year (2 months free) · Annual includes a 7-day trial
-              </p>
-              <p className="mt-1.5 text-sm text-ink-muted/55 dark:text-white/25">
-                For serious wealth planning — decades, not months.
-              </p>
+    <p className="mt-2 text-sm text-ink-muted/55 dark:text-white/25">
+      £60/year (2 months free) · Includes a 7-day trial
+    </p>
+    <p className="mt-3 text-sm text-ink dark:text-white/90 font-medium">
+      See the path, the gap, and the next move.
+    </p>
+    <p className="mt-2 text-sm text-ink-muted/60 dark:text-white/30">
+      Plan 5–40 years ahead, compare scenarios, and understand what it takes to hit your target.
+    </p>
 
-              <div className="mt-6 space-y-2 text-sm text-ink-muted/65 dark:text-white/35">
-                <p>Unlimited accounts</p>
-                <p>5–40 year projections</p>
-                <p>Full trajectory chart: projected vs required path</p>
-                <p>Inflation-adjusted (real terms) view</p>
-                <p>One-off deposit modelling</p>
-                <p>Optimiser: calculates required monthly contribution</p>
-                <p>What-if scenario comparisons</p>
-              </div>
+    <div className="mt-7 space-y-2.5 text-sm text-ink-muted/70 dark:text-white/40">
+      <p>Unlimited accounts</p>
+      <p>5–40 year projections</p>
+      <p>Full trajectory chart: projected vs required path</p>
+      <p>Inflation-adjusted (real terms) view</p>
+      <p>One-off deposit modelling</p>
+      <p>Optimiser: calculates required monthly contribution</p>
+      <p>What-if scenario comparisons</p>
+    </div>
 
-              <div className="mt-8">
-                <Button variant="primary" className="h-11 px-5 rounded-2xl" onClick={() => openAuth('register')}>
-                  Start free trial
-                </Button>
-              </div>
-            </Card>
-          </Reveal>
+    <div className="mt-auto pt-8">
+      <Button variant="primary" className="h-11 px-5 rounded-2xl" onClick={() => openAuth('register')}>
+        Start free trial
+      </Button>
+    </div>
+  </Card>
+</Reveal>
         </div>
       </section>
 

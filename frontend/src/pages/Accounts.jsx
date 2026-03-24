@@ -17,7 +17,7 @@ import Modal from '../components/Modal'
 import ConfirmDialog from '../components/ConfirmDialog'
 import ChangePill from '../components/ChangePill'
 import { track } from '../track'
-import { fmtCurrency, fmtCurrencyCompact, fmtDate, ACCOUNT_TYPE_LABELS, CURRENCIES, isSnapshotStale } from '../utils'
+import { fmtCurrency, fmtCurrencyCompact, fmtDate, ACCOUNT_TYPE_LABELS, CURRENCIES, getSnapshotFreshnessState } from '../utils'
 import { Plus, Camera, ChevronDown, ChevronRight, Clock, Crown, Pencil, Trash2, MoreHorizontal, Landmark } from 'lucide-react'
 
 /* ── Wealth group taxonomy ────────────────────────── */
@@ -72,64 +72,145 @@ function LedgerEntryRow({ account, isLiability, baseCurrency, onEdit, onDelete }
   const hasNotes = account.notes && String(account.notes).trim().length > 0
 
   return (
-    <div onClick={onEdit} className={['group relative flex items-center border-b border-black/[.06] dark:border-white/[.06] transition-colors duration-100 cursor-pointer hover:bg-black/[.04] dark:hover:bg-white/[.055]', excluded ? 'opacity-40' : ''].join(' ')}>
-      <div className="absolute left-0 top-0 bottom-0 w-[2.5px] opacity-0 group-hover:opacity-100 transition-opacity duration-150 rounded-r" style={{background:accentColor}} aria-hidden="true"/>
+    <div
+      onClick={onEdit}
+      className={[
+        'group relative flex items-center cursor-pointer transition-[background-color,opacity] duration-150',
+        'border-b border-black/[.05] dark:border-white/[.05]',
+        'hover:bg-black/[.025] dark:hover:bg-white/[.035]',
+        excluded ? 'opacity-45' : '',
+      ].join(' ')}
+    >
+      <div
+        className="absolute left-0 top-0 bottom-0 w-[2.5px] opacity-0 group-hover:opacity-100 transition-opacity duration-150 rounded-r"
+        style={{ background: accentColor }}
+        aria-hidden="true"
+      />
 
       {/* Zone 1: Identity */}
-      <div className="flex-1 min-w-0 flex items-center gap-4 py-5 pl-4 pr-3">
-        <div className="shrink-0 w-[8px] h-[8px] rounded-full" style={{background:accentColor, opacity:0.85, marginTop:1}} aria-hidden="true"/>
+      <div className="flex-1 min-w-0 flex items-center gap-3.5 py-4 sm:py-[18px] pl-4 pr-3">
+        <div
+          className="shrink-0 w-[8px] h-[8px] rounded-full"
+          style={{ background: accentColor, opacity: 0.9, marginTop: 1 }}
+          aria-hidden="true"
+        />
         <div className="min-w-0">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-[14.5px] font-semibold text-ink dark:text-white leading-snug truncate">{account.name}</span>
-            {excluded && <span className="shrink-0 text-[10px] font-medium tracking-[.02em] px-1.5 py-0.5 rounded bg-black/[.05] dark:bg-white/[.07] text-ink-muted/55 dark:text-white/30">Excluded</span>}
+            <span className="text-[14px] sm:text-[14.5px] font-semibold text-ink dark:text-white leading-snug truncate">
+              {account.name}
+            </span>
+            {excluded && (
+              <span className="shrink-0 text-[10px] font-medium tracking-[.03em] px-1.5 py-0.5 rounded-full bg-black/[.045] dark:bg-white/[.07] text-ink-muted/55 dark:text-white/28">
+                Excluded
+              </span>
+            )}
           </div>
-          <div className="mt-0.5 text-[12px] text-ink-muted/70 dark:text-white/52 leading-snug">
+          <div className="mt-0.5 text-[11.5px] text-ink-muted/65 dark:text-white/40 leading-snug">
             {typeLabel}
-            {foreignCurrency && <> · <span className="font-medium tabular-nums">{displayCurrency}</span></>}
-            {hasNotes && <> · {String(account.notes).slice(0,32)}{String(account.notes).length>32?'…':''}</>}
+            {foreignCurrency && (
+              <>
+                {' '}·{' '}
+                <span className="font-medium tabular-nums">{displayCurrency}</span>
+              </>
+            )}
+            {hasNotes && (
+              <>
+                {' '}· {String(account.notes).slice(0, 32)}
+                {String(account.notes).length > 32 ? '…' : ''}
+              </>
+            )}
           </div>
         </div>
       </div>
 
       {/* Zone 2: Monthly */}
-      <div className="hidden sm:flex flex-col items-end w-[112px] shrink-0 py-5 pr-4">
+      <div className="hidden sm:flex flex-col items-end w-[112px] shrink-0 py-4 sm:py-[18px] pr-4">
         {monthly > 0 ? (
           <>
-            <span className="text-[13.5px] font-semibold tabular-nums text-ink dark:text-white leading-none">{fmtCurrencyCompact(monthly,displayCurrency)}<span className="text-[11px] font-normal text-ink-muted/50 dark:text-white/32">/mo</span></span>
-            <span className="mt-1 text-[11px] font-medium text-ink-muted/55 dark:text-white/40">{monthlyLabel}</span>
+            <span className="text-[13px] font-semibold tabular-nums text-ink dark:text-white leading-none">
+              {fmtCurrencyCompact(monthly, displayCurrency)}
+              <span className="text-[10px] font-normal text-ink-muted/45 dark:text-white/26">/mo</span>
+            </span>
+            <span className="mt-1 text-[10.5px] font-medium text-ink-muted/50 dark:text-white/32">
+              {monthlyLabel}
+            </span>
           </>
-        ) : null}
+        ) : (
+          <span className="text-[11px] text-ink-muted/22 dark:text-white/14">—</span>
+        )}
       </div>
 
       {/* Zone 3: Rate */}
-      <div className="hidden sm:flex flex-col items-end w-[82px] shrink-0 py-5 pr-4">
+      <div className="hidden sm:flex flex-col items-end w-[82px] shrink-0 py-4 sm:py-[18px] pr-4">
         {rate > 0 ? (
           <>
-            <span className="text-[13.5px] font-semibold tabular-nums text-ink dark:text-white leading-none">{rate.toFixed(1)}%</span>
-            <span className="mt-1 text-[11px] font-medium text-ink-muted/55 dark:text-white/40">{rateLabel}</span>
+            <span className="text-[13px] font-semibold tabular-nums text-ink dark:text-white leading-none">
+              {rate.toFixed(1)}%
+            </span>
+            <span className="mt-1 text-[10.5px] font-medium text-ink-muted/50 dark:text-white/32">
+              {rateLabel}
+            </span>
           </>
-        ) : null}
+        ) : (
+          <span className="text-[11px] text-ink-muted/22 dark:text-white/14">—</span>
+        )}
       </div>
 
       {/* Zone 4: Balance */}
-      <div className="shrink-0 flex flex-col items-end w-[114px] sm:w-[130px] py-5 pr-2">
-        <span className={['text-[15px] sm:text-[16px] font-semibold tabular-nums tracking-tight leading-none', isLiability?'text-loss dark:text-rose-400':'text-ink dark:text-white'].join(' ')}>
-          {isLiability?'−':''}{fmtCurrency(balance,displayCurrency)}
+      <div className="shrink-0 flex flex-col items-end w-[118px] sm:w-[138px] py-4 sm:py-[18px] pr-2">
+        <span
+          className={[
+            'text-[15px] sm:text-[16px] font-semibold tabular-nums tracking-tight leading-none',
+            isLiability ? 'text-loss dark:text-rose-400' : 'text-ink dark:text-white',
+          ].join(' ')}
+        >
+          {isLiability ? '−' : ''}{fmtCurrency(balance, displayCurrency)}
         </span>
-        {foreignCurrency && balance > 0 && <span className="mt-1 text-[10px] text-ink-muted/40 dark:text-white/25 tabular-nums">{displayCurrency}</span>}
+        {foreignCurrency && balance !== 0 && (
+          <span className="mt-1 text-[10px] text-ink-muted/35 dark:text-white/20 tabular-nums">
+            {displayCurrency}
+          </span>
+        )}
       </div>
 
       {/* Zone 5: Actions */}
-      <div className={['shrink-0 w-10 pr-2 relative opacity-0 group-hover:opacity-100 transition-opacity duration-150', menuOpen?'opacity-100':''].join(' ')} onClick={(e)=>e.stopPropagation()}>
-        <button type="button" onClick={()=>setMenuOpen(v=>!v)} className="w-7 h-7 rounded-xl flex items-center justify-center hover:bg-black/[.06] dark:hover:bg-white/[.09] transition-colors text-ink-muted/50 dark:text-white/35">
-          <MoreHorizontal size={14}/>
+      <div
+        className={[
+          'shrink-0 w-10 pr-2 relative opacity-0 group-hover:opacity-100 transition-opacity duration-150',
+          menuOpen ? 'opacity-100' : '',
+        ].join(' ')}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={() => setMenuOpen((v) => !v)}
+          className="w-7 h-7 rounded-xl flex items-center justify-center hover:bg-black/[.05] dark:hover:bg-white/[.08] transition-colors text-ink-muted/45 dark:text-white/28"
+        >
+          <MoreHorizontal size={14} />
         </button>
+
         {menuOpen && (
           <>
-            <div className="fixed inset-0 z-10" onClick={()=>setMenuOpen(false)}/>
+            <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
             <div className="absolute right-0 top-8 z-20 w-36 rounded-2xl border border-black/[.07] dark:border-white/[.09] bg-white dark:bg-surface-dark-2 shadow-[0_8px_28px_rgba(0,0,0,0.13)] overflow-hidden">
-              {onEdit && <button type="button" onClick={()=>{setMenuOpen(false);onEdit()}} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-ink dark:text-white hover:bg-black/[.04] dark:hover:bg-white/[.05] transition-colors"><Pencil size={13} className="opacity-55"/> Edit</button>}
-              {onDelete && <button type="button" onClick={()=>{setMenuOpen(false);onDelete()}} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-loss dark:text-rose-400 hover:bg-loss-light/60 dark:hover:bg-rose-500/10 transition-colors"><Trash2 size={13} className="opacity-65"/> Delete</button>}
+              {onEdit && (
+                <button
+                  type="button"
+                  onClick={() => { setMenuOpen(false); onEdit() }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-ink dark:text-white hover:bg-black/[.04] dark:hover:bg-white/[.05] transition-colors"
+                >
+                  <Pencil size={13} className="opacity-55" /> Edit
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={() => { setMenuOpen(false); onDelete() }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-loss dark:text-rose-400 hover:bg-loss-light/60 dark:hover:bg-rose-500/10 transition-colors"
+                >
+                  <Trash2 size={13} className="opacity-65" /> Delete
+                </button>
+              )}
             </div>
           </>
         )}
@@ -143,43 +224,93 @@ function LedgerEntryRow({ account, isLiability, baseCurrency, onEdit, onDelete }
 function WealthGroup({ group, baseCurrency, totalAssetsForPct, onEdit, onDelete, onAdd, nudge }) {
   const { label, accounts, subtotal, isLiability } = group
   if (!accounts.length) return null
-  const allocationPct = !isLiability && totalAssetsForPct > 0 ? (subtotal / totalAssetsForPct) * 100 : null
+
+  const allocationPct = !isLiability && totalAssetsForPct > 0
+    ? (subtotal / totalAssetsForPct) * 100
+    : null
+
   return (
     <div>
-      <div className="flex items-center justify-between gap-4 pb-3">
+      <div className="flex items-center justify-between gap-4 pb-3.5">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="shrink-0 w-[3px] h-4 rounded-full" style={{background: isLiability?'rgba(192,90,70,0.55)':'rgba(120,169,230,0.45)'}} aria-hidden="true"/>
-          <span className="text-[11px] font-bold tracking-[.12em] uppercase text-ink dark:text-white/70">{label}</span>
+          <div
+            className="shrink-0 w-[3px] h-4 rounded-full"
+            style={{ background: isLiability ? 'rgba(192,90,70,0.55)' : 'rgba(120,169,230,0.45)' }}
+            aria-hidden="true"
+          />
+          <span className="text-[10.5px] font-semibold tracking-[.16em] uppercase text-ink-muted/65 dark:text-white/40">
+            {label}
+          </span>
+
           {allocationPct != null && allocationPct > 0.5 && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold tabular-nums bg-black/[.04] dark:bg-white/[.07] text-ink-muted/60 dark:text-white/35">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold tabular-nums bg-black/[.04] dark:bg-white/[.07] text-ink-muted/60 dark:text-white/30">
               {allocationPct.toFixed(0)}%
             </span>
           )}
         </div>
+
         <div className="flex items-center gap-3 shrink-0">
-          <span className={['text-[14.5px] font-bold tabular-nums tracking-tight', isLiability?'text-loss dark:text-rose-400':'text-ink dark:text-white'].join(' ')}>
-            {isLiability?'−':''}{fmtCurrencyCompact(Math.abs(subtotal), baseCurrency)}
+          <span
+            className={[
+              'text-[14px] sm:text-[14.5px] font-bold tabular-nums tracking-tight',
+              isLiability ? 'text-loss dark:text-rose-400' : 'text-ink dark:text-white',
+            ].join(' ')}
+          >
+            {isLiability ? '−' : ''}{fmtCurrencyCompact(Math.abs(subtotal), baseCurrency)}
           </span>
-          {onAdd && <button type="button" onClick={onAdd} className="text-[11px] font-semibold text-accent hover:text-accent-dark dark:text-blue-400 dark:hover:text-blue-300 transition-colors">+ Add</button>}
+
+          {onAdd && (
+            <button
+              type="button"
+              onClick={onAdd}
+              className="text-[11px] font-semibold text-accent hover:text-accent-dark dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+            >
+              + Add
+            </button>
+          )}
         </div>
       </div>
-      <div className="h-px bg-black/[.07] dark:bg-white/[.08] mb-0"/>
-      {accounts.map(a => (
-        <LedgerEntryRow key={a.id} account={a} isLiability={isLiability} baseCurrency={baseCurrency} onEdit={()=>onEdit(a)} onDelete={()=>onDelete(a)}/>
-      ))}
-      {/* Contextual nudge — rendered below rows when relevant */}
-      {nudge && (
-        <button type="button" onClick={nudge.onClick}
-          className="w-full text-left flex items-center gap-2.5 px-4 py-3 mt-1 transition-opacity hover:opacity-80"
-          style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}
-        >
-          <div className="shrink-0 w-[7px] h-[7px] rounded-full" style={{ background: nudge.dotColor || 'rgba(120,169,230,0.6)' }} />
-          <span className="flex-1 min-w-0 text-[13px] font-medium" style={{ color: nudge.color || 'rgba(120,169,230,0.85)' }}>
-            {nudge.label}
-          </span>
-          <ChevronRight size={12} className="shrink-0" style={{ color: nudge.color || 'rgba(120,169,230,0.85)', opacity: 0.5 }} />
-        </button>
-      )}
+
+      <div className="rounded-2xl overflow-hidden border border-black/[.05] dark:border-white/[.06] bg-black/[.01] dark:bg-white/[.02]">
+        {accounts.map((a) => (
+          <LedgerEntryRow
+            key={a.id}
+            account={a}
+            isLiability={isLiability}
+            baseCurrency={baseCurrency}
+            onEdit={() => onEdit(a)}
+            onDelete={() => onDelete(a)}
+          />
+        ))}
+
+        {nudge && (
+          <button
+            type="button"
+            onClick={nudge.onClick}
+            className="w-full text-left flex items-center gap-2.5 px-4 py-3 transition-opacity hover:opacity-85"
+            style={{
+              borderTop: '1px solid rgba(255,255,255,0.05)',
+              background: 'rgba(255,255,255,0.02)',
+            }}
+          >
+            <div
+              className="shrink-0 w-[7px] h-[7px] rounded-full"
+              style={{ background: nudge.dotColor || 'rgba(120,169,230,0.6)' }}
+            />
+            <span
+              className="flex-1 min-w-0 text-[13px] font-medium"
+              style={{ color: nudge.color || 'rgba(120,169,230,0.85)' }}
+            >
+              {nudge.label}
+            </span>
+            <ChevronRight
+              size={12}
+              className="shrink-0"
+              style={{ color: nudge.color || 'rgba(120,169,230,0.85)', opacity: 0.5 }}
+            />
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -188,12 +319,28 @@ function WealthGroup({ group, baseCurrency, totalAssetsForPct, onEdit, onDelete,
 
 function LedgerColumnHeader() {
   return (
-    <div className="flex items-center pb-2.5 border-b border-black/[.07] dark:border-white/[.08]">
-      <div className="flex-1 pl-[1.75rem]"><span className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/50 dark:text-white/30">Account</span></div>
-      <div className="hidden sm:block w-[112px] shrink-0 text-right pr-4"><span className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/50 dark:text-white/30">Monthly</span></div>
-      <div className="hidden sm:block w-[82px] shrink-0 text-right pr-4"><span className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/50 dark:text-white/30">Rate</span></div>
-      <div className="w-[114px] sm:w-[130px] shrink-0 text-right pr-2"><span className="text-[10px] font-semibold tracking-[.14em] uppercase text-ink-muted/50 dark:text-white/30">Balance</span></div>
-      <div className="w-10 shrink-0"/>
+    <div className="flex items-center pb-2.5 border-b border-black/[.05] dark:border-white/[.05]">
+      <div className="flex-1 pl-[1.75rem]">
+        <span className="text-[10px] font-semibold tracking-[.16em] uppercase text-ink-muted/40 dark:text-white/20">
+          Account
+        </span>
+      </div>
+      <div className="hidden sm:block w-[112px] shrink-0 text-right pr-4">
+        <span className="text-[10px] font-semibold tracking-[.16em] uppercase text-ink-muted/40 dark:text-white/20">
+          Monthly
+        </span>
+      </div>
+      <div className="hidden sm:block w-[82px] shrink-0 text-right pr-4">
+        <span className="text-[10px] font-semibold tracking-[.16em] uppercase text-ink-muted/40 dark:text-white/20">
+          Rate
+        </span>
+      </div>
+      <div className="w-[118px] sm:w-[138px] shrink-0 text-right pr-2">
+        <span className="text-[10px] font-semibold tracking-[.16em] uppercase text-ink-muted/40 dark:text-white/20">
+          Balance
+        </span>
+      </div>
+      <div className="w-10 shrink-0" />
     </div>
   )
 }
@@ -209,6 +356,7 @@ export default function Accounts() {
   const [form, setForm] = useState({...emptyForm})
   const [saving, setSaving] = useState(false)
   const [snaps, setSnaps] = useState([])
+  const snapshotsRef = useRef(null)
   const [snapsLoading, setSnapsLoading] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [expandedSnap, setExpandedSnap] = useState(null)
@@ -260,11 +408,25 @@ export default function Accounts() {
   const sortedSnaps = useMemo(()=>[...snaps].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)),[snaps])
   const snapCurrency = (sortedSnaps[0]?.base_currency||baseCurrency||'GBP').toUpperCase()
 
+  const latestSnapshot = sortedSnaps[0] || null
+  const latestSnapshotFreshness = getSnapshotFreshnessState(latestSnapshot?.created_at)
+
   const {assetsTotal,liabilitiesTotal,netPosition} = useMemo(()=>{
     const at=accounts.filter(a=>!LIABILITY_TYPES.has(a.type)&&a.include_in_net_worth!==false).reduce((s,a)=>s+(Number(a.balance)||0),0)
     const lt=accounts.filter(a=>LIABILITY_TYPES.has(a.type)).reduce((s,a)=>s+(Number(a.balance)||0),0)
     return{assetsTotal:at,liabilitiesTotal:lt,netPosition:at-lt}
   },[accounts])
+
+  const totalMonthlyContribs = useMemo(
+    () => accounts.reduce((sum, a) => sum + Number(a.monthly_contribution || 0), 0),
+    [accounts]
+  )
+
+  const totalMonthlyContributions = useMemo(() => {
+    return accounts
+      .filter(a => !LIABILITY_TYPES.has(a.type) && a.include_in_net_worth !== false)
+      .reduce((sum, a) => sum + Math.max(0, Number(a.monthly_contribution || 0)), 0)
+  }, [accounts])
 
   const wealthGroups = useMemo(()=>WEALTH_GROUPS.map(g=>{
     const ga=accounts.filter(a=>g.types.includes(a.type))
@@ -302,6 +464,15 @@ export default function Accounts() {
     }})
   }
 
+  const openHistoryFromHeader = useCallback(() => {
+    setHistoryOpen(true)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        snapshotsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    })
+  }, [])
+
   const inp='w-full px-4 py-3 rounded-2xl border border-black/[.08] dark:border-white/[.08] bg-surface dark:bg-surface-dark text-base text-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all'
   const lbl='block text-xs font-semibold text-ink-3 dark:text-white/50 mb-2'
 
@@ -326,57 +497,201 @@ export default function Accounts() {
     <div className="animate-page-in">
       <h1 className="text-sm font-semibold tracking-[.08em] uppercase text-ink-muted/40 dark:text-white/22">Accounts</h1>
 
-      {/* SCENE 1: HEADER */}
-      <div className="-mx-4 sm:-mx-6 lg:-mx-8 relative overflow-hidden" style={{background:'linear-gradient(160deg, #0A0F1A 0%, #141A26 50%, #0F141F 100%)'}}>
-        <div aria-hidden="true" className="absolute -top-20 -right-12 w-[340px] h-[340px] rounded-full pointer-events-none" style={{background:'radial-gradient(circle, rgba(120,169,230,0.06) 0%, transparent 60%)'}}/>
-        <div aria-hidden="true" className="absolute -bottom-14 -left-8 w-[240px] h-[240px] rounded-full pointer-events-none" style={{background:'radial-gradient(circle, rgba(212,175,55,0.04) 0%, transparent 60%)'}}/>
-        <div className="relative px-6 pt-9 pb-8 sm:px-10 sm:pt-10">
-          <div className="text-[10px] font-semibold tracking-[.18em] uppercase mb-3" style={{color:'rgba(255,255,255,0.25)'}}>Wealth ledger · {baseCurrency}</div>
-          <div className="flex items-start justify-between gap-6">
-            <div className="min-w-0">
+            {/* SCENE 1: HEADER */}
+            <div
+        className="-mx-4 sm:-mx-6 lg:-mx-8 relative overflow-hidden"
+        style={{ background: 'linear-gradient(160deg, #0A0F1A 0%, #141A26 50%, #0F141F 100%)' }}
+      >
+        <div
+          aria-hidden="true"
+          className="absolute -top-20 -right-12 w-[340px] h-[340px] rounded-full pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(120,169,230,0.06) 0%, transparent 60%)' }}
+        />
+        <div
+          aria-hidden="true"
+          className="absolute -bottom-14 -left-8 w-[240px] h-[240px] rounded-full pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(212,175,55,0.04) 0%, transparent 60%)' }}
+        />
+
+<div className="relative px-6 pt-8 pb-5 sm:px-10 sm:pt-9 sm:pb-6">
+          <div className="flex items-start justify-between gap-6 flex-wrap">
+            <div className="min-w-0 flex-1 max-w-[58rem]">
+              <div
+                className="text-[10px] font-semibold tracking-[.18em] uppercase mb-3"
+                style={{ color: 'rgba(255,255,255,0.25)' }}
+              >
+                Wealth ledger · {baseCurrency}
+              </div>
+
               {hasAccounts ? (
                 <>
-                  <div className="hero-number text-white leading-none">{fmtCurrencyCompact(netPosition, baseCurrency)}</div>
-                  <div className="mt-1.5 text-xs" style={{color:'rgba(255,255,255,0.28)'}}>
-                    Net position
-                    {liabilitiesTotal > 0 && <span> · {fmtCurrencyCompact(assetsTotal,baseCurrency)} assets − {fmtCurrencyCompact(liabilitiesTotal,baseCurrency)} liabilities</span>}
-                  </div>
-                </>
-              ) : <div className="text-[1.5rem] font-semibold text-white/40">No accounts yet</div>}
+                <div className="hero-number text-white leading-none">
+                  {fmtCurrencyCompact(netPosition, baseCurrency)}
+                </div>
+              
+                <div className="mt-2 text-[12px] leading-none" style={{ color: 'rgba(255,255,255,0.22)' }}>
+                  Net position
+                  {liabilitiesTotal > 0 && (
+                    <span style={{ color: 'rgba(255,255,255,0.18)' }}>
+                      {' '}· {fmtCurrencyCompact(assetsTotal, baseCurrency)} assets − {fmtCurrencyCompact(liabilitiesTotal, baseCurrency)} liabilities
+                    </span>
+                  )}
+                </div>
+              </>
+              ) : (
+                <div className="text-[1.5rem] font-semibold text-white/40">No accounts yet</div>
+              )}
             </div>
-            <button onClick={()=>{if(accountLimitReached)return goUpgrade();openAdd()}}
-              className={['shrink-0 flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-2xl transition-all active:scale-[.97]',accountLimitReached?'bg-gradient-to-r from-accent to-accent-dark text-white hover:opacity-90':'bg-white/[.09] border border-white/[.13] text-white hover:bg-white/[.14]'].join(' ')}
-              disabled={saving} type="button">
-              {accountLimitReached?<><Crown size={13}/> Upgrade to Pro</>:<><Plus size={14}/> Add account</>}
-            </button>
+
+            <div className="shrink-0">
+            <div className="shrink-0 self-start sm:self-end lg:translate-y-[8px]">
+  <div
+    className="flex items-center gap-1.5 px-1.5 py-1.5 rounded-[20px] border backdrop-blur-xl"
+    style={{
+      borderColor: 'rgba(255,255,255,0.07)',
+      background: 'rgba(255,255,255,0.025)',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+    }}
+  >
+    <button
+      onClick={() => {
+        if (historyOpen) setHistoryOpen(false)
+        else openHistoryFromHeader()
+      }}
+      className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-2 rounded-xl text-white/72 hover:text-white hover:bg-white/[.05] transition-colors"
+      type="button"
+    >
+      <Clock size={12} className="opacity-65" />
+      History
+      <ChevronDown size={11} className={`opacity-45 transition-transform duration-200 ${historyOpen ? 'rotate-180' : ''}`} />
+    </button>
+
+    <button
+      onClick={recordSnapshot}
+      disabled={saving || !hasAccounts}
+      className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-2 rounded-xl text-white/72 hover:text-white hover:bg-white/[.05] transition-colors disabled:opacity-40"
+      type="button"
+    >
+      <Camera size={12} className="opacity-65" />
+      Record
+    </button>
+
+    <button
+      onClick={() => { if (accountLimitReached) return goUpgrade(); openAdd() }}
+      className={[
+        'flex items-center gap-2 text-[12.5px] font-semibold px-3.5 py-2 rounded-[16px] transition-all active:scale-[.985]',
+        accountLimitReached
+          ? 'bg-gradient-to-r from-accent to-accent-dark text-white hover:opacity-90'
+          : 'bg-white/[.07] border border-white/[.10] text-white hover:bg-white/[.10]'
+      ].join(' ')}
+      disabled={saving}
+      type="button"
+    >
+      {accountLimitReached ? (
+        <>
+          <Crown size={13} />
+          Upgrade
+        </>
+      ) : (
+        <>
+          <Plus size={13} />
+          Add account
+        </>
+      )}
+    </button>
+  </div>
+</div>
+</div>
           </div>
 
           {hasAccounts && (
-            <div className="mt-7 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-5">
-              {[
-                {label:'Total assets',value:fmtCurrencyCompact(assetsTotal,baseCurrency),show:true},
-                {label:'Liabilities',value:'−'+fmtCurrencyCompact(liabilitiesTotal,baseCurrency),show:liabilitiesTotal>0,color:'rgba(192,90,70,0.85)'},
-                {label:'Last recorded',value:sortedSnaps[0]?fmtDate(sortedSnaps[0].created_at):null,show:true,empty:'Not yet',stale:!!(sortedSnaps[0]&&isSnapshotStale(sortedSnaps[0].created_at))},
-              ].filter(s=>s.show).map(stat=>(
-                <div key={stat.label}>
-                  <div className="text-[9.5px] font-semibold tracking-[.13em] uppercase mb-1.5" style={{color:'rgba(255,255,255,0.22)'}}>{stat.label}</div>
-                  <div className="text-[1.3rem] font-semibold tabular-nums tracking-tight leading-tight" style={{color:stat.stale?'rgba(217,119,6,0.85)':stat.color||'white'}}>
-                    {stat.value || <span className="text-sm font-normal" style={{color:'rgba(255,255,255,0.30)'}}>{stat.empty}</span>}
-                  </div>
-                </div>
-              ))}
+  <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-5 max-w-[58rem]">
+    {[
+  { label: 'Total assets', value: fmtCurrencyCompact(assetsTotal, baseCurrency), show: true },
+  { label: 'Liabilities', value: '−' + fmtCurrencyCompact(liabilitiesTotal, baseCurrency), show: liabilitiesTotal > 0, color: 'rgba(192,90,70,0.82)' },
+  {
+    label: 'Monthly contributions',
+    value: totalMonthlyContributions > 0 ? `${fmtCurrencyCompact(totalMonthlyContributions, baseCurrency)}/mo` : '—',
+    show: true,
+  },
+  {
+    label: 'Last recorded',
+    value: latestSnapshot ? fmtDate(latestSnapshot.created_at) : null,
+    show: true,
+    empty: 'Not yet',
+    freshness: latestSnapshotFreshness.state,
+  },
+].filter(s => s.show).map(stat => (
+  <div key={stat.label}>
+    <div
+      className="text-[9.5px] font-semibold tracking-[.13em] uppercase mb-1.5"
+      style={{ color: 'rgba(255,255,255,0.20)' }}
+    >
+      {stat.label}
+    </div>
+
+    <div
+      className="text-[1.22rem] sm:text-[1.28rem] font-semibold tabular-nums tracking-tight leading-tight"
+      style={{
+        color:
+          stat.freshness === 'stale'
+            ? 'rgba(217,119,6,0.82)'
+            : stat.freshness === 'aging'
+            ? 'rgba(217,119,6,0.76)'
+            : stat.color || 'rgba(255,255,255,0.88)'
+      }}
+    >
+      {stat.value || (
+        <span
+          className="text-sm font-normal"
+          style={{ color: 'rgba(255,255,255,0.28)' }}
+        >
+          {stat.empty}
+        </span>
+      )}
+    </div>
+  </div>
+))}
+  </div>
+)}
+
+          {!isPro && usage && !accountLimitReached && hasAccounts && (
+            <div className="mt-5 flex items-center gap-3">
+              <div className="h-1 w-20 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.10)' }}>
+                <div className="h-full rounded-full bg-accent" style={{ width: `${usage.pct}%` }} />
+              </div>
+              <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.30)' }}>
+                {usage.used} of {usage.limit} free · <button onClick={goUpgrade} className="underline" type="button">Upgrade for unlimited</button>
+              </span>
             </div>
           )}
 
-          {!isPro&&usage&&!accountLimitReached&&hasAccounts&&(
-            <div className="mt-5 flex items-center gap-3">
-              <div className="h-1 w-20 rounded-full overflow-hidden" style={{background:'rgba(255,255,255,0.10)'}}><div className="h-full rounded-full bg-accent" style={{width:`${usage.pct}%`}}/></div>
-              <span className="text-[10px]" style={{color:'rgba(255,255,255,0.30)'}}>{usage.used} of {usage.limit} free · <button onClick={goUpgrade} className="underline" type="button">Upgrade for unlimited</button></span>
+          {accountLimitReached && (
+            <div className="mt-4 text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
+              Free limit reached · <button onClick={goUpgrade} className="font-semibold underline" style={{ color: 'var(--gold)' }} type="button">Upgrade for unlimited accounts</button>
             </div>
           )}
-          {accountLimitReached&&<div className="mt-4 text-[10px]" style={{color:'rgba(255,255,255,0.35)'}}>Free limit reached · <button onClick={goUpgrade} className="font-semibold underline" style={{color:'var(--gold)'}} type="button">Upgrade for unlimited accounts</button></div>}
+          <div
+  className="mt-5 h-px"
+  style={{
+    background:
+      'linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 68%, transparent 100%)',
+  }}
+/>
         </div>
       </div>
+
+      {hasAccounts && latestSnapshotFreshness.state === 'stale' && (
+            <div
+              className="mt-5 inline-flex items-start gap-2.5 px-3.5 py-2.5 rounded-2xl"
+              style={{ background: 'rgba(217,119,6,0.10)', border: '1px solid rgba(217,119,6,0.18)', color: 'rgba(217,119,6,0.88)' }}
+            >
+              <span className="mt-[2px] w-1.5 h-1.5 rounded-full" style={{ background: 'rgba(217,119,6,0.88)' }} />
+              <span className="text-[11px] font-medium leading-relaxed">
+                Last snapshot was {latestSnapshotFreshness.days} days ago — figures may not reflect current balances.
+              </span>
+            </div>
+          )}
 
       {/* SCENE 2: LEDGER */}
       {!hasAccounts ? (
@@ -387,9 +702,9 @@ export default function Accounts() {
           <button onClick={()=>{if(accountLimitReached)return goUpgrade();openAdd()}} className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-2xl bg-accent text-white hover:bg-accent-dark transition-all" type="button"><Plus size={14}/> Add account</button>
         </div>
       ) : (
-        <div className="pt-8">
-          <LedgerColumnHeader/>
-          <div className="mt-7 space-y-10">
+        <div className="pt-5">
+  <LedgerColumnHeader />
+  <div className="mt-5 space-y-9">
             {wealthGroups.map(g=>{
               // Contextual nudge — at most 1 per group, priority order
               let nudge = null
@@ -483,7 +798,10 @@ export default function Accounts() {
       )}
 
       {/* SCENE 4: SNAPSHOTS */}
-      <div className="mt-8 pt-6 border-t border-black/[.06] dark:border-white/[.07] pb-4">
+      <div
+  ref={snapshotsRef}
+  className="mt-8 pt-6 border-t border-black/[.06] dark:border-white/[.07] pb-4"
+>
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-[10.5px] font-semibold tracking-[.14em] uppercase text-ink-muted/45 dark:text-white/25">Snapshots</span>
@@ -494,15 +812,17 @@ export default function Accounts() {
             )}
           </div>
           <div className="flex flex-col items-end gap-2">
-            {sortedSnaps[0]&&isSnapshotStale(sortedSnaps[0].created_at)&&!justRecorded&&(
-              <span className="text-[10.5px] font-medium text-amber-600/80 dark:text-amber-400/65">Over 30 days since last record.</span>
+            {latestSnapshotFreshness.state === 'stale' && !justRecorded && (
+              <span className="text-[10.5px] font-medium text-amber-600/80 dark:text-amber-400/65">
+                Over 30 days since last record.
+              </span>
             )}
-            <div className="flex items-center gap-2">
-              <button onClick={recordSnapshot} disabled={saving} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border border-black/[.07] dark:border-white/[.08] text-ink-muted dark:text-white/40 hover:text-ink dark:hover:text-white hover:bg-black/[.03] dark:hover:bg-white/[.04] transition-colors" type="button"><Camera size={12} className="opacity-65"/> Record</button>
-              <button onClick={()=>setHistoryOpen(v=>!v)} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border border-black/[.07] dark:border-white/[.08] text-ink-muted dark:text-white/40 hover:text-ink dark:hover:text-white hover:bg-black/[.03] dark:hover:bg-white/[.04] transition-colors" type="button"><Clock size={12} className="opacity-65"/> History <ChevronDown size={11} className={`opacity-40 transition-transform duration-200 ${historyOpen?'rotate-180':''}`}/></button>
-            </div>
-            {justRecorded&&(
-              <button type="button" onClick={()=>setPage('plan')} className="text-[11px] font-semibold text-accent hover:text-accent-dark dark:text-blue-400 dark:hover:text-blue-300 transition-colors">
+            {justRecorded && (
+              <button
+                type="button"
+                onClick={() => setPage('plan')}
+                className="text-[11px] font-semibold text-accent hover:text-accent-dark dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+              >
                 View your updated plan →
               </button>
             )}

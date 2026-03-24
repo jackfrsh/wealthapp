@@ -4,17 +4,17 @@
 // Structure:
 //   MilestoneReceipt   ← celebration ribbon (conditional)
 //   HeroStage          ← net worth, delta, milestone progress
+//   OnboardingPanel    ← conditional, directly below hero for incomplete setup
 //   ISA urgency        ← full-width interrupt (conditional)
 //   CommandDeck        ← Plan · Accounts · Next move (unified slab)
-//   WealthRunway       ← "If you keep going" projection module
-//   OnboardingPanel    ← conditional, dismisses when complete
+//   WealthRunway       ← current forecast module
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { api } from '../api'
 import { track } from '../track'
 import { useApp } from '../App'
 import { GoldDelta } from '../components/surfaces'
-import { fmtCurrency, fmtCurrencyCompact, fmtDate, isIsaUrgent, isSnapshotStale, getDaysSinceSnapshot } from '../utils'
+import { fmtCurrency, fmtCurrencyCompact, fmtCurrencyCompactStable, fmtDate, isIsaUrgent, getSnapshotFreshnessState } from '../utils'
 import GoalSetup from './GoalSetup'
 import useProjectionData from '../hooks/outlook/useProjectionData'
 import {
@@ -35,10 +35,11 @@ import {
   X,
   ChevronRight,
   Clock,
+  Crown,
 } from 'lucide-react'
 
 /* ──────────────────────────────────────────────────── */
-/* Milestone / forecast math (unchanged from original)  */
+/* Milestone / forecast math (unchanged from original) */
 /* ──────────────────────────────────────────────────── */
 
 const MILESTONE_LADDER = [
@@ -92,7 +93,7 @@ function monthsToTarget({ pv, pmt, annualReturnPct, target }) {
 }
 
 /* ──────────────────────────────────────────────────── */
-/* Celebration storage (unchanged)                      */
+/* Celebration storage (unchanged)                     */
 /* ──────────────────────────────────────────────────── */
 
 const CELEBRATION_LAST_KEY = 'wealthapp:last-celebrated-milestone-v1'
@@ -125,7 +126,7 @@ function toCents(n) {
 }
 
 /* ──────────────────────────────────────────────────── */
-/* Tax-year / ISA helpers (pure date math)              */
+/* Tax-year / ISA helpers                              */
 /* ──────────────────────────────────────────────────── */
 
 function getTaxYearEnd() {
@@ -153,13 +154,13 @@ function getCurrentTaxYearLabel() {
 
 /* Plan status config — matches Outlook.jsx statusLabels */
 const PLAN_STATUS = {
-  ahead:    { label: 'Ahead of plan',           color: 'rgba(47,166,118,0.90)', bg: 'rgba(47,166,118,0.10)', border: 'rgba(47,166,118,0.20)' },
-  on_track: { label: 'On track',                color: 'rgba(255,255,255,0.75)', bg: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.10)' },
-  adjust:   { label: 'Needs attention',         color: 'rgba(200,155,60,0.90)',  bg: 'rgba(200,155,60,0.08)', border: 'rgba(200,155,60,0.18)' },
+  ahead:    { label: 'Ahead of plan',   color: 'rgba(47,166,118,0.90)', bg: 'rgba(47,166,118,0.10)', border: 'rgba(47,166,118,0.20)' },
+  on_track: { label: 'On track',        color: 'rgba(255,255,255,0.75)', bg: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.10)' },
+  adjust:   { label: 'Needs attention', color: 'rgba(200,155,60,0.90)', bg: 'rgba(200,155,60,0.08)', border: 'rgba(200,155,60,0.18)' },
 }
 
 /* ──────────────────────────────────────────────────── */
-/* Milestone receipt (redesigned)                       */
+/* Milestone receipt                                   */
 /* ──────────────────────────────────────────────────── */
 
 function MilestoneReceipt({ visible, milestone, ccy, onDismiss }) {
@@ -176,9 +177,7 @@ function MilestoneReceipt({ visible, milestone, ccy, onDismiss }) {
       ].join(' ')}
     >
       <div className="relative px-5 sm:px-6 py-3.5 flex items-center gap-4">
-        {/* Glow */}
         <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-emerald-500/[.04] via-transparent to-transparent" />
-
         <div className="shrink-0">
           <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/15 flex items-center justify-center">
             <Trophy size={18} className="text-emerald-600 dark:text-emerald-400" />
@@ -206,13 +205,14 @@ function MilestoneReceipt({ visible, milestone, ccy, onDismiss }) {
           <X size={15} className="text-ink-muted dark:text-white/40" />
         </button>
       </div>
+
       <div className="h-px bg-gradient-to-r from-emerald-500/20 via-emerald-500/40 to-transparent" />
     </div>
   )
 }
 
 /* ──────────────────────────────────────────────────── */
-/* Onboarding panel (redesigned, logic unchanged)       */
+/* Onboarding panel                                    */
 /* ──────────────────────────────────────────────────── */
 
 function OnboardingPanel({ needsGoal, needsAccounts, accountsCount = 0, onGoal, onAccounts }) {
@@ -339,8 +339,7 @@ function OnboardingPanel({ needsGoal, needsAccounts, accountsCount = 0, onGoal, 
 }
 
 /* ──────────────────────────────────────────────────── */
-/* CommandDeck — unified premium slab beneath the hero  */
-/* Plan (left) · Accounts (right-top) · Next move (opt) */
+/* CommandDeck                                          */
 /* ──────────────────────────────────────────────────── */
 
 function CommandDeck({
@@ -359,7 +358,6 @@ function CommandDeck({
   onAccounts,
   onStrategy,
 }) {
-  /* ── Plan pane data ── */
   const hasGoal = !!goal
   const target = Number(goal?.target_amount || 0)
   const projectedEnd = Number(forecast?.projected_end_value || 0)
@@ -383,14 +381,11 @@ function CommandDeck({
   else if (target > 0 && progress !== null) supportingParts.push(`${progress.toFixed(0)}% of ${fmtCurrencyCompact(target, ccy)}`)
   const supportingLine = supportingParts.join(' · ')
 
-  /* ── Next move gate ── */
   const showNextMove = !showIsaUrgency && planShortfall > 0 && !!retirementGoal?.target_age
 
   return (
     <div className="rounded-xl overflow-hidden bg-black/[.012] dark:bg-white/[.018]" style={{ border: '1px solid rgba(0,0,0,0.04)' }}>
       <div className="grid grid-cols-1 md:grid-cols-[3fr_2fr]">
-
-        {/* ── Plan pane (left / top on mobile) ── */}
         <button
           type="button"
           onClick={hasGoal ? onPlan : onSetGoal}
@@ -399,7 +394,6 @@ function CommandDeck({
           <div className="px-5 pt-5 pb-5 flex flex-col justify-between h-full">
             {hasGoal ? (
               <>
-                {/* Header: goal name + status badge */}
                 <div>
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <div className="text-sm font-semibold text-ink dark:text-white truncate">
@@ -415,7 +409,6 @@ function CommandDeck({
                     )}
                   </div>
 
-                  {/* Projected outcome */}
                   {projectedEnd > 0 && (
                     <div className="text-2xl font-bold tabular-nums text-ink dark:text-white tracking-tight leading-none">
                       {fmtCurrencyCompact(projectedEnd, ccy)}
@@ -428,7 +421,6 @@ function CommandDeck({
                   )}
                 </div>
 
-                {/* Progress bar + CTA */}
                 <div className="mt-4">
                   {progress !== null && (
                     <div className="h-[3px] rounded-full w-full mb-3" style={{ background: 'rgba(0,0,0,0.04)' }}>
@@ -450,7 +442,6 @@ function CommandDeck({
                 </div>
               </>
             ) : (
-              /* No-goal state — intentional, not empty */
               <div className="py-4">
                 <div className="text-lg font-bold text-ink dark:text-white leading-tight">
                   Set your target
@@ -469,10 +460,7 @@ function CommandDeck({
           </div>
         </button>
 
-        {/* ── Right column ── */}
         <div className="flex flex-col border-t md:border-t-0 md:border-l border-black/[.05] dark:border-white/[.06]">
-
-          {/* Accounts pane */}
           <button
             type="button"
             onClick={onAccounts}
@@ -491,7 +479,6 @@ function CommandDeck({
             </div>
           </button>
 
-          {/* Next move pane — only when quantified shortfall exists */}
           {showNextMove && (
             <>
               <div className="h-px bg-black/[.05] dark:bg-white/[.06]" aria-hidden="true" />
@@ -519,11 +506,10 @@ function CommandDeck({
 }
 
 /* ──────────────────────────────────────────────────── */
-/* WealthRunway — motivational projection module       */
-/* "If you keep going" → projected value → chips/chart */
+/* WealthRunway                                         */
 /* ──────────────────────────────────────────────────── */
 
-function WealthRunway({ settingsReady, isPro, ccy }) {
+function WealthRunway({ settingsReady, isPro, ccy, defaultProjYears }) {
   const [runwayOpen, setRunwayOpen] = useState(false)
 
   const deflate = useCallback((v) => Number(v || 0), [])
@@ -531,9 +517,14 @@ function WealthRunway({ settingsReady, isPro, ccy }) {
   const {
     projData, setProjYears, projLoading,
     HORIZONS, effectiveProjYears, projChartData, filteredMilestones,
-  } = useProjectionData({ settingsReady, isPro, projOpen: runwayOpen, deflate })
+  } = useProjectionData({
+    settingsReady,
+    isPro,
+    projOpen: runwayOpen,
+    deflate,
+    defaultProjYears,
+  })
 
-  // Lead with the strongest projected value for the selected horizon
   const headlineValue = useMemo(() => {
     if (!projData?.points?.length) return null
     const last = projData.points[projData.points.length - 1]
@@ -543,130 +534,206 @@ function WealthRunway({ settingsReady, isPro, ccy }) {
   if (!settingsReady) return null
 
   return (
-    <div>
-      {/* Header — always visible, sits on the page surface */}
+    <div
+      className="rounded-3xl overflow-hidden"
+      style={{
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.022) 0%, rgba(255,255,255,0.014) 100%)',
+        border: '1px solid rgba(255,255,255,0.06)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.025)',
+      }}
+    >
       <button
         type="button"
         onClick={() => setRunwayOpen((v) => !v)}
-        className="w-full text-left flex items-center justify-between gap-4 py-1 transition-opacity duration-150 hover:opacity-75"
+        className="w-full text-left px-6 py-5 sm:px-7 sm:py-5 flex items-start justify-between gap-4 transition-opacity duration-150 hover:opacity-80"
       >
         <div className="min-w-0">
-          <div className="text-[10.5px] font-semibold tracking-[.14em] uppercase text-ink-muted/40 dark:text-white">
-            If you keep going
+          <div
+            className="text-[10.5px] font-semibold tracking-[.16em] uppercase"
+            style={{ color: 'rgba(255,255,255,0.34)' }}
+          >
+            Current forecast
           </div>
+
+          <div
+            className="mt-1.5 text-[13px] leading-relaxed"
+            style={{ color: 'rgba(255,255,255,0.36)' }}
+          >
+            Projected from your current accounts and contributions.
+          </div>
+
           {!runwayOpen && headlineValue && (
-            <div className="mt-2 text-lg font-semibold tabular-nums text-ink dark:text-white tracking-tight leading-none">
-              {fmtCurrencyCompact(headlineValue, ccy)}
-              <span className="text-[13px] font-normal text-ink-muted/45 dark:text-white/28 ml-2">
+            <div className="mt-3 flex items-baseline gap-2 flex-wrap">
+              <div className="text-[32px] sm:text-[36px] font-bold tabular-nums text-white tracking-tight leading-none">
+                {fmtCurrencyCompactStable(headlineValue, ccy)}
+              </div>
+              <div
+                className="text-[13px] font-medium"
+                style={{ color: 'rgba(255,255,255,0.34)' }}
+              >
                 in {effectiveProjYears}y
-              </span>
+              </div>
             </div>
           )}
         </div>
+
         <ChevronRight
           size={13}
-          className={`shrink-0 text-ink-muted/30 dark:text-white transition-transform duration-200 ${runwayOpen ? 'rotate-90' : ''}`}
+          className={`shrink-0 mt-1 text-white/25 transition-transform duration-200 ${runwayOpen ? 'rotate-90' : ''}`}
         />
       </button>
 
-      {/* Expanded body — flows into page, no card wrapper */}
       {runwayOpen && (
-        <div className="mt-4 space-y-5">
-          {/* Projected headline */}
-          {headlineValue && (
-            <div>
-              <div className="text-2xl font-bold tabular-nums text-ink dark:text-white tracking-tight leading-none">
-                {fmtCurrencyCompact(headlineValue, ccy)}
+        <div className="px-6 pb-6 sm:px-7 sm:pb-7">
+          <div className="pt-4">
+            <div
+              className="mb-4 h-px"
+              style={{
+                background:
+                  'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.025) 72%, transparent 100%)',
+              }}
+            />
+            <div className="space-y-4">
+              <div className="pt-5 space-y-5">
+                {headlineValue && (
+                  <div>
+                    <div className="flex items-end gap-2.5 flex-wrap">
+                      <div className="text-[30px] sm:text-[34px] font-bold tabular-nums text-white tracking-tight leading-none">
+                        {fmtCurrencyCompactStable(headlineValue, ccy)}
+                      </div>
+                      <div
+                        className="text-[12px] font-medium pb-[3px]"
+                        style={{ color: 'rgba(255,255,255,0.32)' }}
+                      >
+                        in {effectiveProjYears} year{effectiveProjYears !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                    <div
+                      className="mt-1.5 text-[12.5px] leading-relaxed"
+                      style={{ color: 'rgba(255,255,255,0.32)' }}
+                    >
+                      If you keep going at your current pace.
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="mt-1.5 text-[13px] text-ink-muted/45 dark:text-white/28">
-                Projected net worth in {effectiveProjYears} year{effectiveProjYears !== 1 ? 's' : ''}
-              </div>
-            </div>
-          )}
 
-          {/* Horizon chips */}
-          {HORIZONS.length > 1 && (
-            <div className="flex bg-surface-2 dark:bg-white/5 rounded-full p-0.5 gap-0.5 w-fit">
-              {HORIZONS.map((h) => (
-                <button
-                  key={h}
-                  onClick={() => setProjYears(h)}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-all min-w-[38px] ${
-                    effectiveProjYears === h
-                      ? 'bg-white dark:bg-white/10 text-ink dark:text-white shadow-sm'
-                      : 'text-ink-muted dark:text-white/35 hover:text-ink dark:hover:text-white/60'
-                  }`}
-                  type="button"
+              {HORIZONS.length > 1 && (
+                <div className="flex bg-white/[.04] rounded-full p-0.5 gap-0.5 w-fit flex-wrap">
+                  {HORIZONS.map((h) => (
+                    <button
+                      key={h}
+                      onClick={() => setProjYears(h)}
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-all min-w-[38px] ${
+                        effectiveProjYears === h
+                          ? 'bg-white/[.10] text-white shadow-sm'
+                          : 'text-white/35 hover:text-white/65'
+                      }`}
+                      type="button"
+                    >
+                      {h}Y
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {!projLoading && filteredMilestones.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {filteredMilestones.map((m) => (
+                    <div
+                      key={m.year}
+                      className="px-3 py-2 rounded-2xl"
+                      style={{
+                        background: 'rgba(255,255,255,0.04)',
+                        border: '1px solid rgba(255,255,255,0.06)',
+                      }}
+                    >
+                      <div
+                        className="text-[10px] font-semibold tracking-[.14em] uppercase"
+                        style={{ color: 'rgba(255,255,255,0.24)' }}
+                      >
+                        {m.year}y
+                      </div>
+                      <div
+                        className="mt-1 text-[13px] font-semibold tabular-nums"
+                        style={{ color: 'rgba(255,255,255,0.72)' }}
+                      >
+                        {fmtCurrencyCompactStable(m.projected_net_worth, ccy)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {projLoading ? (
+                <div className="h-[180px] rounded-2xl skeleton opacity-15" />
+              ) : projChartData.length > 1 ? (
+                <div
+                  className="rounded-2xl px-2 pt-3"
+                  style={{
+                    background: 'rgba(255,255,255,0.022)',
+                    border: '1px solid rgba(255,255,255,0.05)',
+                  }}
                 >
-                  {h}Y
-                </button>
-              ))}
-            </div>
-          )}
+                  <div className="h-[190px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={projChartData} margin={chartMargin}>
+                        <defs>
+                          <linearGradient id="homeRunwayFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={ACCENT_STROKE} stopOpacity={0.08} />
+                            <stop offset="100%" stopColor={ACCENT_STROKE} stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
 
-          {/* Milestones — inline text row, not cards */}
-          {!projLoading && filteredMilestones.length > 0 && (
-            <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-              {filteredMilestones.map((m) => (
-                <span key={m.year} className="text-[13px] tabular-nums text-ink-muted/55 dark:text-white/30">
-                  <span className="font-semibold text-ink/80 dark:text-white/55">{fmtCurrencyCompact(m.projected_net_worth, ccy)}</span>
-                  {' '}in {m.year}y
-                </span>
-              ))}
-            </div>
-          )}
+                        <CartesianGrid {...gridProps} />
 
-          {/* Chart — embedded directly, minimal chrome */}
-          {projLoading ? (
-            <div className="h-[180px] rounded-lg skeleton opacity-15" />
-          ) : projChartData.length > 1 ? (
-            <div className="h-[180px] -mx-1">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={projChartData} margin={chartMargin}>
-                  <defs>
-                    <linearGradient id="homeRunwayFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={ACCENT_STROKE} stopOpacity={0.06} />
-                      <stop offset="100%" stopColor={ACCENT_STROKE} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid {...gridProps} />
-                  <XAxis
-                    dataKey="date"
-                    {...xAxisProps}
-                    tickFormatter={(d) =>
-                      new Date(d).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
-                    }
-                  />
-                  <YAxis {...yAxisProps} tickFormatter={(v) => Math.round(v / 1000) + 'k'} />
-                  <Tooltip content={<WealthTooltip currency={ccy} />} {...tooltipProps} />
-                  <Area
-                    type="monotone"
-                    dataKey="actual"
-                    stroke={ACCENT_STROKE}
-                    strokeWidth={1.5}
-                    fill="url(#homeRunwayFill)"
-                    dot={false}
-                    connectNulls={false}
-                    activeDot={activeDotStyle}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="projected"
-                    stroke={ACCENT_STROKE}
-                    strokeWidth={1.5}
-                    strokeDasharray="6 4"
-                    fill="none"
-                    dot={false}
-                    connectNulls
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+                        <XAxis
+                          dataKey="date"
+                          {...xAxisProps}
+                          tickFormatter={(d) =>
+                            new Date(d).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
+                          }
+                        />
+
+                        <YAxis {...yAxisProps} tickFormatter={(v) => Math.round(v / 1000) + 'k'} />
+
+                        <Tooltip content={<WealthTooltip currency={ccy} />} {...tooltipProps} />
+
+                        <Area
+                          type="monotone"
+                          dataKey="actual"
+                          stroke={ACCENT_STROKE}
+                          strokeWidth={1.5}
+                          fill="url(#homeRunwayFill)"
+                          dot={false}
+                          connectNulls={false}
+                          activeDot={activeDotStyle}
+                        />
+
+                        <Area
+                          type="monotone"
+                          dataKey="projected"
+                          stroke={ACCENT_STROKE}
+                          strokeWidth={1.5}
+                          strokeDasharray="6 4"
+                          fill="none"
+                          dot={false}
+                          connectNulls
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="text-center py-8 text-[13px]"
+                  style={{ color: 'rgba(255,255,255,0.24)' }}
+                >
+                  Add accounts to see your current forecast.
+                </div>
+              )}
             </div>
-          ) : !projLoading && (
-            <div className="text-center py-6 text-[13px] text-ink-muted/35 dark:text-white/22">
-              Add accounts to see your projection.
-            </div>
-          )}
+          </div>
         </div>
       )}
     </div>
@@ -674,7 +741,7 @@ function WealthRunway({ settingsReady, isPro, ccy }) {
 }
 
 /* ──────────────────────────────────────────────────── */
-/* Inline progress bar (used inside HeroStage)         */
+/* Inline milestone progress                            */
 /* ──────────────────────────────────────────────────── */
 
 function MilestoneProgress({
@@ -765,7 +832,6 @@ function MilestoneProgress({
         </div>
       )}
 
-      {/* Progress track */}
       <div>
         <div className="h-[4px] rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
           <div
@@ -868,7 +934,6 @@ export default function Home() {
     if (Number.isFinite(savedCents) && totalCents !== savedCents) clearCelebration()
   }, [data, totalCents, pendingCelebrate, clearCelebration])
 
-
   const load = useCallback(
     async ({ reason = 'load', forceOverlay = false } = {}) => {
       setError(null)
@@ -954,7 +1019,6 @@ export default function Home() {
 
   useEffect(() => { load({ reason: 'effect' }) }, [load, dataVersion])
 
-  /* ── Loading skeleton ────────────────── */
   if (loading && !data) {
     return (
       <div className="space-y-5 animate-fade-in">
@@ -973,7 +1037,6 @@ export default function Home() {
     )
   }
 
-  /* ── Error state ─────────────────────── */
   if (error && !data) {
     return (
       <div className="rounded-3xl border border-black/[.05] dark:border-white/[.06] bg-white dark:bg-surface-dark-2 p-8 text-center">
@@ -993,13 +1056,43 @@ export default function Home() {
 
   if (!data) return null
 
-  /* ── Derived values (unchanged) ─────── */
-  const sparkValues = (data?.series || []).map((p) => Number(p.v)).filter(Number.isFinite)
+  const seriesPoints = data?.series || []
+  const sparkValues = seriesPoints.map((p) => Number(p.v)).filter(Number.isFinite)
   const firstVal = sparkValues[0]
   const lastVal = sparkValues[sparkValues.length - 1]
   const delta = sparkValues.length >= 2 ? lastVal - firstVal : 0
   const deltaPct = sparkValues.length >= 2 && Number.isFinite(firstVal) && firstVal !== 0
-    ? (delta / Math.abs(firstVal)) * 100 : 0
+    ? (delta / Math.abs(firstVal)) * 100
+    : 0
+
+  const firstSeriesPoint = seriesPoints[0]
+  const lastSeriesPoint = seriesPoints[seriesPoints.length - 1]
+  const seriesSpanDays =
+    firstSeriesPoint?.t && lastSeriesPoint?.t
+      ? Math.max(0, Math.floor((new Date(lastSeriesPoint.t) - new Date(firstSeriesPoint.t)) / 86400000))
+      : null
+
+  const changeFromDate = firstSeriesPoint?.t ? fmtDate(firstSeriesPoint.t) : null
+
+  const showHeroPct =
+    Number.isFinite(deltaPct) &&
+    seriesSpanDays != null &&
+    seriesSpanDays >= 30 &&
+    Math.abs(deltaPct) <= 99
+
+  const deltaContextLabel = showHeroPct
+    ? ` · ${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(1)}%`
+    : undefined
+
+  const changeGroundingLabel = changeFromDate
+    ? `Change since ${changeFromDate}`
+    : null
+
+  const changeExplainer = changeFromDate
+    ? seriesSpanDays != null && seriesSpanDays < 30
+      ? 'Includes account additions, contributions, balance updates, and market movement.'
+      : 'Includes contributions, balance updates, and market movement between recorded snapshots.'
+    : null
 
   const dashboardGoal =
     data?.primary_goal && (data.primary_goal.id || data.primary_goal.name) &&
@@ -1046,7 +1139,9 @@ export default function Home() {
       bumpData?.()
     } catch (e) {
       showToast?.(e?.message || 'Failed to update target', 'error')
-    } finally { setSavingMilestone(false) }
+    } finally {
+      setSavingMilestone(false)
+    }
   }
 
   const heroCelebrating = pendingCelebrate?.milestone
@@ -1057,28 +1152,44 @@ export default function Home() {
   const needsAccounts = accountsCount === 0
   const showOnboarding = needsGoal || needsAccounts
 
-  /* ── Signal derivations ──────────────── */
-  const snapshotStale = isSnapshotStale(data?.last_snapshot_date)
-  const daysSinceSnap = getDaysSinceSnapshot(data?.last_snapshot_date)
-
+  const snapshotFreshness = getSnapshotFreshnessState(data?.last_snapshot_date)
   const dataAccounts = accounts
 
-  /* ── Freshness label (used in hero timestamp) ─── */
   const freshnessValue = data?.last_snapshot_date
-    ? (daysSinceSnap === 0 ? 'Today' : `${daysSinceSnap}d ago`)
+    ? (snapshotFreshness.days === 0 ? 'Today' : `${snapshotFreshness.days}d ago`)
     : '—'
 
-  /* ── ISA urgency — backend only ─ */
+  const snapshotTone =
+    snapshotFreshness.state === 'stale'
+      ? {
+          icon: AlertTriangle,
+          color: 'rgba(200,155,60,0.72)',
+          label: `Snapshot ${freshnessValue} — update due`,
+        }
+      : snapshotFreshness.state === 'aging'
+      ? {
+          icon: Clock,
+          color: 'rgba(200,155,60,0.58)',
+          label: `Snapshot ${freshnessValue} — consider updating soon`,
+        }
+      : {
+          icon: Shield,
+          color: 'rgba(255,255,255,0.28)',
+          label: data?.last_snapshot_date
+            ? `Snapshot ${freshnessValue} · Encrypted`
+            : 'No snapshots yet · Encrypted',
+        }
+
+  const SnapshotFreshnessIcon = snapshotTone.icon
+
   const isaRemaining = data?.isa_remaining ?? null
   const taxYearDaysLeft = daysUntilTaxYearEnd()
   const taxYearEnd = getTaxYearEndLabel()
   const showIsaUrgency = isIsaUrgent(isaRemaining)
 
-  /* ── Command deck derivations ─── */
   const totalMonthlyContribs = dataAccounts.reduce((s, a) => s + Number(a.monthly_contribution || 0), 0)
   const contributingCount = dataAccounts.filter((a) => Number(a.monthly_contribution || 0) > 0).length
 
-  // Plan shortfall — uses forecast's own inputs to match backend computation
   const forecastMonthsRemaining = (data.forecast?.years_remaining || 0) * 12
   let planShortfall = 0
   if (data.forecast?.status === 'adjust' && retirementGoal && forecastMonthsRemaining > 0) {
@@ -1092,19 +1203,20 @@ export default function Home() {
     planShortfall = Math.max(0, Math.ceil(pmtNeeded - currentMc))
   }
 
-  /* ── Trial badge ─────────────────────── */
+  const goalHorizonYears = (() => {
+    const targetAge = Number(retirementGoal?.target_age)
+    const currentAge = Number(retirementGoal?.current_age)
+    if (!Number.isFinite(targetAge) || !Number.isFinite(currentAge)) return null
+    const years = Math.round(targetAge - currentAge)
+    return years > 0 ? years : null
+  })()
+
   const trialDaysLeft = subscriptionStatus === 'trialing' && trialEnd
     ? Math.max(0, Math.ceil((new Date(trialEnd) - Date.now()) / 86400000))
     : null
 
-  /* ── Change grounding line ── */
-  const changeFromDate = sparkValues.length >= 2 && data.series?.[0]?.t
-    ? fmtDate(data.series[0].t)
-    : null
-
   return (
     <div className="animate-page-in pb-6">
-      {/* Soft background refresh indicator */}
       {loading && data ? (
         <div className="fixed inset-0 z-[900] pointer-events-none">
           <div className="absolute top-4 right-4 text-[11px] font-semibold px-3 py-1.5 rounded-2xl bg-black/80 text-white">
@@ -1113,7 +1225,6 @@ export default function Home() {
         </div>
       ) : null}
 
-      {/* Milestone receipt */}
       {pendingCelebrate?.milestone ? (
         <div className="mb-5">
           <MilestoneReceipt
@@ -1125,7 +1236,6 @@ export default function Home() {
         </div>
       ) : null}
 
-      {/* Trial badge — above stage */}
       {trialDaysLeft !== null && trialDaysLeft <= 14 && (
         <div className="mb-3">
           <button
@@ -1136,12 +1246,13 @@ export default function Home() {
             className="inline-flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/15 transition-colors"
             type="button"
           >
+            <Crown size={10} />
             {trialDaysLeft === 0 ? 'Trial ends today' : `${trialDaysLeft}d left in trial`}
           </button>
         </div>
       )}
 
-      {/* ── 1. Hero — full-bleed dark stage ── */}
+      {/* Hero */}
       <div
         className="-mx-4 sm:-mx-6 lg:-mx-8 relative overflow-hidden"
         style={{
@@ -1149,43 +1260,55 @@ export default function Home() {
           borderBottom: heroHighlight ? `2px solid ${heroHighlight}` : undefined,
         }}
       >
-        {/* Atmospheric glows */}
-        <div aria-hidden="true" className="absolute -top-24 -right-16 w-[380px] h-[380px] rounded-full pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(212,175,55,0.05) 0%, transparent 65%)' }} />
-        <div aria-hidden="true" className="absolute -bottom-16 -left-10 w-[280px] h-[280px] rounded-full pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(120,169,230,0.06) 0%, transparent 65%)' }} />
+        <div
+          aria-hidden="true"
+          className="absolute -top-24 -right-16 w-[380px] h-[380px] rounded-full pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(212,175,55,0.05) 0%, transparent 65%)' }}
+        />
+        <div
+          aria-hidden="true"
+          className="absolute -bottom-16 -left-10 w-[280px] h-[280px] rounded-full pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(120,169,230,0.06) 0%, transparent 65%)' }}
+        />
 
         <div className="relative px-6 pt-9 pb-8 sm:px-10 sm:pt-10 max-w-2xl">
-
-          {/* Eyebrow */}
           <div className="text-[11px] font-semibold tracking-[.18em] uppercase mb-3" style={{ color: 'rgba(255,255,255,0.38)' }}>
             Total wealth · {baseCurrency}
           </div>
 
-          {/* Hero number */}
           <div className={`hero-number text-white ${animatingDelta ? 'animate-delta' : ''}`}>
             {fmtCurrency(total, baseCurrency)}
           </div>
 
-          {/* Delta — currency primary, percentage as context */}
           {sparkValues.length >= 2 && (
-            <div className="-mt-0.5 mb-1">
+            <div className="mt-3 mb-1">
+              <div
+                className="text-[10px] font-semibold tracking-[.14em] uppercase mb-1.5"
+                style={{ color: 'rgba(255,255,255,0.26)' }}
+              >
+                Net change
+              </div>
+
               <GoldDelta
                 value={delta}
-                label={Math.abs(deltaPct) <= 99 ? ` · ${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(1)}% 90d` : ' · 90d'}
+                label={deltaContextLabel}
                 size="md"
               />
             </div>
           )}
 
-          {/* What changed — grounding line */}
-          {changeFromDate && (
-            <div className="text-[11px] mb-3" style={{ color: 'rgba(255,255,255,0.38)' }}>
-              vs snapshot {changeFromDate}
+          {changeGroundingLabel && (
+            <div className="text-[11px] mt-1" style={{ color: 'rgba(255,255,255,0.38)' }}>
+              {changeGroundingLabel}
             </div>
           )}
 
-          {/* Milestone achieved badge */}
+          {changeExplainer && (
+            <div className="text-[11px] mt-1.5 mb-3" style={{ color: 'rgba(255,255,255,0.28)' }}>
+              {changeExplainer}
+            </div>
+          )}
+
           {milestoneAchieved && (
             <div className="mt-3">
               <div className="inline-flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
@@ -1194,7 +1317,6 @@ export default function Home() {
             </div>
           )}
 
-          {/* Milestone progress */}
           {hasMilestone && (
             <div className="mt-5 max-w-xl">
               <MilestoneProgress
@@ -1216,24 +1338,52 @@ export default function Home() {
             </div>
           )}
 
-          {/* Snapshot freshness — trust cue; escalates to amber if stale */}
           <div
             className="flex items-center gap-2 mt-5 text-[11px]"
-            style={{ color: snapshotStale ? 'rgba(200,155,60,0.65)' : 'rgba(255,255,255,0.28)' }}
+            style={{ color: snapshotTone.color }}
           >
-            {snapshotStale ? <AlertTriangle size={10} /> : <Shield size={10} />}
-            <span>
-              {data?.last_snapshot_date
-                ? snapshotStale
-                  ? `Snapshot ${freshnessValue} — update due`
-                  : `Snapshot ${freshnessValue} · Encrypted`
-                : 'No snapshots yet · Encrypted'}
-            </span>
+            <SnapshotFreshnessIcon size={10} />
+            <span>{snapshotTone.label}</span>
           </div>
         </div>
       </div>
 
-      {/* ── 2. ISA urgency — only full-width interrupt ── */}
+      {/* Onboarding moved directly below hero for incomplete setup */}
+      {showOnboarding && (
+        <div className="mt-6">
+          <OnboardingPanel
+            needsGoal={needsGoal}
+            needsAccounts={needsAccounts}
+            accountsCount={accountsCount}
+            onGoal={() => setGoalSetupOpen(true)}
+            onAccounts={() => setPage('accounts')}
+          />
+        </div>
+      )}
+
+      {hasMilestone && false}
+
+      {snapshotFreshness.state === 'stale' && data?.last_snapshot_date && (
+        <div className="mt-5">
+          <div
+            className="rounded-2xl px-5 py-4"
+            style={{ background: 'rgba(200,155,60,0.07)', border: '1px solid rgba(200,155,60,0.16)' }}
+          >
+            <div className="flex items-start gap-3">
+              <AlertTriangle size={14} style={{ color: 'rgba(200,155,60,0.75)', flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <div className="text-sm font-semibold" style={{ color: 'rgba(200,155,60,0.92)' }}>
+                  Last snapshot was {snapshotFreshness.days} days ago.
+                </div>
+                <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(200,155,60,0.65)' }}>
+                  Figures may not reflect current balances until you record a new snapshot.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showIsaUrgency && (
         <div className="mt-5">
           <button
@@ -1272,7 +1422,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* ── Scene 2: Command deck ── */}
       <div className="mt-6">
         <CommandDeck
           goal={retirementGoal}
@@ -1292,26 +1441,15 @@ export default function Home() {
         />
       </div>
 
-      {/* ── Scene 3: Wealth runway ── */}
       <div className="mt-10 pt-8 border-t border-black/[.04] dark:border-white/[.04]">
-        <WealthRunway settingsReady={settingsReady} isPro={isPro} ccy={ccy} />
+        <WealthRunway
+          settingsReady={settingsReady}
+          isPro={isPro}
+          ccy={ccy}
+          defaultProjYears={goalHorizonYears}
+        />
       </div>
 
-      {/* ── Onboarding (conditional) ── */}
-      {showOnboarding && (
-        <div className="mt-8">
-          <OnboardingPanel
-            needsGoal={needsGoal}
-            needsAccounts={needsAccounts}
-            accountsCount={accountsCount}
-            onGoal={() => setGoalSetupOpen(true)}
-            onAccounts={() => setPage('accounts')}
-          />
-        </div>
-      )}
-
-      {/* ── Sign out (mobile only, unchanged) ── */}
-      {/* ── Goal setup overlay ── */}
       {goalSetupOpen && (
         <div className="fixed inset-0 z-[60]">
           <button
