@@ -514,95 +514,76 @@ export default function Accounts() {
         />
 
 <div className="relative px-6 pt-8 pb-5 sm:px-10 sm:pt-9 sm:pb-6">
-          <div className="flex items-start justify-between gap-6 flex-wrap">
-            <div className="min-w-0 flex-1 max-w-[58rem]">
-              <div
-                className="text-[10px] font-semibold tracking-[.18em] uppercase mb-3"
-                style={{ color: 'rgba(255,255,255,0.25)' }}
-              >
-                Wealth ledger · {baseCurrency}
-              </div>
+<div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+  <div className="min-w-0 flex-1 max-w-[58rem]">
+    <div
+      className="text-[10px] font-semibold tracking-[.18em] uppercase mb-3"
+      style={{ color: 'rgba(255,255,255,0.25)' }}
+    >
+      Wealth ledger · {baseCurrency}
+    </div>
 
-              {hasAccounts ? (
-                <>
-                <div className="hero-number text-white leading-none">
-                  {fmtCurrencyCompact(netPosition, baseCurrency)}
-                </div>
-              
-                <div className="mt-2 text-[12px] leading-none" style={{ color: 'rgba(255,255,255,0.22)' }}>
-                  Net position
-                  {liabilitiesTotal > 0 && (
-                    <span style={{ color: 'rgba(255,255,255,0.18)' }}>
-                      {' '}· {fmtCurrencyCompact(assetsTotal, baseCurrency)} assets − {fmtCurrencyCompact(liabilitiesTotal, baseCurrency)} liabilities
-                    </span>
-                  )}
-                </div>
-              </>
-              ) : (
-                <div className="text-[1.5rem] font-semibold text-white/40">No accounts yet</div>
-              )}
-            </div>
+    {hasAccounts ? (
+      <>
+        <div className="hero-number text-white leading-none">
+          {fmtCurrencyCompact(netPosition, baseCurrency)}
+        </div>
 
-            <div className="shrink-0">
-            <div className="shrink-0 self-start sm:self-end lg:translate-y-[8px]">
-  <div
-    className="flex items-center gap-1.5 px-1.5 py-1.5 rounded-[20px] border backdrop-blur-xl"
-    style={{
-      borderColor: 'rgba(255,255,255,0.07)',
-      background: 'rgba(255,255,255,0.025)',
-      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
-    }}
-  >
+        <div className="mt-2 text-[12px] leading-none" style={{ color: 'rgba(255,255,255,0.22)' }}>
+          Net position
+          {liabilitiesTotal > 0 && (
+            <span style={{ color: 'rgba(255,255,255,0.18)' }}>
+              {' '}· {fmtCurrencyCompact(assetsTotal, baseCurrency)} assets − {fmtCurrencyCompact(liabilitiesTotal, baseCurrency)} liabilities
+            </span>
+          )}
+        </div>
+      </>
+    ) : (
+      <div className="text-[1.5rem] font-semibold text-white/40">No accounts yet</div>
+    )}
+  </div>
+
+  <div className="shrink-0 w-full sm:w-auto">
+  <div className="flex flex-nowrap items-center gap-1.5 sm:gap-2 p-1.5 rounded-[22px] border border-white/[.08] bg-white/[.03] backdrop-blur-xl w-full sm:w-auto">
     <button
       onClick={() => {
         if (historyOpen) setHistoryOpen(false)
         else openHistoryFromHeader()
       }}
-      className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-2 rounded-xl text-white/72 hover:text-white hover:bg-white/[.05] transition-colors"
+      className="shrink-0 inline-flex items-center justify-center gap-1.5 text-[11.5px] sm:text-xs font-semibold px-2.5 sm:px-3 py-2 rounded-xl text-white/75 hover:text-white hover:bg-white/[.06] transition-colors whitespace-nowrap"
       type="button"
     >
-      <Clock size={12} className="opacity-65" />
+      <Clock size={12} className="opacity-70" />
       History
-      <ChevronDown size={11} className={`opacity-45 transition-transform duration-200 ${historyOpen ? 'rotate-180' : ''}`} />
+      <ChevronDown size={11} className={`opacity-50 transition-transform duration-200 ${historyOpen ? 'rotate-180' : ''}`} />
     </button>
 
     <button
       onClick={recordSnapshot}
       disabled={saving || !hasAccounts}
-      className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-2 rounded-xl text-white/72 hover:text-white hover:bg-white/[.05] transition-colors disabled:opacity-40"
+      className="shrink-0 inline-flex items-center justify-center gap-1.5 text-[11.5px] sm:text-xs font-semibold px-2.5 sm:px-3 py-2 rounded-xl text-white/75 hover:text-white hover:bg-white/[.06] transition-colors whitespace-nowrap"
       type="button"
     >
-      <Camera size={12} className="opacity-65" />
+      <Camera size={12} className="opacity-70" />
       Record
     </button>
 
     <button
       onClick={() => { if (accountLimitReached) return goUpgrade(); openAdd() }}
       className={[
-        'flex items-center gap-2 text-[12.5px] font-semibold px-3.5 py-2 rounded-[16px] transition-all active:scale-[.985]',
+        'flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 text-[12px] sm:text-sm font-semibold px-3 sm:px-4 py-2 rounded-[18px] transition-all active:scale-[.97] whitespace-nowrap',
         accountLimitReached
           ? 'bg-gradient-to-r from-accent to-accent-dark text-white hover:opacity-90'
-          : 'bg-white/[.07] border border-white/[.10] text-white hover:bg-white/[.10]'
+          : 'bg-white/[.09] border border-white/[.13] text-white hover:bg-white/[.14]',
       ].join(' ')}
       disabled={saving}
       type="button"
     >
-      {accountLimitReached ? (
-        <>
-          <Crown size={13} />
-          Upgrade
-        </>
-      ) : (
-        <>
-          <Plus size={13} />
-          Add account
-        </>
-      )}
+      {accountLimitReached ? <><Crown size={13} /> Upgrade</> : <><Plus size={14} /> Add account</>}
     </button>
   </div>
 </div>
 </div>
-          </div>
 
           {hasAccounts && (
   <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-5 max-w-[58rem]">

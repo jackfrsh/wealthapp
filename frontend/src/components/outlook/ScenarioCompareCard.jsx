@@ -159,7 +159,7 @@ export default function ScenarioCompareCard({
   ]
 
   const header = (
-    <div className="flex items-start justify-between gap-4">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
         <div className={planTheme.eyebrowAccent}>
           <span className="inline-flex items-center gap-2">
@@ -171,15 +171,20 @@ export default function ScenarioCompareCard({
         <div className="mt-2 text-base font-semibold text-ink dark:text-white tracking-tight">
           Compare scenarios
         </div>
-        <div className={`mt-1 ${planTheme.body}`}>
+  
+        <div className={`mt-1 max-w-[28rem] ${planTheme.body}`}>
           Test different assumptions against your current plan.
         </div>
       </div>
   
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex w-full sm:w-auto flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
         {isPro ? (
           <>
-            <button type="button" onClick={onToggleOpen} className={planTheme.buttonSecondary}>
+            <button
+              type="button"
+              onClick={onToggleOpen}
+              className={`${planTheme.buttonSecondary} text-[12px] sm:text-sm px-3.5 sm:px-4 py-2 whitespace-nowrap`}
+            >
               {isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
               {isOpen ? 'Hide' : 'Show'}
             </button>
@@ -190,13 +195,17 @@ export default function ScenarioCompareCard({
                 if (!isOpen) onToggleOpen?.()
                 onAdd()
               }}
-              className={planTheme.buttonPrimary}
+              className={`${planTheme.buttonPrimary} flex-1 sm:flex-none justify-center text-[12.5px] sm:text-sm px-4 sm:px-5 py-2.5 whitespace-nowrap`}
             >
               <Plus size={15} /> Add scenario
             </button>
           </>
         ) : (
-          <button type="button" onClick={onUpgrade} className={planTheme.buttonUpgrade}>
+          <button
+            type="button"
+            onClick={onUpgrade}
+            className={`${planTheme.buttonUpgrade} w-full sm:w-auto justify-center text-[12.5px] sm:text-sm px-4 sm:px-5 py-2.5 whitespace-nowrap`}
+          >
             <Lock size={15} /> Unlock
           </button>
         )}
