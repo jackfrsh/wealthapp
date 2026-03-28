@@ -4,7 +4,6 @@ import {
   supabase,
   setAuthPersistenceMode,
   getAuthPersistenceMode,
-  clearStoredAuthSession,
 } from '../supabase'
 import UpgradeButton from './UpgradeButton'
 import Card from './Card'
@@ -116,6 +115,29 @@ function PasswordChecklist({ value, className = '' }) {
         <span>One number</span>
       </div>
     </div>
+  )
+}
+
+function GoogleMark(props) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
+      <path
+        fill="#4285F4"
+        d="M21.805 12.227c0-.682-.061-1.338-.175-1.969H12v3.726h5.5a4.703 4.703 0 0 1-2.04 3.087v2.565h3.3c1.93-1.777 3.045-4.4 3.045-7.409Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 22c2.7 0 4.965-.896 6.62-2.424l-3.3-2.565c-.915.614-2.086.977-3.32.977-2.553 0-4.717-1.724-5.49-4.04H3.1v2.64A9.997 9.997 0 0 0 12 22Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M6.51 13.948A5.99 5.99 0 0 1 6.203 12c0-.677.116-1.334.307-1.948V7.412H3.1A9.997 9.997 0 0 0 2 12c0 1.61.384 3.135 1.1 4.588l3.41-2.64Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 6.012c1.468 0 2.786.505 3.823 1.498l2.868-2.868C16.96 3.03 14.696 2 12 2A9.997 9.997 0 0 0 3.1 7.412l3.41 2.64c.773-2.317 2.937-4.04 5.49-4.04Z"
+      />
+    </svg>
   )
 }
 
@@ -268,7 +290,6 @@ export default function AuthModal({
   const prepareSessionStorageMode = () => {
     const nextMode = sharedComputer ? 'session' : 'persistent'
     setAuthPersistenceMode(nextMode)
-    clearStoredAuthSession()
   }
 
   const submitAuth = async () => {
@@ -338,6 +359,35 @@ export default function AuthModal({
         )
       )
     } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGoogleSignIn = async () => {
+    setError('')
+    setNotice('')
+
+    if (!supabase) {
+      setError('Auth is not configured. Check your env vars.')
+      return
+    }
+
+    try {
+      setLoading(true)
+
+      // Keep the chosen persistence mode, but do not clear auth storage before OAuth.
+      setAuthPersistenceMode(sharedComputer ? 'session' : 'persistent')
+
+      const redirectTo = `${window.location.origin}/auth/callback`
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo },
+      })
+
+      if (error) throw error
+    } catch (e) {
+      setError(mapAuthErrorMessage(e?.message, 'Could not continue with Google.'))
       setLoading(false)
     }
   }
@@ -431,6 +481,14 @@ export default function AuthModal({
 
   if (!open) return null
 
+  const googleBtn =
+  'w-full h-11 rounded-2xl border border-black/[.10] dark:border-white/[.10] ' +
+  'bg-white dark:bg-white text-[#1f1f1f] dark:text-[#1f1f1f] ' +
+  'hover:bg-[#f8f9fa] dark:hover:bg-[#f1f3f4] ' +
+  'active:bg-[#eef1f3] transition-colors ' +
+  'flex items-center justify-center gap-3 text-sm font-medium ' +
+  'shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
+
   return (
     <div className="fixed inset-0 z-[1000]" aria-modal="true" role="dialog" aria-label="Sign in">
       <div
@@ -507,7 +565,30 @@ export default function AuthModal({
                     </div>
                   )}
 
-                  <div className="space-y-4">
+<div className="space-y-4">
+                    <div className="space-y-3">
+                      <button
+                        type="button"
+                        onClick={handleGoogleSignIn}
+                        disabled={loading}
+                        className={googleBtn}
+                      >
+                        <GoogleMark className="h-[18px] w-[18px] shrink-0" />
+                        <span>{mode === 'login' ? 'Sign in with Google' : 'Continue with Google'}</span>
+                      </button>
+
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t border-black/[.06] dark:border-white/[.07]" />
+                        </div>
+                        <div className="relative flex justify-center">
+                          <span className="px-3 bg-white/90 dark:bg-surface-dark-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-muted/55 dark:text-white/28">
+                            Or continue with email
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
                     <div>
                       <div className="text-xs font-semibold text-ink-3 dark:text-white/50 mb-2">
                         Email

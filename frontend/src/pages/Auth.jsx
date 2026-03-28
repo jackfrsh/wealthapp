@@ -92,6 +92,29 @@ function FeatureCard({ icon: Icon, title, body }) {
   )
 }
 
+function GoogleMark(props) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
+      <path
+        fill="#4285F4"
+        d="M21.805 12.227c0-.682-.061-1.338-.175-1.969H12v3.726h5.5a4.703 4.703 0 0 1-2.04 3.087v2.565h3.3c1.93-1.777 3.045-4.4 3.045-7.409Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 22c2.7 0 4.965-.896 6.62-2.424l-3.3-2.565c-.915.614-2.086.977-3.32.977-2.553 0-4.717-1.724-5.49-4.04H3.1v2.64A9.997 9.997 0 0 0 12 22Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M6.51 13.948A5.99 5.99 0 0 1 6.203 12c0-.677.116-1.334.307-1.948V7.412H3.1A9.997 9.997 0 0 0 2 12c0 1.61.384 3.135 1.1 4.588l3.41-2.64Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 6.012c1.468 0 2.786.505 3.823 1.498l2.868-2.868C16.96 3.03 14.696 2 12 2A9.997 9.997 0 0 0 3.1 7.412l3.41 2.64c.773-2.317 2.937-4.04 5.49-4.04Z"
+      />
+    </svg>
+  )
+}
+
 function PasswordChecklist({ value, className = '' }) {
   const checks = getPasswordChecks(value)
 
@@ -142,7 +165,7 @@ function PasswordChecklist({ value, className = '' }) {
   )
 }
 
-export default function AuthPage({ onLogin }) {
+export default function AuthPage() {
   const { showToast, setPage } = useApp()
 
   const [mode, setMode] = useState(getAuthModeFromUrl)
@@ -291,11 +314,6 @@ export default function AuthPage({ onLogin }) {
         showToast?.('Account created.', 'success')
 
         if (data?.session) {
-          const token = data.session.access_token
-          if (typeof onLogin === 'function') {
-            if (onLogin.length >= 2) onLogin(token, email)
-            else onLogin(email)
-          }
           return
         }
 
@@ -315,10 +333,8 @@ export default function AuthPage({ onLogin }) {
       })
       if (signInError) throw signInError
 
-      const token = data?.session?.access_token
-      if (typeof onLogin === 'function') {
-        if (onLogin.length >= 2) onLogin(token, email)
-        else onLogin(email)
+      if (data?.session) {
+        return
       }
     } catch (e) {
       setError(
@@ -328,6 +344,40 @@ export default function AuthPage({ onLogin }) {
         )
       )
     } finally {
+      setLoading(false)
+    }
+  }
+
+  const googleBtn =
+  'w-full min-h-[50px] sm:min-h-[52px] rounded-2xl border border-black/[.10] dark:border-white/[.10] ' +
+  'bg-white text-[#1f1f1f] hover:bg-[#f8f9fa] active:bg-[#eef1f3] ' +
+  'transition-colors shadow-[0_1px_2px_rgba(0,0,0,0.04)] ' +
+  'flex items-center justify-center gap-3 text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed'
+
+  const handleGoogleSignIn = async () => {
+    setError('')
+    setNotice('')
+  
+    if (!supabase) {
+      setError('Supabase is not configured. Check your env vars.')
+      return
+    }
+  
+    try {
+      setLoading(true)
+      setAuthPersistenceMode(sharedComputer ? 'session' : 'persistent')
+  
+      const redirectTo = `${window.location.origin}/auth/callback`
+  
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo },
+      })
+  
+      if (error) throw error
+    } catch (e) {
+      console.error('Google sign-in failed:', e)
+      setError(mapAuthErrorMessage(e?.message, 'Could not continue with Google.'))
       setLoading(false)
     }
   }
@@ -581,6 +631,28 @@ export default function AuthPage({ onLogin }) {
 
                 {!recovery ? (
                   <>
+                  <div className="space-y-3 mb-5">
+  <button
+    type="button"
+    onClick={handleGoogleSignIn}
+    disabled={loading}
+    className={googleBtn}
+  >
+    <GoogleMark className="h-[18px] w-[18px] shrink-0" />
+    <span>{mode === 'login' ? 'Sign in with Google' : 'Continue with Google'}</span>
+  </button>
+
+  <div className="relative py-1">
+    <div className="absolute inset-0 flex items-center">
+      <div className="w-full border-t border-black/[.06] dark:border-white/[.07]" />
+    </div>
+    <div className="relative flex justify-center">
+      <span className="px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-muted/55 dark:text-white/28 bg-white/88 dark:bg-surface-dark-2/92">
+        Or continue with email
+      </span>
+    </div>
+  </div>
+</div>
                     <form
                       onSubmit={(e) => {
                         e.preventDefault()

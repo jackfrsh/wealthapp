@@ -50,6 +50,7 @@ import NetWorthTracker from './pages/guides/NetWorthTracker'
 import TrackISAsPensionsSavings from './pages/guides/TrackISAsPensionsSavings'
 import SpreadsheetAlternative from './pages/guides/SpreadsheetAlternative'
 import HowToTrackNetWorth from './pages/guides/HowToTrackNetWorth'
+import AuthCallbackPage from './pages/AuthCallbackPage'
 
 /* ────────────────────────────────────────────
    Error Boundary — catches render crashes
@@ -146,6 +147,7 @@ export const useApp = () => useContext(AppContext)
 const PAGE_TO_PATH = {
   landing: '/',
   auth: '/auth',
+  'auth-callback': '/auth/callback',
   privacy: '/privacy',
   security: '/security',
   terms: '/terms',
@@ -172,6 +174,7 @@ function pageFromPath(pathname) {
   const p = (pathname || '').toLowerCase()
 
   if (p === '/' || p === '') return 'landing'
+  if (p.startsWith('/auth/callback')) return 'auth-callback'
   if (p.startsWith('/auth')) return 'auth'
   if (p.startsWith('/privacy')) return 'privacy'
   if (p.startsWith('/security')) return 'security'
@@ -526,6 +529,7 @@ export default function App() {
         const fromPath = pageFromPath(window.location.pathname)
         const publicPage =
         fromPath === 'auth' ||
+        fromPath === 'auth-callback' ||
         fromPath === 'privacy' ||
         fromPath === 'security' ||
         fromPath === 'terms' ||
@@ -742,6 +746,7 @@ export default function App() {
       if (page === 'security') return <Security navigateTo={navigateTo} />
       if (page === 'terms') return <Terms navigateTo={navigateTo} />
       if (page === 'auth') return <AuthPage />
+      if (page === 'auth-callback') return <AuthCallbackPage />
       if (page === 'decisions') return <Decisions />
       if (page === 'guides_index') return <GuideIndex navigateTo={navigateTo} />
       if (page === 'guide_multi_currency') return <MultiCurrencyGuide />
