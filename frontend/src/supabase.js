@@ -152,7 +152,7 @@ export const supabase = hasCreds
         detectSessionInUrl: true,
         storage: authStorage,
         storageKey: AUTH_STORAGE_KEY,
-        flowType: 'implicit',
+        flowType: 'pkce',
       },
     })
   : null

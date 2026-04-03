@@ -25,6 +25,10 @@ from ..routers.fx import convert_to_base, get_fx_cache
 
 CRYPTO_PSEUDO_FIAT = {"BTC", "ETH"}
 
+# Liabilities are stored as positive balances by UI convention (e.g. mortgage = 200000).
+# They must be subtracted from net worth, not added.
+LIABILITY_TYPES = {"mortgage", "loan"}
+
 
 @dataclass
 class NetWorthResult:
@@ -70,6 +74,10 @@ async def compute_live_networth(session: Session, user_id: int) -> NetWorthResul
         except HTTPException:
             excluded += 1
             continue
+
+        # Liabilities are stored as positive numbers but reduce net worth
+        if (acc.type or "").lower() in LIABILITY_TYPES:
+            value_base = -abs(float(value_base))
 
         total += float(value_base)
         breakdown.append(
@@ -171,6 +179,7 @@ async def compute_projection_series(session: Session, user_id: int, years: int =
                 "balance": float(a.balance or 0.0),
                 "c": float(getattr(a, "monthly_contribution", 0.0) or 0.0),
                 "r": float(getattr(a, "annual_interest_rate_percent", 0.0) or 0.0) / 100.0,
+                "is_liability": (a.type or "").lower() in LIABILITY_TYPES,
             }
         )
 
@@ -193,7 +202,8 @@ async def compute_projection_series(session: Session, user_id: int, years: int =
         excluded = 0
         for acc in state:
             try:
-                total += _value_to_base_mvp(acc["balance"], acc["currency"], base_currency, rates)
+                v = _value_to_base_mvp(acc["balance"], acc["currency"], base_currency, rates)
+                total += -abs(float(v)) if acc["is_liability"] else float(v)
             except HTTPException:
                 excluded += 1
                 continue

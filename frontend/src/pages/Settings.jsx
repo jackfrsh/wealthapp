@@ -326,7 +326,7 @@ export default function Settings() {
         </div>
 
         <div
-          className="rounded-3xl p-6 sm:p-7"
+          className="relative rounded-3xl p-6 sm:p-7"
           style={settingsPanelStyle}
         >
           {isPro && (
@@ -377,7 +377,7 @@ export default function Settings() {
                   disabled={billingBusy}
                   type="button"
                 >
-                  <CreditCard size={15} /> {billingBusy ? 'Opening…' : 'Billing'}
+                  <CreditCard size={15} /> {billingBusy ? 'Opening…' : 'Manage billing'}
                 </button>
 
                 <button

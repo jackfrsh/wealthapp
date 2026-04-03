@@ -90,6 +90,9 @@ def _apply_patch(account: Account, patch: dict) -> None:
         if field == "currency" and value:
             value = str(value).upper()
 
+        if field == "type" and value:
+            value = str(value).lower()
+
         if field == "balance" and value is not None:
             value = float(value)
 
@@ -144,7 +147,7 @@ async def create_account(
     account = Account(
         user_id=current_user.id,
         name=body.name.strip(),
-        type=body.type,
+        type=(body.type or "bank").lower(),
         currency=(body.currency or "GBP").upper(),
         balance=float(body.balance or 0.0),
         include_in_net_worth=bool(body.include_in_net_worth),

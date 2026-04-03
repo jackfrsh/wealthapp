@@ -591,7 +591,13 @@ export default function App() {
           resolvedFromPath === 'spreadsheet_alternative' ||
           resolvedFromPath === 'how_to_track_net_worth'
 
-        const isBlocked = resolvedFromPath === 'upgrade'
+        // Allow checkout return URLs through so Upgrade.jsx can complete the
+        // success path. Only block bare /upgrade for already-authenticated users.
+        const upgradeSearch = window.location.search || ''
+        const isCheckoutReturn =
+          resolvedFromPath === 'upgrade' &&
+          (upgradeSearch.includes('session_id=') || upgradeSearch.includes('success=true'))
+        const isBlocked = resolvedFromPath === 'upgrade' && !isCheckoutReturn
 
         if (resolvedFromPath && !isPublic && !isBlocked) {
           setPage(resolvedFromPath, { replace: true })

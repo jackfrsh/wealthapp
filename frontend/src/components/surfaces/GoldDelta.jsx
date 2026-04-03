@@ -13,6 +13,7 @@
 import React from 'react'
 import clsx from 'clsx'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { fmtCurrencyCompactStable } from '../../utils'
 
 const SIZE_CLS = {
   sm: 'text-[11px] gap-1',
@@ -27,6 +28,7 @@ export default function GoldDelta({
   isPercent = false,
   size = 'md',
   cap = 99.9,
+  currency,
   className = '',
 }) {
   const numeric = typeof value === 'number' ? value : null
@@ -50,6 +52,8 @@ export default function GoldDelta({
       const sign = numeric > 0 ? '+' : numeric < 0 ? '−' : ''
       display = isPercent
         ? `${sign}${abs.toLocaleString(undefined, { maximumFractionDigits: 1 })}%`
+        : currency
+        ? `${sign}${fmtCurrencyCompactStable(abs, currency)}`
         : `${sign}${abs.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
     }
   } else {

@@ -92,6 +92,17 @@ function monthsToTarget({ pv, pmt, annualReturnPct, target }) {
   return lo
 }
 
+function shouldSuppressDelta(spanDays, deltaValue, totalWealth) {
+  // Suppress when span is too short to be meaningful
+  if (spanDays == null || !Number.isFinite(spanDays) || spanDays < 7) return true
+  // Suppress when the absolute delta is implausibly large relative to total wealth
+  const absD = Math.abs(Number(deltaValue))
+  if (!Number.isFinite(absD)) return true
+  const w = Number(totalWealth)
+  if (!Number.isFinite(w) || w <= 0) return true
+  return absD / w >= 0.85
+}
+
 /* ──────────────────────────────────────────────────── */
 /* Celebration storage (unchanged)                     */
 /* ──────────────────────────────────────────────────── */
@@ -158,6 +169,9 @@ const PLAN_STATUS = {
   on_track: { label: 'On track',        color: 'rgba(255,255,255,0.75)', bg: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.10)' },
   adjust:   { label: 'Needs attention', color: 'rgba(200,155,60,0.90)', bg: 'rgba(200,155,60,0.08)', border: 'rgba(200,155,60,0.18)' },
 }
+
+/* Account types that represent liabilities — must match Accounts.jsx */
+const LIABILITY_TYPES = new Set(['mortgage', 'loan'])
 
 /* ──────────────────────────────────────────────────── */
 /* Milestone receipt                                   */
@@ -666,7 +680,7 @@ function WealthRunway({ settingsReady, isPro, ccy, defaultProjYears }) {
               )}
 
               {projLoading ? (
-                <div className="h-[180px] rounded-2xl skeleton opacity-15" />
+                <div className="h-[230px] rounded-2xl skeleton opacity-15" />
               ) : projChartData.length > 1 ? (
                 <div
                   className="rounded-2xl px-2 pt-3"
@@ -675,7 +689,7 @@ function WealthRunway({ settingsReady, isPro, ccy, defaultProjYears }) {
                     border: '1px solid rgba(255,255,255,0.05)',
                   }}
                 >
-                  <div className="h-[190px]">
+                  <div className="h-[240px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={projChartData} margin={chartMargin}>
                         <defs>
@@ -1084,11 +1098,13 @@ export default function Home() {
     ? ` · ${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(1)}%`
     : undefined
 
-  const changeGroundingLabel = changeFromDate
+  const suppressDelta = shouldSuppressDelta(seriesSpanDays, delta, total)
+
+  const changeGroundingLabel = !suppressDelta && changeFromDate
     ? `Change since ${changeFromDate}`
     : null
 
-  const changeExplainer = changeFromDate
+  const changeExplainer = !suppressDelta && changeFromDate
     ? seriesSpanDays != null && seriesSpanDays < 30
       ? 'Includes account additions, contributions, balance updates, and market movement.'
       : 'Includes contributions, balance updates, and market movement between recorded snapshots.'
@@ -1187,8 +1203,9 @@ export default function Home() {
   const taxYearEnd = getTaxYearEndLabel()
   const showIsaUrgency = isIsaUrgent(isaRemaining)
 
-  const totalMonthlyContribs = dataAccounts.reduce((s, a) => s + Number(a.monthly_contribution || 0), 0)
-  const contributingCount = dataAccounts.filter((a) => Number(a.monthly_contribution || 0) > 0).length
+  const assetAccounts = dataAccounts.filter((a) => !LIABILITY_TYPES.has(a.type))
+  const totalMonthlyContribs = assetAccounts.reduce((s, a) => s + Math.max(0, Number(a.monthly_contribution || 0)), 0)
+  const contributingCount = assetAccounts.filter((a) => Number(a.monthly_contribution || 0) > 0).length
 
   const forecastMonthsRemaining = (data.forecast?.years_remaining || 0) * 12
   let planShortfall = 0
@@ -1280,7 +1297,7 @@ export default function Home() {
             {fmtCurrency(total, baseCurrency)}
           </div>
 
-          {sparkValues.length >= 2 && (
+          {!suppressDelta && sparkValues.length >= 2 && (
             <div className="mt-3 mb-1">
               <div
                 className="text-[10px] font-semibold tracking-[.14em] uppercase mb-1.5"
@@ -1293,6 +1310,7 @@ export default function Home() {
                 value={delta}
                 label={deltaContextLabel}
                 size="md"
+                currency={ccy}
               />
             </div>
           )}
