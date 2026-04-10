@@ -30,6 +30,7 @@ from .routers import (
     admin,
     events,
     billing,
+    billing_apple,
 )
 
 
@@ -84,6 +85,7 @@ app.include_router(insights.router, prefix=API_PREFIX)
 app.include_router(projection.router, prefix=API_PREFIX)
 app.include_router(history.router, prefix=API_PREFIX)
 app.include_router(billing.router, prefix=API_PREFIX)
+app.include_router(billing_apple.router, prefix=API_PREFIX)
 app.include_router(events.router, prefix=API_PREFIX)
 app.include_router(admin.router, prefix=API_PREFIX)
 

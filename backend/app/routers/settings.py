@@ -92,19 +92,28 @@ def get_entitlement(
 ):
     """
     Fast cached entitlement read for native/mobile clients.
-    Never calls Stripe directly.
-    """
-    settings = _get_or_create_settings(current_user.id, session)
+    Never calls Stripe or Apple directly — reads from local cache only.
 
-    status = getattr(settings, "subscription_status", None)
-    trial_end = getattr(settings, "trial_end_iso", None)
-    is_pro = bool(getattr(settings, "is_pro", False))
+    Tier values
+    ───────────
+    "free"  – no active subscription
+    "pro"   – active subscription (Stripe or Apple)
+    "grace" – Apple billing grace period; user retains access while payment retries
+
+    trial_active is True only when the user is within a verified intro trial period.
+    Stripe past_due is treated as "pro" (Stripe retries; we do not surface it as grace).
+    Apple billing failure with grace semantics is surfaced as "grace".
+    """
+    from .billing_apple import compute_tier
+
+    settings = _get_or_create_settings(current_user.id, session)
+    tier, trial_active = compute_tier(settings)
 
     return EntitlementResponse(
-        tier="pro" if is_pro else "free",
-        trial_active=(status == "trialing"),
-        subscription_status=status,
-        trial_end=trial_end,
+        tier=tier,
+        trial_active=trial_active,
+        subscription_status=getattr(settings, "subscription_status", None),
+        trial_end=getattr(settings, "trial_end_iso", None),
     )
 
 

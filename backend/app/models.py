@@ -17,8 +17,6 @@ from sqlmodel import SQLModel, Field
 
 # ─── Stripe webhook idempotency ─────────────────────────────────────────────
 
-# ─── Stripe webhook idempotency ─────────────────────────────────────────────
-
 class StripeEvent(SQLModel, table=True):
     __tablename__ = "stripe_events"
 
@@ -63,6 +61,11 @@ class User(SQLModel, table=True):
     stripe_customer_id: Optional[str] = Field(default=None, index=True)
     stripe_subscription_id: Optional[str] = Field(default=None, index=True)
 
+    # Apple (nullable; durable key for a user's Apple subscription lifecycle)
+    # The iOS app must set appAccountToken = supabase_user_id on purchase so
+    # server notifications can resolve back to this user without a sync call.
+    apple_original_transaction_id: Optional[str] = Field(default=None, index=True)
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -81,6 +84,11 @@ class Settings(SQLModel, table=True):
     # Cached Stripe subscription data (updated by billing sync/webhook only — never hits Stripe on read)
     subscription_status: Optional[str] = Field(default=None)   # active | trialing | past_due | canceled | null
     trial_end_iso: Optional[str] = Field(default=None)         # ISO 8601 datetime or null
+
+    # Apple subscription status (updated by /billing/apple/sync and /billing/apple/notifications)
+    # Values: active | grace | expired | revoked | null
+    # "grace" = Apple billing grace period — user retains access temporarily while payment retries
+    apple_subscription_status: Optional[str] = Field(default=None)
 
 
 # ─── Accounts ────────────────────────────────────────────────────────────────
@@ -181,3 +189,52 @@ class Snapshot(SQLModel, table=True):
 
     def get_breakdown(self) -> list[dict[str, Any]]:
         return json.loads(self.breakdown_json)
+
+
+# ─── Apple IAP: verified transactions ────────────────────────────────────────
+
+class AppleTransaction(SQLModel, table=True):
+    """
+    One row per unique Apple transactionId.
+    Idempotent on insert: callers should check by transaction_id before inserting.
+    originalTransactionId is the durable subscription key across renewals.
+    """
+    __tablename__ = "apple_transactions"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+
+    transaction_id: str = Field(index=True, unique=True)
+    original_transaction_id: str = Field(index=True)
+    product_id: str = Field(default="")
+    app_account_token: Optional[str] = Field(default=None, index=True)
+
+    purchase_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    expires_date: Optional[datetime] = Field(default=None)
+
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+# ─── Apple IAP: server notification audit log ─────────────────────────────────
+
+class AppleNotification(SQLModel, table=True):
+    """
+    Append-only audit log of all Apple Server Notification v2 events received.
+    notification_uuid provides idempotency: duplicate UUIDs are dropped.
+    No signed payloads or raw JWS are stored — only decoded metadata.
+    """
+    __tablename__ = "apple_notifications"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    notification_uuid: str = Field(index=True, unique=True)
+    notification_type: str = Field(index=True)        # e.g. SUBSCRIBED, EXPIRED
+    subtype: Optional[str] = Field(default=None)      # e.g. BILLING_RECOVERY, GRACE_PERIOD
+    original_transaction_id: Optional[str] = Field(default=None, index=True)
+    app_account_token: Optional[str] = Field(default=None, index=True)
+
+    # Decoded, non-sensitive metadata (no JWS/signed payloads)
+    event_json: str = Field(default="{}")
+
+    processed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -46,6 +46,8 @@ def _migrate_columns() -> None:
     """Add missing columns to existing tables. Safe to run repeatedly."""
     _add_column_if_missing("settings", "subscription_status", "TEXT")
     _add_column_if_missing("settings", "trial_end_iso", "TEXT")
+    _add_column_if_missing("settings", "apple_subscription_status", "TEXT")
+    _add_column_if_missing("users", "apple_original_transaction_id", "TEXT")
 
 
 def _add_column_if_missing(table: str, column: str, col_type: str) -> None:

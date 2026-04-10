@@ -68,7 +68,6 @@ def _set_pro_for_user(
     trial_end_ts: Optional[int] = None,
 ):
     settings = _get_or_create_settings(db, user.id)
-    settings.is_pro = bool(pro)
 
     # Cache subscription metadata so GET /settings never hits Stripe
     if sub_status is not None:
@@ -83,6 +82,13 @@ def _set_pro_for_user(
         user.stripe_customer_id = customer
     if subscription_id is not None:
         user.stripe_subscription_id = subscription_id
+
+    # Compute is_pro from both Stripe and Apple so neither source clobbers the other.
+    # When Stripe says False (e.g. subscription deleted), Apple may still be active.
+    apple_active = getattr(settings, "apple_subscription_status", None) in (
+        "active", "grace", "trialing"
+    )
+    settings.is_pro = bool(pro or apple_active)
 
     db.add(user)
     db.add(settings)
