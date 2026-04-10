@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import os
 import logging
+import os
 
+from sqlalchemy import text
 from sqlmodel import Session, SQLModel, create_engine
 
 logger = logging.getLogger("wealth.database")
@@ -21,6 +22,7 @@ engine = create_engine(
     pool_pre_ping=True,
 )
 
+
 def ensure_schema() -> None:
     """
     Lightweight schema ensure (no Alembic).
@@ -28,62 +30,66 @@ def ensure_schema() -> None:
     """
     try:
         from . import models  # noqa: F401
+
         SQLModel.metadata.create_all(engine)
         logger.info("Schema ensured (create_all)")
 
-        # ── Post-create migrations ──────────────────────────────────
-
-        # create_all() won't ADD columns to existing tables,
-        # so we need to handle new columns manually.
-        _migrate_columns()
+        # create_all() will not add new columns to existing tables,
+        # so run lightweight idempotent column migrations afterwards.
+        with engine.begin() as conn:
+            _migrate_columns(conn)
 
     except Exception as e:
         logger.exception("ensure_schema failed: %s", str(e))
         raise
 
 
-def _migrate_columns() -> None:
+def _migrate_columns(conn) -> None:
     """Add missing columns to existing tables. Safe to run repeatedly."""
-    _add_column_if_missing("settings", "subscription_status", "TEXT")
-    _add_column_if_missing("settings", "trial_end_iso", "TEXT")
-    _add_column_if_missing("settings", "apple_subscription_status", "TEXT")
-    _add_column_if_missing("users", "apple_original_transaction_id", "TEXT")
+    _add_column_if_missing(conn, "settings", "subscription_status", "TEXT")
+    _add_column_if_missing(conn, "settings", "trial_end_iso", "TEXT")
+    _add_column_if_missing(conn, "settings", "apple_subscription_status", "TEXT")
+    _add_column_if_missing(conn, "users", "apple_original_transaction_id", "TEXT")
 
 
-def _add_column_if_missing(table: str, column: str, col_type: str) -> None:
-    """Safely add a column to an existing table (PostgreSQL)."""
-    from sqlalchemy import text
+def _add_column_if_missing(conn, table: str, column: str, col_type: str) -> None:
+    """Safely add a column to an existing table."""
+    try:
+        result = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = :table
+                  AND column_name = :column
+                """
+            ),
+            {"table": table, "column": column},
+        )
 
-    with engine.connect() as conn:
-        try:
-            result = conn.execute(
-                text(
-                    "SELECT 1 FROM information_schema.columns "
-                    "WHERE table_name = :table AND column_name = :column"
-                ),
-                {"table": table, "column": column},
-            )
+        if result.fetchone() is not None:
+            return
 
-            if result.fetchone() is not None:
-                return
+        logger.info("Adding missing column %s.%s (%s)", table, column, col_type)
+        conn.execute(
+            text(f'ALTER TABLE "{table}" ADD COLUMN "{column}" {col_type}')
+        )
 
-            logger.info("Adding missing column %s.%s (%s)", table, column, col_type)
+    except Exception as e:
+        # In production we fail fast: schema drift causes random 500s later.
+        is_prod = (
+            os.getenv("RAILWAY_ENVIRONMENT") == "production"
+            or os.getenv("ENV") == "production"
+        )
+        if is_prod:
+            raise RuntimeError(
+                f"Column migration failed for {table}.{column}: {e}"
+            ) from e
 
-            # DDL should be executed in an explicit transaction.
-            with conn.begin():
-                conn.execute(
-                    text(f'ALTER TABLE "{table}" ADD COLUMN "{column}" {col_type}')
-                )
+        logger.warning("Column migration %s.%s skipped: %s", table, column, e)
 
-        except Exception as e:
-            # In production we fail fast: schema drift causes random 500s later.
-            is_prod = (os.getenv("RAILWAY_ENVIRONMENT") == "production") or (os.getenv("ENV") == "production")
-            if is_prod:
-                raise RuntimeError(f"Column migration failed for {table}.{column}: {e}") from e
-
-            logger.warning("Column migration %s.%s skipped: %s", table, column, e)
 
 def get_session():
     """FastAPI dependency providing a DB session with proper cleanup."""
     with Session(engine) as session:
-     yield session
+        yield session

@@ -36,7 +36,7 @@ def test_app():
     SQLModel.metadata.create_all(test_engine)
 
     from sqlalchemy import text
-    with test_engine.connect() as conn:
+    with test_engine.begin() as conn:
         for col, col_type in [
             ("subscription_status", "TEXT"),
             ("trial_end_iso", "TEXT"),
