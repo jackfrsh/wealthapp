@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import sys
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -16,6 +17,8 @@ if _REPO_ROOT not in sys.path:
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test_auth.db")
 os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
 os.environ.setdefault("SUPABASE_JWT_SECRET", "test-secret-at-least-32-chars-long-padding")
+# Provide a stub key so the endpoint doesn't 500 on misconfiguration check.
+os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
 
 
 @pytest.fixture(scope="module")
@@ -116,6 +119,7 @@ def _override_auth_by_uid(supabase_uid: str):
 
 class TestDeleteAccount:
     def test_delete_removes_user_and_related_rows(self, test_app, db_session):
+        """Full cascade delete: Supabase call is mocked; local rows must be gone."""
         client, _ = test_app
         uid = "del-uid-001"
         user = _create_user(db_session, uid)
@@ -125,9 +129,18 @@ class TestDeleteAccount:
         from backend.app.auth import get_current_user
         app.dependency_overrides[get_current_user] = _override_auth_by_uid(uid)
 
-        resp = client.delete("/api/auth/account")
-        assert resp.status_code == 200
+        # Mock the Supabase admin deletion — we don't have a real service_role key
+        # in CI; the important assertion is that local rows are removed.
+        with patch(
+            "backend.app.routers.auth._delete_supabase_auth_user",
+            new_callable=AsyncMock,
+        ) as mock_supabase:
+            resp = client.delete("/api/auth/account")
+
+        assert resp.status_code == 200, resp.text
         assert resp.json()["status"] == "deleted"
+        # Supabase deletion was called with the correct UID.
+        mock_supabase.assert_awaited_once_with(uid)
 
         db_session.expire_all()
         from backend.app.models import User, Settings, Account, Goal
@@ -139,12 +152,58 @@ class TestDeleteAccount:
         assert db_session.exec(select(Goal).where(Goal.user_id == user_id)).first() is None
 
     def test_delete_requires_auth(self, test_app, db_session):
+        """Unauthenticated DELETE must be rejected."""
         client, _ = test_app
 
         from backend.app.main import app
         from backend.app.auth import get_current_user
-        # Remove override so real auth runs (no Bearer token → 401/403)
         app.dependency_overrides.pop(get_current_user, None)
 
         resp = client.delete("/api/auth/account")
         assert resp.status_code in (401, 403)
+
+    def test_delete_fails_if_service_role_key_missing(self, test_app, db_session):
+        """If SUPABASE_SERVICE_ROLE_KEY is unset, endpoint must return 500."""
+        client, _ = test_app
+        uid = "del-uid-misconfig"
+        _create_user(db_session, uid)
+
+        from backend.app.main import app
+        from backend.app.auth import get_current_user
+        app.dependency_overrides[get_current_user] = _override_auth_by_uid(uid)
+
+        import backend.app.routers.auth as auth_router
+        original_key = auth_router._SUPABASE_SERVICE_ROLE_KEY
+        auth_router._SUPABASE_SERVICE_ROLE_KEY = ""
+        try:
+            resp = client.delete("/api/auth/account")
+        finally:
+            auth_router._SUPABASE_SERVICE_ROLE_KEY = original_key
+
+        assert resp.status_code == 500
+
+    def test_supabase_404_treated_as_success(self, test_app, db_session):
+        """If Supabase returns 404 (user already gone), deletion should still succeed."""
+        import httpx
+        from unittest.mock import MagicMock
+
+        client, _ = test_app
+        uid = "del-uid-already-gone"
+        _create_user(db_session, uid)
+
+        from backend.app.main import app
+        from backend.app.auth import get_current_user
+        app.dependency_overrides[get_current_user] = _override_auth_by_uid(uid)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_response.text = "User not found"
+
+        async def mock_delete(*args, **kwargs):
+            return mock_response
+
+        with patch("httpx.AsyncClient.delete", new=mock_delete):
+            resp = client.delete("/api/auth/account")
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "deleted"
