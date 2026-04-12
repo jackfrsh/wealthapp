@@ -84,8 +84,19 @@ def _assert_apple_root(cert: x509.Certificate) -> None:
 def verify_apple_jws(signed_payload: str) -> dict:
     """
     Verify an Apple-signed JWS (StoreKit 2 transaction or server notification).
+
+    Steps
+    ─────
+    1. Parse JWS structure: header.payload.signature
+    2. Extract x5c certificate chain from JWS header
+    3. Verify each cert is signed by the next (chain integrity)
+    4. Check all certs are currently valid
+    5. Assert root cert belongs to Apple
+    6. Verify JWS signature with leaf cert's public key
+    7. Return decoded payload dict
     """
     print("[verify_apple_jws] called")
+
     if not signed_payload or not isinstance(signed_payload, str):
         raise ValueError("signedPayload must be a non-empty string")
 
@@ -101,10 +112,14 @@ def verify_apple_jws(signed_payload: str) -> dict:
         raise ValueError(f"JWS header is not valid base64url JSON: {exc}") from exc
 
     alg = header.get("alg", "")
+    x5c = header.get("x5c")
+
+    print("[verify_apple_jws] alg =", alg)
+    print("[verify_apple_jws] x5c count =", len(x5c) if isinstance(x5c, list) else "not-a-list")
+
     if alg != "ES256":
         raise ValueError(f"Unexpected JWS algorithm {alg!r}; expected ES256")
 
-    x5c = header.get("x5c")
     if not isinstance(x5c, list) or len(x5c) < 2:
         raise ValueError("JWS header x5c must be a list of ≥ 2 base64-encoded DER certificates")
 
@@ -118,6 +133,7 @@ def verify_apple_jws(signed_payload: str) -> dict:
     for i, cert in enumerate(certs):
         nb = _cert_not_before(cert)
         na = _cert_not_after(cert)
+
         if now < nb:
             raise ValueError(f"Certificate[{i}] is not yet valid (valid from {nb.isoformat()})")
         if now > na:
@@ -137,26 +153,43 @@ def verify_apple_jws(signed_payload: str) -> dict:
     _assert_apple_root(certs[-1])
 
     signing_input = f"{header_b64}.{payload_b64}".encode("ascii")
+
     try:
         signature = _b64url_decode(sig_b64)
     except Exception as exc:
         raise ValueError(f"JWS signature is not valid base64url: {exc}") from exc
 
+    print("[verify_apple_jws] signature length =", len(signature))
+
+    # JOSE ES256 signatures are raw R || S bytes.
+    # cryptography expects DER-encoded ECDSA signatures.
+    if len(signature) != 64:
+        raise ValueError(f"Unexpected ES256 signature length: {len(signature)}")
+
+    r = int.from_bytes(signature[:32], "big")
+    s = int.from_bytes(signature[32:], "big")
+    der_signature = encode_dss_signature(r, s)
+
     try:
-        certs[0].public_key().verify(signature, signing_input, ec.ECDSA(hashes.SHA256()))
+        certs[0].public_key().verify(
+            der_signature,
+            signing_input,
+            ec.ECDSA(hashes.SHA256()),
+        )
     except InvalidSignature:
         raise ValueError("JWS signature verification failed — payload may have been tampered with")
     except Exception as exc:
         raise ValueError(f"JWS signature check error: {exc}") from exc
 
     try:
-        return json.loads(_b64url_decode(payload_b64))
+        payload = json.loads(_b64url_decode(payload_b64))
     except Exception as exc:
         raise ValueError(f"JWS payload is not valid JSON: {exc}") from exc
 
-        print("[verify_apple_jws] alg =", alg)
-print("[verify_apple_jws] x5c count =", len(x5c) if isinstance(x5c, list) else "not-a-list")
+    print("[verify_apple_jws] payload environment =", payload.get("environment"))
+    print("[verify_apple_jws] payload productId =", payload.get("productId"))
 
+    return payload
 
 # ─── Entitlement helpers ─────────────────────────────────────────────────────
 
