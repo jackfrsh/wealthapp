@@ -263,28 +263,25 @@ def _upsert_apple_transaction(db: Session, user_id: int, payload: dict) -> None:
 
 # ─── POST /billing/apple/sync ────────────────────────────────────────────────
 
-class AppleSyncBody(BaseModel):
-    # Accept both camelCase and snake_case so the endpoint is robust against
-    # JSONEncoder key strategies on the client.
-    signedTransaction: Optional[str] = None
-    signed_transaction: Optional[str] = None
-
-    @property
-    def signed_transaction_value(self) -> Optional[str]:
-        return self.signedTransaction or self.signed_transaction
-
-
 @router.post("/sync")
-def apple_sync(
-    body: AppleSyncBody,
+async def apple_sync(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_session),
 ):
     """
     Verify a StoreKit 2 signed transaction and update the authenticated user's entitlement.
     """
-    signed_transaction = body.signed_transaction_value
-    if not signed_transaction:
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Request body must be valid JSON")
+
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Request body must be a JSON object")
+
+    signed_transaction = body.get("signedTransaction") or body.get("signed_transaction")
+    if not isinstance(signed_transaction, str) or not signed_transaction.strip():
         raise HTTPException(
             status_code=400,
             detail="Request body must include signedTransaction",
