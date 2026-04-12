@@ -13,7 +13,6 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from ..auth import get_current_user
@@ -95,8 +94,6 @@ def verify_apple_jws(signed_payload: str) -> dict:
     6. Verify JWS signature with leaf cert's public key
     7. Return decoded payload dict
     """
-    print("[verify_apple_jws] called")
-
     if not signed_payload or not isinstance(signed_payload, str):
         raise ValueError("signedPayload must be a non-empty string")
 
@@ -113,9 +110,6 @@ def verify_apple_jws(signed_payload: str) -> dict:
 
     alg = header.get("alg", "")
     x5c = header.get("x5c")
-
-    print("[verify_apple_jws] alg =", alg)
-    print("[verify_apple_jws] x5c count =", len(x5c) if isinstance(x5c, list) else "not-a-list")
 
     if alg != "ES256":
         raise ValueError(f"Unexpected JWS algorithm {alg!r}; expected ES256")
@@ -159,8 +153,6 @@ def verify_apple_jws(signed_payload: str) -> dict:
     except Exception as exc:
         raise ValueError(f"JWS signature is not valid base64url: {exc}") from exc
 
-    print("[verify_apple_jws] signature length =", len(signature))
-
     # JOSE ES256 signatures are raw R || S bytes.
     # cryptography expects DER-encoded ECDSA signatures.
     if len(signature) != 64:
@@ -186,10 +178,8 @@ def verify_apple_jws(signed_payload: str) -> dict:
     except Exception as exc:
         raise ValueError(f"JWS payload is not valid JSON: {exc}") from exc
 
-    print("[verify_apple_jws] payload environment =", payload.get("environment"))
-    print("[verify_apple_jws] payload productId =", payload.get("productId"))
-
     return payload
+
 
 # ─── Entitlement helpers ─────────────────────────────────────────────────────
 
@@ -234,10 +224,9 @@ def set_apple_entitlement(
     settings = _get_or_create_settings(db, user.id)
     settings.apple_subscription_status = apple_status
 
-    if original_transaction_id:
-        if not getattr(user, "apple_original_transaction_id", None):
-            user.apple_original_transaction_id = original_transaction_id
-            db.add(user)
+    if original_transaction_id and not getattr(user, "apple_original_transaction_id", None):
+        user.apple_original_transaction_id = original_transaction_id
+        db.add(user)
 
     stripe_active = getattr(settings, "subscription_status", None) in (
         "active", "trialing", "past_due"
@@ -332,7 +321,6 @@ async def apple_sync(
         payload = verify_apple_jws(signed_transaction)
     except ValueError as exc:
         logger.warning("apple_sync: JWS verification failed user=%s: %s", current_user.id, exc)
-        print("[apple_sync] verification failed:", repr(exc))
         raise HTTPException(status_code=400, detail=f"Transaction verification failed: {exc}")
 
     tx_id = payload.get("transactionId") or payload.get("transaction_id")
@@ -397,7 +385,6 @@ async def apple_notifications(request: Request, db: Session = Depends(get_sessio
         envelope = verify_apple_jws(signed_payload)
     except ValueError as exc:
         logger.warning("apple_notifications: outer JWS verification failed: %s", exc)
-        print("[apple_notifications] outer verification failed:", repr(exc))
         raise HTTPException(status_code=400, detail=f"Payload verification failed: {exc}")
 
     notification_type = envelope.get("notificationType") or ""
@@ -423,7 +410,6 @@ async def apple_notifications(request: Request, db: Session = Depends(get_sessio
             tx_payload = verify_apple_jws(inner_tx)
         except ValueError as exc:
             logger.warning("apple_notifications: inner transaction JWS failed: %s", exc)
-            print("[apple_notifications] inner transaction verification failed:", repr(exc))
 
     inner_renewal = data.get("signedRenewalInfo")
     if inner_renewal:
@@ -431,7 +417,6 @@ async def apple_notifications(request: Request, db: Session = Depends(get_sessio
             renewal_payload = verify_apple_jws(inner_renewal)
         except ValueError as exc:
             logger.warning("apple_notifications: inner renewal JWS failed: %s", exc)
-            print("[apple_notifications] inner renewal verification failed:", repr(exc))
 
     orig_tx_id: Optional[str] = None
     app_account_token: Optional[str] = None
