@@ -85,6 +85,7 @@ def verify_apple_jws(signed_payload: str) -> dict:
     """
     Verify an Apple-signed JWS (StoreKit 2 transaction or server notification).
     """
+    print("[verify_apple_jws] called")
     if not signed_payload or not isinstance(signed_payload, str):
         raise ValueError("signedPayload must be a non-empty string")
 
@@ -152,6 +153,9 @@ def verify_apple_jws(signed_payload: str) -> dict:
         return json.loads(_b64url_decode(payload_b64))
     except Exception as exc:
         raise ValueError(f"JWS payload is not valid JSON: {exc}") from exc
+
+        print("[verify_apple_jws] alg =", alg)
+print("[verify_apple_jws] x5c count =", len(x5c) if isinstance(x5c, list) else "not-a-list")
 
 
 # ─── Entitlement helpers ─────────────────────────────────────────────────────
@@ -360,6 +364,7 @@ async def apple_notifications(request: Request, db: Session = Depends(get_sessio
         envelope = verify_apple_jws(signed_payload)
     except ValueError as exc:
         logger.warning("apple_notifications: outer JWS verification failed: %s", exc)
+        print("[apple_notifications] outer verification failed:", repr(exc))
         raise HTTPException(status_code=400, detail=f"Payload verification failed: {exc}")
 
     notification_type = envelope.get("notificationType") or ""
@@ -385,6 +390,7 @@ async def apple_notifications(request: Request, db: Session = Depends(get_sessio
             tx_payload = verify_apple_jws(inner_tx)
         except ValueError as exc:
             logger.warning("apple_notifications: inner transaction JWS failed: %s", exc)
+            print("[apple_notifications] inner transaction verification failed:", repr(exc))
 
     inner_renewal = data.get("signedRenewalInfo")
     if inner_renewal:
@@ -392,6 +398,7 @@ async def apple_notifications(request: Request, db: Session = Depends(get_sessio
             renewal_payload = verify_apple_jws(inner_renewal)
         except ValueError as exc:
             logger.warning("apple_notifications: inner renewal JWS failed: %s", exc)
+            print("[apple_notifications] inner renewal verification failed:", repr(exc))
 
     orig_tx_id: Optional[str] = None
     app_account_token: Optional[str] = None
