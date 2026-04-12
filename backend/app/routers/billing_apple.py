@@ -11,6 +11,7 @@ from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlmodel import Session, select
@@ -294,6 +295,7 @@ async def apple_sync(
         payload = verify_apple_jws(signed_transaction)
     except ValueError as exc:
         logger.warning("apple_sync: JWS verification failed user=%s: %s", current_user.id, exc)
+        print("[apple_sync] verification failed:", repr(exc))
         raise HTTPException(status_code=400, detail=f"Transaction verification failed: {exc}")
 
     tx_id = payload.get("transactionId") or payload.get("transaction_id")
