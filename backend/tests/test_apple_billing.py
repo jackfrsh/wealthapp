@@ -264,7 +264,7 @@ def test_app():
     # Add columns that _migrate_columns would normally add (SQLite silently ignores
     # ADD COLUMN if the column already exists via CREATE TABLE, so just ensure schema)
     from sqlalchemy import text
-    with test_engine.connect() as conn:
+    with test_engine.begin() as conn:
         for col, col_type in [
             ("subscription_status", "TEXT"),
             ("trial_end_iso", "TEXT"),
