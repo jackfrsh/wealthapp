@@ -24,8 +24,13 @@ engine = create_engine(
 
 
 def ensure_schema() -> None:
-    """
-    Lightweight schema ensure (no Alembic).
+    """Create any tables not yet covered by Alembic migrations.
+
+    Alembic (run via `alembic upgrade head` in the Dockerfile) is the canonical
+    migration path. This function only calls SQLModel.metadata.create_all() as a
+    safety net for tables that don't yet have an Alembic migration (e.g. newly
+    added tables before a migration is written). It never mutates existing columns.
+
     IMPORTANT: must import models so all tables are registered in SQLModel.metadata.
     """
     try:
@@ -34,59 +39,9 @@ def ensure_schema() -> None:
         SQLModel.metadata.create_all(engine)
         logger.info("Schema ensured (create_all)")
 
-        # create_all() will not add new columns to existing tables,
-        # so run lightweight idempotent column migrations afterwards.
-        with engine.begin() as conn:
-            _migrate_columns(conn)
-
     except Exception as e:
         logger.exception("ensure_schema failed: %s", str(e))
         raise
-
-
-def _migrate_columns(conn) -> None:
-    """Add missing columns to existing tables. Safe to run repeatedly."""
-    _add_column_if_missing(conn, "settings", "subscription_status", "TEXT")
-    _add_column_if_missing(conn, "settings", "trial_end_iso", "TEXT")
-    _add_column_if_missing(conn, "settings", "apple_subscription_status", "TEXT")
-    _add_column_if_missing(conn, "users", "apple_original_transaction_id", "TEXT")
-
-
-def _add_column_if_missing(conn, table: str, column: str, col_type: str) -> None:
-    """Safely add a column to an existing table."""
-    try:
-        result = conn.execute(
-            text(
-                """
-                SELECT 1
-                FROM information_schema.columns
-                WHERE table_name = :table
-                  AND column_name = :column
-                """
-            ),
-            {"table": table, "column": column},
-        )
-
-        if result.fetchone() is not None:
-            return
-
-        logger.info("Adding missing column %s.%s (%s)", table, column, col_type)
-        conn.execute(
-            text(f'ALTER TABLE "{table}" ADD COLUMN "{column}" {col_type}')
-        )
-
-    except Exception as e:
-        # In production we fail fast: schema drift causes random 500s later.
-        is_prod = (
-            os.getenv("RAILWAY_ENVIRONMENT") == "production"
-            or os.getenv("ENV") == "production"
-        )
-        if is_prod:
-            raise RuntimeError(
-                f"Column migration failed for {table}.{column}: {e}"
-            ) from e
-
-        logger.warning("Column migration %s.%s skipped: %s", table, column, e)
 
 
 def get_session():

@@ -348,11 +348,26 @@ async def goal_forecast(
 
     net_worth = await _current_net_worth(session, current_user, base_currency)
 
+    # When no monthly_contribution override is requested and the goal has none set,
+    # fall back to the sum of the user's account contributions so the forecast
+    # reflects the user's actual saving behaviour from the start.
+    effective_monthly_contribution = monthly_contribution
+    if monthly_contribution is None and float(goal.monthly_contribution or 0) == 0.0:
+        accounts = session.exec(
+            select(Account).where(
+                Account.user_id == current_user.id,
+                Account.include_in_net_worth == True,
+            )
+        ).all()
+        account_mc_sum = sum(float(a.monthly_contribution or 0) for a in accounts)
+        if account_mc_sum > 0:
+            effective_monthly_contribution = account_mc_sum
+
     result = compute_goal_forecast(
         goal=goal,
         current_net_worth=net_worth,
         base_currency=base_currency,
-        monthly_contribution=monthly_contribution,
+        monthly_contribution=effective_monthly_contribution,
         expected_return=expected_return,
     )
 
@@ -360,5 +375,10 @@ async def goal_forecast(
         "goal": goal,
         "base_currency": base_currency,
         "current_net_worth": net_worth,
+        "effective_monthly_contribution": float(
+            effective_monthly_contribution
+            if effective_monthly_contribution is not None
+            else float(goal.monthly_contribution or 0)
+        ),
         **result,
     }

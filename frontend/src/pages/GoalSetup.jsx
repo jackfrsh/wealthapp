@@ -19,6 +19,7 @@ export default function GoalSetup({ onComplete, embedded = false }) {
     current_age: '',
     target_age: '60',
     target_amount: '',
+    monthly_contribution: '',
     expected_annual_return_pct: '7',
   })
 
@@ -70,13 +71,15 @@ export default function GoalSetup({ onComplete, embedded = false }) {
 
     setSaving(true)
     try {
+      const monthlyContribution = toNumber(form.monthly_contribution, 0) ?? 0
+
       const payload = {
         goal_type: 'retirement',
         name: (form.name || 'Independence').trim() || 'Independence',
         current_age: Math.trunc(currentAge),
         target_age: Math.trunc(targetAge),
         target_amount: targetAmount,
-        monthly_contribution: 0,
+        monthly_contribution: Math.max(0, monthlyContribution),
         expected_annual_return_pct: expectedReturn,
         is_primary: true,
       }
@@ -287,6 +290,20 @@ export default function GoalSetup({ onComplete, embedded = false }) {
             </div>
 
             <div>
+              <label className={lbl}>Monthly contribution ({baseCurrency}) <span style={{ color: 'rgba(255,255,255,0.22)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>optional</span></label>
+              <input
+                value={form.monthly_contribution}
+                onChange={(e) => update('monthly_contribution', e.target.value)}
+                className={inp}
+                placeholder="500"
+                inputMode="decimal"
+              />
+              <p className="text-[11px] mt-1.5" style={{ color: 'rgba(255,255,255,0.24)' }}>
+                How much you save toward this goal each month. You can update this anytime.
+              </p>
+            </div>
+
+            <div>
               <label className={lbl}>Expected annual return (%)</label>
               <input
                 value={form.expected_annual_return_pct}
@@ -492,6 +509,25 @@ export default function GoalSetup({ onComplete, embedded = false }) {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div>
+              <label className={lbl}>
+                Monthly contribution ({baseCurrency}){' '}
+                <span className="font-normal normal-case tracking-normal text-ink-muted/40 dark:text-white/25">
+                  optional
+                </span>
+              </label>
+              <input
+                value={form.monthly_contribution}
+                onChange={(e) => update('monthly_contribution', e.target.value)}
+                className={inp}
+                placeholder="500"
+                inputMode="decimal"
+              />
+              <p className="text-xs text-ink-muted/50 dark:text-white/25 mt-2">
+                How much you save toward this goal each month. You can update this anytime.
+              </p>
             </div>
 
             <div>

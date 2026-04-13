@@ -57,6 +57,17 @@ function asArray(v){return Array.isArray(v)?v:[]}
 
 /* ── LedgerEntryRow ──────────────────────────────── */
 
+const ACCOUNT_STALE_DAYS = 60
+const ACCOUNT_AGING_DAYS = 30
+
+function accountStaleness(updatedAt) {
+  if (!updatedAt) return null
+  const days = Math.floor((Date.now() - new Date(updatedAt).getTime()) / 86400000)
+  if (days >= ACCOUNT_STALE_DAYS) return { state: 'stale', days }
+  if (days >= ACCOUNT_AGING_DAYS) return { state: 'aging', days }
+  return null
+}
+
 function LedgerEntryRow({ account, isLiability, baseCurrency, onEdit, onDelete }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const typeLabel = ACCOUNT_TYPE_LABELS?.[account.type] || account.type
@@ -70,6 +81,7 @@ function LedgerEntryRow({ account, isLiability, baseCurrency, onEdit, onDelete }
   const monthlyLabel = MONTHLY_LABEL[account.type] || 'Monthly'
   const foreignCurrency = displayCurrency !== (baseCurrency || 'GBP').toUpperCase()
   const hasNotes = account.notes && String(account.notes).trim().length > 0
+  const staleness = accountStaleness(account.updated_at)
 
   return (
     <div
@@ -118,6 +130,14 @@ function LedgerEntryRow({ account, isLiability, baseCurrency, onEdit, onDelete }
                 {' '}· {String(account.notes).slice(0, 32)}
                 {String(account.notes).length > 32 ? '…' : ''}
               </>
+            )}
+            {staleness && !excluded && (
+              <span
+                className="ml-1"
+                style={{ color: staleness.state === 'stale' ? 'rgba(217,119,6,0.70)' : 'rgba(217,119,6,0.50)' }}
+              >
+                · Updated {staleness.days}d ago
+              </span>
             )}
           </div>
         </div>

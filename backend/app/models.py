@@ -1,7 +1,8 @@
 """SQLModel models for Wealth App.
 
-This repo uses SQLite + SQLModel without Alembic.
-Schema changes are applied via a lightweight ensure step (see database.ensure_schema).
+This repo uses Postgres + SQLModel with Alembic as the canonical migration tool.
+database.ensure_schema() calls create_all() as a safety net for tables not yet covered by a migration.
+Never add schema mutations outside of Alembic migration files.
 
 FX rates are stored as: 1 BASE = X QUOTE.
 Example: base GBP, USD=1.366 means 1 GBP = 1.366 USD.

@@ -153,7 +153,8 @@ async def compute_projection_series(session: Session, user_id: int, years: int =
     """Compute an aggregate net worth projection series.
 
     Returns: dict with:
-      base_currency, fx_as_of, excluded_accounts, years, points
+      base_currency, fx_as_of, excluded_accounts, years, points,
+      total_monthly_contribution, weighted_avg_return_pct
     where points = [{date, projected_net_worth}]
     """
     if years < 1:
@@ -182,6 +183,29 @@ async def compute_projection_series(session: Session, user_id: int, years: int =
                 "is_liability": (a.type or "").lower() in LIABILITY_TYPES,
             }
         )
+
+    # Compute aggregated assumptions from account data
+    total_monthly_contribution = sum(acc["c"] for acc in state if not acc["is_liability"])
+
+    # Weighted-average return: weight by starting balance in base currency (liabilities excluded)
+    total_balance_for_weighting = 0.0
+    weighted_return_sum = 0.0
+    for acc in state:
+        if acc["is_liability"]:
+            continue
+        try:
+            bal_base = _value_to_base_mvp(acc["balance"], acc["currency"], base_currency, rates)
+        except HTTPException:
+            continue
+        if bal_base > 0:
+            total_balance_for_weighting += bal_base
+            weighted_return_sum += bal_base * (acc["r"] * 100.0)  # r is fractional
+
+    weighted_avg_return_pct: Optional[float]
+    if total_balance_for_weighting > 0:
+        weighted_avg_return_pct = round(weighted_return_sum / total_balance_for_weighting, 4)
+    else:
+        weighted_avg_return_pct = None
 
     start = date.today().replace(day=1)
     months = years * 12
@@ -229,4 +253,6 @@ async def compute_projection_series(session: Session, user_id: int, years: int =
         "excluded_accounts": excluded_current,
         "years": years,
         "points": points,
+        "total_monthly_contribution": round(total_monthly_contribution, 2),
+        "weighted_avg_return_pct": weighted_avg_return_pct,
     }

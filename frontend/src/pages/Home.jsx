@@ -104,6 +104,34 @@ function shouldSuppressDelta(spanDays, deltaValue, totalWealth) {
 }
 
 /* ──────────────────────────────────────────────────── */
+/* Net worth change breakdown movers                    */
+/* ──────────────────────────────────────────────────── */
+
+function ChangeBreakdown({ items, ccy }) {
+  if (!items || items.length === 0) return null
+  return (
+    <div className="mt-3 space-y-1">
+      {items.map((item) => (
+        <div key={item.name} className="flex items-center justify-between gap-4">
+          <span
+            className="text-[12px] truncate"
+            style={{ color: 'rgba(255,255,255,0.38)' }}
+          >
+            {item.name}
+          </span>
+          <span
+            className="text-[12px] tabular-nums font-semibold shrink-0"
+            style={{ color: item.delta >= 0 ? 'rgba(47,166,118,0.82)' : 'rgba(200,90,70,0.82)' }}
+          >
+            {item.delta >= 0 ? '+' : ''}{fmtCurrencyCompact(item.delta, ccy)}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* ──────────────────────────────────────────────────── */
 /* Celebration storage (unchanged)                     */
 /* ──────────────────────────────────────────────────── */
 
@@ -361,7 +389,6 @@ function CommandDeck({
   total,
   ccy,
   forecast,
-  isPro,
   planShortfall,
   showIsaUrgency,
   totalMonthlyContribs,
@@ -391,8 +418,7 @@ function CommandDeck({
 
   const supportingParts = []
   if (projectedEnd > 0 && targetAge) supportingParts.push(`Projected by ${targetAge}`)
-  if (isPro && forecast?.freedom?.hit_year) supportingParts.push(`Freedom ${forecast.freedom.hit_year}`)
-  else if (target > 0 && progress !== null) supportingParts.push(`${progress.toFixed(0)}% of ${fmtCurrencyCompact(target, ccy)}`)
+  if (target > 0 && progress !== null) supportingParts.push(`${progress.toFixed(0)}% of ${fmtCurrencyCompact(target, ccy)}`)
   const supportingLine = supportingParts.join(' · ')
 
   const showNextMove = !showIsaUrgency && planShortfall > 0 && !!retirementGoal?.target_age
@@ -1207,6 +1233,15 @@ export default function Home() {
   const totalMonthlyContribs = assetAccounts.reduce((s, a) => s + Math.max(0, Number(a.monthly_contribution || 0)), 0)
   const contributingCount = assetAccounts.filter((a) => Number(a.monthly_contribution || 0) > 0).length
 
+  // Stale account detection — accounts included in net worth not updated in 60+ days.
+  const ACCOUNT_STALE_DAYS = 60
+  const staleAccountCount = dataAccounts.filter((a) => {
+    if (a.include_in_net_worth === false) return false
+    if (!a.updated_at) return false
+    const days = Math.floor((Date.now() - new Date(a.updated_at).getTime()) / 86400000)
+    return days >= ACCOUNT_STALE_DAYS
+  }).length
+
   const forecastMonthsRemaining = (data.forecast?.years_remaining || 0) * 12
   let planShortfall = 0
   if (data.forecast?.status === 'adjust' && retirementGoal && forecastMonthsRemaining > 0) {
@@ -1312,6 +1347,8 @@ export default function Home() {
                 size="md"
                 currency={ccy}
               />
+
+              <ChangeBreakdown items={data?.breakdown_delta} ccy={ccy} />
             </div>
           )}
 
@@ -1440,13 +1477,37 @@ export default function Home() {
         </div>
       )}
 
+      {staleAccountCount > 0 && (
+        <div className="mt-5">
+          <button
+            type="button"
+            onClick={() => setPage('accounts')}
+            className="w-full text-left group"
+          >
+            <div
+              className="rounded-2xl px-5 py-3.5 flex items-center justify-between gap-4 transition-opacity group-hover:opacity-80"
+              style={{ background: 'rgba(120,169,230,0.055)', border: '1px solid rgba(120,169,230,0.11)' }}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <Clock size={13} style={{ color: 'rgba(120,169,230,0.60)', flexShrink: 0 }} />
+                <span className="text-[13px] font-medium truncate" style={{ color: 'rgba(120,169,230,0.80)' }}>
+                  {staleAccountCount === 1
+                    ? '1 account may need a balance review'
+                    : `${staleAccountCount} accounts may need a balance review`}
+                </span>
+              </div>
+              <ChevronRight size={13} style={{ color: 'rgba(120,169,230,0.38)', flexShrink: 0 }} />
+            </div>
+          </button>
+        </div>
+      )}
+
       <div className="mt-6">
         <CommandDeck
           goal={retirementGoal}
           total={total}
           ccy={ccy}
           forecast={data.forecast}
-          isPro={isPro}
           planShortfall={planShortfall}
           showIsaUrgency={showIsaUrgency}
           totalMonthlyContribs={totalMonthlyContribs}

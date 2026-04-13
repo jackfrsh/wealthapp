@@ -22,6 +22,7 @@ from .routers import (
     dashboard,
     settings,
     goals,
+    pension,
     snapshots,
     fx,
     insights,
@@ -78,6 +79,7 @@ app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(accounts.router, prefix=API_PREFIX)
 app.include_router(settings.router, prefix=API_PREFIX)
 app.include_router(goals.router, prefix=API_PREFIX)
+app.include_router(pension.router, prefix=API_PREFIX)
 app.include_router(dashboard.router, prefix=API_PREFIX)
 app.include_router(snapshots.router, prefix=API_PREFIX)
 app.include_router(fx.router, prefix=API_PREFIX)

@@ -111,7 +111,7 @@ class ErrorBoundary extends React.Component {
                 : 'An unexpected error occurred. Please refresh the page to continue.'}
             </p>
 
-            {!isChunkError && this.state.error ? (
+            {!isChunkError && import.meta.env.DEV && this.state.error ? (
               <pre className="mt-3 text-left text-xs bg-black/5 dark:bg-white/5 p-3 rounded-xl overflow-auto max-h-[40vh]">
                 {String(this.state.error?.stack || this.state.error?.message || this.state.error)}
               </pre>
@@ -214,19 +214,12 @@ export default function App() {
 
   const [username, setUsername] = useState('')
 
-  // Dark mode only — light mode is not yet supported.
-  // Force dark regardless of OS preference or any stored setting.
-  const resolveTheme = () => true
-
+  // Paddock launches in dark mode only. Light mode is not yet supported.
   const applyThemeToDom = () => {
     document.documentElement.classList.add('dark')
   }
 
-  const [themePref, _setThemePref] = useState('dark')
-
   const [isNavPending, startNavTransition] = useTransition()
-
-  const setThemePreference = useCallback(() => {}, [])
 
   useEffect(() => {
     applyThemeToDom()
@@ -252,7 +245,7 @@ export default function App() {
     setDataVersion((v) => v + 1)
   }, [])
 
-  const dark = resolveTheme(themePref)
+  const dark = true
 
   const setPage = useCallback(
     (next, { replace = false } = {}) => {
@@ -401,32 +394,37 @@ export default function App() {
     }
   }, [refreshSettings])
 
+  // Billing sync is debounced: at most once every 5 minutes on focus/visibility.
+  // This prevents hitting the Stripe API on every tab switch for Pro users.
+  const BILLING_SYNC_INTERVAL_MS = 5 * 60 * 1000
+  const lastBillingSyncRef = useRef(0)
+
   useEffect(() => {
     if (!authed) return
-  
+
     let running = false
-  
+
     const run = async () => {
+      const now = Date.now()
       if (running) return
+      if (now - lastBillingSyncRef.current < BILLING_SYNC_INTERVAL_MS) return
       running = true
+      lastBillingSyncRef.current = now
       try {
         await syncBilling()
       } finally {
         running = false
       }
     }
-  
-    const onFocus = () => {
-      run()
-    }
-  
+
+    const onFocus = () => { run() }
     const onVisibility = () => {
       if (document.visibilityState === 'visible') run()
     }
-  
+
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVisibility)
-  
+
     return () => {
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibility)
@@ -566,8 +564,10 @@ export default function App() {
         setSettingsReady(false)
         setAuthed(true)
 
+        // Critical path: fast DB reads only. syncBilling (Stripe API) runs
+        // in the background after the UI is ready.
         await Promise.allSettled([
-          syncBilling(),
+          refreshSettings(),
           fetchPrimaryGoal(),
           fetchAccountsCount(),
         ])
@@ -609,6 +609,18 @@ export default function App() {
       } finally {
         if (!cancelled) setSettingsReady(true)
         if (!cancelled) setChecking(false)
+
+        // Background tasks: run after the UI is visible, outside the loading gate.
+        if (!cancelled) {
+          // Sync billing without blocking render. Stamp the time so the focus
+          // listener doesn't immediately double-fire.
+          lastBillingSyncRef.current = Date.now()
+          syncBilling().catch(() => {})
+
+          // Accumulate a snapshot if the last one is stale (>24h).
+          // Fire-and-forget — never blocks the user.
+          api('/snapshots/ensure', { method: 'POST', skipCache: true }).catch(() => {})
+        }
       }
     }
 
@@ -695,9 +707,6 @@ export default function App() {
     settingsReady,
     setSettingsReady,
 
-    themePref,
-    setThemePreference,
-    setThemePref: setThemePreference,
     dark,
 
     baseCurrency,

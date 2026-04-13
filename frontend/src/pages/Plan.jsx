@@ -17,10 +17,12 @@ import {
   compactTickFormatter, chartMargin, ACCENT_STROKE, activeDotStyle,
 } from '../components/charts/chartTheme'
 import ScenarioCompareCard from '../components/outlook/ScenarioCompareCard'
+import DrawdownPlannerCard from '../components/outlook/DrawdownPlannerCard'
 import EditPlanModal from '../components/outlook/EditPlanModal'
 import PlanHeroDashboard from '../components/outlook/PlanHeroDashboard'
 import useScenarioCompare from '../hooks/outlook/useScenarioCompare'
 import useOutlookForecast from '../hooks/outlook/useOutlookForecast'
+import useDrawdownPlanner from '../hooks/outlook/useDrawdownPlanner'
 import {
   AlertTriangle,
   RefreshCw,
@@ -82,27 +84,42 @@ function DecisionsHandoff({ onOpen }) {
 /* situation means before asking them to read a chart.   */
 
 function PlanSentence({ derived, ccy }) {
-  const { status, displayProjEnd, targetAmt, absGap, gap, deltaMc, goal } = derived
+  const { status, displayProjEnd, targetAmt, absGap, gap, deltaMc, goal, freedomYearNum, yearsToGoal } = derived
 
   if (!targetAmt || targetAmt <= 0) return null
 
   const targetAge = goal?.target_age
-  const projFormatted  = fmtCurrencyCompact(displayProjEnd, ccy)
+  const projFormatted   = fmtCurrencyCompact(displayProjEnd, ccy)
   const targetFormatted = fmtCurrencyCompact(targetAmt, ccy)
-  const gapFormatted   = fmtCurrencyCompact(absGap, ccy)
+  const gapFormatted    = fmtCurrencyCompact(absGap, ccy)
+
+  // Build a human-readable "N years from now" label when the goal hit-date is known.
+  const yearsRounded = yearsToGoal != null ? Math.round(yearsToGoal) : null
+  const yearsLabel = yearsRounded != null
+    ? yearsRounded < 1 ? 'less than a year from now'
+    : yearsRounded === 1 ? 'about a year from now'
+    : `about ${yearsRounded} years from now`
+    : null
 
   let headline = ''
+  let freedomLine = null
   let lever = ''
 
   if (status === 'ahead') {
     headline = targetAge
       ? `Projecting ${projFormatted} by age ${targetAge} — ${gapFormatted} ahead of your ${targetFormatted} target.`
       : `You're ${gapFormatted} ahead of your ${targetFormatted} target.`
+    if (freedomYearNum != null && yearsLabel) {
+      freedomLine = `At this pace, you reach your target in ${freedomYearNum} — ${yearsLabel}.`
+    }
     lever = 'Maintain the current pace or redirect the surplus.'
   } else if (status === 'on_track') {
     headline = targetAge
       ? `At current pace, projecting ${projFormatted} by age ${targetAge} — on track for your ${targetFormatted} target.`
       : `You're on track to reach your ${targetFormatted} target.`
+    if (freedomYearNum != null && yearsLabel) {
+      freedomLine = `Your plan reaches the target in ${freedomYearNum} — ${yearsLabel}.`
+    }
     lever = 'Consistency matters more than complexity from here.'
   } else {
     headline = targetAge
@@ -118,6 +135,11 @@ function PlanSentence({ derived, ccy }) {
       <p className="text-[19px] sm:text-[22px] font-semibold leading-snug" style={{ color: 'rgba(255,255,255,0.92)' }}>
         {headline}
       </p>
+      {freedomLine && (
+        <p className="mt-2 text-[16px] sm:text-[18px] font-medium leading-snug" style={{ color: 'rgba(255,255,255,0.68)' }}>
+          {freedomLine}
+        </p>
+      )}
       <p className="mt-2 text-[13.5px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.40)' }}>
         {lever}
       </p>
@@ -135,6 +157,7 @@ export default function Plan() {
   const [trajOpen, setTrajOpen] = useState(true)
   const [inflationAdj, setInflationAdj] = useState(false)
   const [scenarioCompareOpen, setScenarioCompareOpen] = useState(true)
+  const [drawdownOpen, setDrawdownOpen] = useState(true)
 
   const [goalSetupOpen, setGoalSetupOpen] = useState(false)
 
@@ -186,6 +209,8 @@ export default function Plan() {
     localContrib, localReturn, showToast,
     isActive: scenarioCompareOpen,
   })
+
+  const drawdown = useDrawdownPlanner({ goal: derived.goal })
 
   useEffect(() => {
     if (trackedViewRef.current) return
@@ -678,6 +703,14 @@ if (primaryGoal === null) {
           isOpen={scenarioCompareOpen} onToggleOpen={() => setScenarioCompareOpen((v) => !v)}
         />
       </div>
+
+      {/* ── SCENE 2B: Drawdown Planner ── */}
+      <DrawdownPlannerCard
+        ccy={ccy}
+        drawdown={drawdown}
+        isOpen={drawdownOpen}
+        onToggleOpen={() => setDrawdownOpen((v) => !v)}
+      />
 
       {/* ── SCENE 3: Decisions handoff ── */}
       <DecisionsHandoff onOpen={openStrategy} />

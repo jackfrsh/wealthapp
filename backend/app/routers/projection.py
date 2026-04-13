@@ -72,10 +72,12 @@ async def networth_projection(
                 }
             )
 
+    # Assumptions derived from real account data, not defaults.
+    # weighted_avg_return_pct is None when no accounts have a non-zero balance.
     assumptions = {
-        "expectedReturn": result.get("expected_annual_return_pct", 7.0),
-        "monthlyContribution": result.get("monthly_contribution", 0.0),
-        "inflationRate": result.get("inflation_rate"),
+        "monthlyContribution": result.get("total_monthly_contribution"),
+        "expectedReturn": result.get("weighted_avg_return_pct"),
+        "inflationRate": None,
     }
 
     return {

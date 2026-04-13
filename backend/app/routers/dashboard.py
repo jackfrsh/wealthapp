@@ -5,6 +5,7 @@ GET /dashboard?range=1M   (7D | 1M | 3M | 1Y | ALL)
 """
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -29,6 +30,68 @@ RANGE_DAYS: dict[str, int | None] = {
 }
 
 CRYPTO_PSEUDO_FIAT = {"BTC", "ETH"}  # MVP: treat balances as fiat-value entered by user
+
+
+def _compute_breakdown_delta(old_snap: Snapshot, new_snap: Snapshot) -> list[dict] | None:
+    """Compare two snapshots and return top movers by absolute delta.
+
+    Matching uses stable account IDs when present (so renames don't produce
+    false delete+add pairs).  For legacy snapshots that pre-date the id field,
+    the account name is used as the fallback key.
+
+    Returns up to 3 items: [{name, delta}] sorted by abs(delta) desc.
+    Returns None when there is no meaningful data to show.
+    """
+    def _key(item: dict) -> str:
+        """Stable key: str(id) when available, else account name."""
+        raw_id = item.get("id")
+        return str(raw_id) if raw_id is not None else item.get("name", "")
+
+    try:
+        old_raw = json.loads(old_snap.breakdown_json or "[]")
+        new_raw = json.loads(new_snap.breakdown_json or "[]")
+
+        old_items: dict[str, float] = {
+            _key(item): float(item.get("value_base", 0))
+            for item in old_raw
+            if _key(item)
+        }
+        # For display: prefer the newest snapshot's name; fall back to old name.
+        old_name_by_key: dict[str, str] = {
+            _key(item): item.get("name", _key(item))
+            for item in old_raw
+            if _key(item)
+        }
+        new_name_by_key: dict[str, str] = {
+            _key(item): item.get("name", _key(item))
+            for item in new_raw
+            if _key(item)
+        }
+        new_items: dict[str, float] = {
+            _key(item): float(item.get("value_base", 0))
+            for item in new_raw
+            if _key(item)
+        }
+
+        all_keys = set(old_items) | set(new_items)
+        if not all_keys:
+            return None
+
+        movers = []
+        for key in all_keys:
+            delta = new_items.get(key, 0.0) - old_items.get(key, 0.0)
+            if abs(delta) >= 1.0:  # suppress sub-unit noise
+                display_name = new_name_by_key.get(key) or old_name_by_key.get(key, key)
+                movers.append({"name": display_name, "delta": round(delta, 2)})
+
+        if not movers:
+            return None
+
+        movers.sort(key=lambda x: abs(x["delta"]), reverse=True)
+        return movers[:3]
+    except Exception:
+        logger.debug("breakdown_delta computation failed", exc_info=True)
+        return None
 
 
 @router.get("")
@@ -81,12 +144,21 @@ async def dashboard(
 
     current_total = round(current_total, 2)
 
-    # Snapshots
+    # Snapshots — only those recorded in the current base currency are comparable.
+    # Mixing snapshots from a different currency would produce nonsense deltas.
     all_snaps = session.exec(
         select(Snapshot)
         .where(Snapshot.user_id == current_user.id)
         .order_by(Snapshot.created_at.asc())
     ).all()
+
+    # Detect if any snapshots exist in a different currency (user changed base currency).
+    history_currency_changed = any(
+        s.base_currency != base_currency for s in all_snaps
+    )
+
+    # Only use snapshots that match the current base currency for delta/chart.
+    comparable_snaps = [s for s in all_snaps if s.base_currency == base_currency]
 
     # Compute range-specific delta (first snapshot in range vs latest)
     days = RANGE_DAYS.get(range.upper(), 30)
@@ -94,14 +166,32 @@ async def dashboard(
     if days is not None:
         cutoff = datetime.now(timezone.utc) - timedelta(days=int(days))
 
+    # Most recent snapshot date (regardless of range — for Home freshness indicator).
+    last_snapshot_date: str | None = None
+    if comparable_snaps:
+        last_snap = comparable_snaps[-1]
+        lsd = last_snap.created_at
+        if lsd.tzinfo is None:
+            lsd = lsd.replace(tzinfo=timezone.utc)
+        last_snapshot_date = lsd.isoformat()
+
     series: list[dict[str, object]] = []
-    for snap in all_snaps:
+    range_snaps: list[Snapshot] = []  # comparable snaps within the selected range
+    for snap in comparable_snaps:
         snap_dt = snap.created_at
         if snap_dt.tzinfo is None:
             snap_dt = snap_dt.replace(tzinfo=timezone.utc)
         if cutoff and snap_dt < cutoff:
             continue
+        range_snaps.append(snap)
         series.append({"t": snap.created_at.isoformat(), "v": float(snap.total_base)})
+
+    # Breakdown delta: top movers between first and last snapshot in the range.
+    # Uses the same comparison window as the hero range_change for consistency.
+    # Suppressed when cross-currency or fewer than two snapshots in range.
+    breakdown_delta: list[dict] | None = None
+    if len(range_snaps) >= 2 and not history_currency_changed:
+        breakdown_delta = _compute_breakdown_delta(range_snaps[0], range_snaps[-1])
 
     # Range delta: change from first point in range to current
     range_change = 0.0
@@ -172,6 +262,15 @@ async def dashboard(
         "excluded_accounts": excluded_accounts,
         "series": series,
         "total_snapshots": len(all_snaps),
+        # True when the user has old snapshots in a different base currency.
+        # The frontend should surface a message explaining why history is limited.
+        "history_currency_changed": history_currency_changed and not series,
+        # ISO timestamp of the most recent comparable snapshot, or null.
+        # Used by Home to display snapshot freshness.
+        "last_snapshot_date": last_snapshot_date,
+        # Top movers between first and last snapshot in the selected range.
+        # Null when history is insufficient or cross-currency.
+        "breakdown_delta": breakdown_delta,
         "primary_goal": goal_data,
         "forecast": forecast_data,
     }
