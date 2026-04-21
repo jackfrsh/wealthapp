@@ -201,9 +201,21 @@ def get_current_user(
             if existing.supabase_user_id == sub:
                 user = existing
             else:
+                # A valid Supabase JWT arrived for this email but with a different UUID.
+                # This happens when users re-register after account deletion, or authenticate
+                # via a second provider that Supabase did not auto-link. Returning 409 here
+                # breaks every protected route for the user with no recovery path on the
+                # client side. Return 401 so the client re-authenticates and support can
+                # investigate the sub mismatch (old=%s, new=%s).
+                logger.warning(
+                    "Supabase sub mismatch for email %s: stored=%s incoming=%s",
+                    email,
+                    existing.supabase_user_id,
+                    sub,
+                )
                 raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Username already linked to a different Supabase account",
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Account authentication state is inconsistent. Please sign out and sign in again.",
                 )
         else:
             # Race-safe creation: try insert, catch duplicate, re-fetch
@@ -232,9 +244,15 @@ def get_current_user(
                     session.commit()
                     session.refresh(user)
                 elif user.supabase_user_id != sub:
+                    logger.warning(
+                        "Supabase sub mismatch (race path) for email %s: stored=%s incoming=%s",
+                        email,
+                        user.supabase_user_id,
+                        sub,
+                    )
                     raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="Username already linked to a different Supabase account",
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Account authentication state is inconsistent. Please sign out and sign in again.",
                     )
 
                 # Ensure settings exist (covers duplicate/create-race path too)

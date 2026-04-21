@@ -105,7 +105,7 @@ async def dashboard(
         select(Settings).where(Settings.user_id == current_user.id)
     ).first()
     base_currency = (settings.base_currency if settings else "GBP").upper()
-    goal = float(settings.goal if settings else 0)
+    goal = float(settings.goal if (settings and settings.goal is not None) else 0)
 
     # FX
     fx_cache = await get_fx_cache(base_currency, session)

@@ -426,7 +426,7 @@ export default function DrawdownPlannerCard({
               <div className="mt-4 space-y-5">
                 {/* Row 1: Pot + ages */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <FieldRow label={`Pension pot (${ccy})`}>
+                  <FieldRow label={`Current Pension pot (${ccy})`}>
                     <NumInput
                       value={inputs.current_pot}
                       onChange={(v) => setInput('current_pot', v)}
