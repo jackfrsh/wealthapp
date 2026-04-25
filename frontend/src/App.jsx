@@ -24,6 +24,7 @@ import AuthPage from './pages/Auth'
 import Privacy from './pages/Privacy'
 import Security from './pages/Security'
 import Terms from './pages/Terms'
+import Support from './pages/Support'
 
 // ✅ Eager-load core authed pages (instant navigation, no suspense blank)
 import Home from './pages/Home'
@@ -46,10 +47,18 @@ import MultiCurrencyGuide from './pages/guides/MultiCurrency'
 import LongTermProjectionGuide from './pages/guides/LongTermProjection'
 import InflationAdjustedGuide from './pages/guides/InflationAdjusted'
 import GuideIndex from './pages/guides/GuideIndex'
+import PensionLongevityGuide from './pages/guides/PensionLongevityGuide'
+import ManualTracking from './pages/guides/ManualTracking'
+import BestNetWorthAppsUK from './pages/guides/BestNetWorthAppsUK'
 import NetWorthTracker from './pages/guides/NetWorthTracker'
 import TrackISAsPensionsSavings from './pages/guides/TrackISAsPensionsSavings'
 import SpreadsheetAlternative from './pages/guides/SpreadsheetAlternative'
 import HowToTrackNetWorth from './pages/guides/HowToTrackNetWorth'
+import ToolIndex from './pages/tools/ToolIndex'
+import PensionDrawdownCalculator from './pages/tools/PensionDrawdownCalculator'
+import FireNumberCalculator from './pages/tools/FireNumberCalculator'
+import IsaGrowthCalculator from './pages/tools/IsaGrowthCalculator'
+import NetWorthCalculatorTool from './pages/tools/NetWorthCalculator'
 import AuthCallbackPage from './pages/AuthCallbackPage'
 
 /* ────────────────────────────────────────────
@@ -151,6 +160,7 @@ const PAGE_TO_PATH = {
   privacy: '/privacy',
   security: '/security',
   terms: '/terms',
+  support: '/support',
   upgrade: '/upgrade',
   settings: '/settings',
   accounts: '/accounts',
@@ -160,14 +170,52 @@ const PAGE_TO_PATH = {
   goal_setup: '/goal_setup',
   admin: '/admin',
   home: '/home',
+  tools_index: '/tools',
+  tool_pension_drawdown: '/tools/pension-drawdown-calculator',
+  tool_fire_number: '/tools/fire-number-calculator',
+  tool_isa_growth: '/tools/isa-growth-calculator',
+  tool_net_worth: '/tools/net-worth-calculator',
   guide_multi_currency: '/guides/multi-currency-net-worth-tracker',
   guide_long_term_projection: '/guides/long-term-wealth-projection',
   guide_inflation_adjusted: '/guides/inflation-adjusted-net-worth',
   guides_index: '/guides',
+  guide_pension_longevity: '/guides/how-long-will-my-pension-last',
+  best_net_worth_apps_uk: '/best-net-worth-tracking-apps-uk',
+  manual_tracking: '/why-i-track-wealth-manually-instead-of-using-open-banking-apps',
   net_worth_tracker: '/net-worth-tracker',
   track_isas_pensions_savings: '/track-isas-pensions-savings',
   spreadsheet_alternative: '/spreadsheet-alternative-net-worth-tracking',
   how_to_track_net_worth: '/how-to-track-your-net-worth',
+}
+
+const PUBLIC_PAGES = new Set([
+  'landing',
+  'auth',
+  'auth-callback',
+  'privacy',
+  'security',
+  'terms',
+  'support',
+  'tools_index',
+  'tool_pension_drawdown',
+  'tool_fire_number',
+  'tool_isa_growth',
+  'tool_net_worth',
+  'guides_index',
+  'guide_pension_longevity',
+  'best_net_worth_apps_uk',
+  'manual_tracking',
+  'guide_multi_currency',
+  'guide_long_term_projection',
+  'guide_inflation_adjusted',
+  'net_worth_tracker',
+  'track_isas_pensions_savings',
+  'spreadsheet_alternative',
+  'how_to_track_net_worth',
+])
+
+function isPublicPage(page) {
+  return PUBLIC_PAGES.has(page)
 }
 
 function pageFromPath(pathname) {
@@ -179,11 +227,20 @@ function pageFromPath(pathname) {
   if (p.startsWith('/privacy')) return 'privacy'
   if (p.startsWith('/security')) return 'security'
   if (p.startsWith('/terms')) return 'terms'
+  if (p.startsWith('/support')) return 'support'
+  if (p.startsWith('/tools/pension-drawdown-calculator')) return 'tool_pension_drawdown'
+  if (p.startsWith('/tools/fire-number-calculator')) return 'tool_fire_number'
+  if (p.startsWith('/tools/isa-growth-calculator')) return 'tool_isa_growth'
+  if (p.startsWith('/tools/net-worth-calculator')) return 'tool_net_worth'
+  if (p === '/tools' || p === '/tools/') return 'tools_index'
 
   if (p.startsWith('/guides/multi-currency-net-worth-tracker')) return 'guide_multi_currency'
   if (p.startsWith('/guides/long-term-wealth-projection')) return 'guide_long_term_projection'
   if (p.startsWith('/guides/inflation-adjusted-net-worth')) return 'guide_inflation_adjusted'
+  if (p.startsWith('/guides/how-long-will-my-pension-last')) return 'guide_pension_longevity'
   if (p === '/guides' || p === '/guides/') return 'guides_index'
+  if (p.startsWith('/best-net-worth-tracking-apps-uk')) return 'best_net_worth_apps_uk'
+  if (p.startsWith('/why-i-track-wealth-manually-instead-of-using-open-banking-apps')) return 'manual_tracking'
   if (p.startsWith('/net-worth-tracker')) return 'net_worth_tracker'
   if (p.startsWith('/track-isas-pensions-savings')) return 'track_isas_pensions_savings'
   if (p.startsWith('/spreadsheet-alternative-net-worth-tracking')) return 'spreadsheet_alternative'
@@ -308,10 +365,19 @@ export default function App() {
     privacy: 'Privacy — Paddock',
     security: 'Security — Paddock',
     terms: 'Terms of Service — Paddock',
+    support: 'Support — Paddock',
+    tools_index: 'Tools — Paddock',
+    tool_pension_drawdown: 'Pension Drawdown Calculator — Paddock',
+    tool_fire_number: 'FIRE Number Calculator — Paddock',
+    tool_isa_growth: 'ISA Growth Calculator — Paddock',
+    tool_net_worth: 'Net Worth Calculator — Paddock',
     guide_multi_currency: 'Multi-Currency Net Worth Tracking — Paddock',
     guide_long_term_projection: 'Long-Term Wealth Projections — Paddock',
     guide_inflation_adjusted: 'Inflation-Adjusted Net Worth — Paddock',
     guides_index: 'Guides — Paddock',
+    guide_pension_longevity: 'How Long Will My Pension Last? — Paddock',
+    best_net_worth_apps_uk: 'Best Net Worth Tracking Apps UK — Paddock',
+    manual_tracking: 'Why I Track Wealth Manually — Paddock',
     net_worth_tracker: 'Net Worth Tracker — Paddock',
     track_isas_pensions_savings: 'Track ISAs, Pensions and Savings — Paddock',
     spreadsheet_alternative: 'Spreadsheet Alternative for Net Worth Tracking — Paddock',
@@ -525,22 +591,7 @@ export default function App() {
         setChecking(false)
 
         const fromPath = pageFromPath(window.location.pathname)
-        const publicPage =
-        fromPath === 'auth' ||
-        fromPath === 'auth-callback' ||
-        fromPath === 'privacy' ||
-        fromPath === 'security' ||
-        fromPath === 'terms' ||
-        fromPath === 'guides_index' ||
-        fromPath === 'guide_multi_currency' ||
-        fromPath === 'guide_long_term_projection' ||
-        fromPath === 'guide_inflation_adjusted' ||
-        fromPath === 'net_worth_tracker' ||
-        fromPath === 'track_isas_pensions_savings' ||
-        fromPath === 'spreadsheet_alternative' ||
-        fromPath === 'how_to_track_net_worth'
-            ? fromPath
-            : 'landing'
+        const publicPage = isPublicPage(fromPath) ? fromPath : 'landing'
 
         setPage(publicPage, { replace: true })
         return
@@ -577,19 +628,7 @@ export default function App() {
         const fromPath = pageFromPath(window.location.pathname)
         const resolvedFromPath = fromPath || 'home'
 
-        const isPublic =
-          resolvedFromPath === 'landing' ||
-          resolvedFromPath === 'auth' ||
-          resolvedFromPath === 'privacy' ||
-          resolvedFromPath === 'security' ||
-          resolvedFromPath === 'terms' ||
-          resolvedFromPath === 'guide_multi_currency' ||
-          resolvedFromPath === 'guide_long_term_projection' ||
-          resolvedFromPath === 'guide_inflation_adjusted' ||
-          resolvedFromPath === 'net_worth_tracker' ||
-          resolvedFromPath === 'track_isas_pensions_savings' ||
-          resolvedFromPath === 'spreadsheet_alternative' ||
-          resolvedFromPath === 'how_to_track_net_worth'
+        const isPublic = isPublicPage(resolvedFromPath)
 
         // Allow checkout return URLs through so Upgrade.jsx can complete the
         // success path. Only block bare /upgrade for already-authenticated users.
@@ -641,21 +680,7 @@ export default function App() {
         setChecking(false)
 
         const fromPath = pageFromPath(window.location.pathname)
-        const publicPage =
-        fromPath === 'auth' ||
-        fromPath === 'privacy' ||
-        fromPath === 'security' ||
-        fromPath === 'terms' ||
-        fromPath === 'guides_index' ||
-        fromPath === 'guide_multi_currency' ||
-        fromPath === 'guide_long_term_projection' ||
-        fromPath === 'guide_inflation_adjusted' ||
-        fromPath === 'net_worth_tracker' ||
-        fromPath === 'track_isas_pensions_savings' ||
-        fromPath === 'spreadsheet_alternative' ||
-        fromPath === 'how_to_track_net_worth'
-            ? fromPath
-            : 'landing'
+        const publicPage = isPublicPage(fromPath) ? fromPath : 'landing'
 
         setPage(publicPage, { replace: true })
       })
@@ -760,10 +785,19 @@ export default function App() {
       if (page === 'privacy') return <Privacy navigateTo={navigateTo} />
       if (page === 'security') return <Security navigateTo={navigateTo} />
       if (page === 'terms') return <Terms navigateTo={navigateTo} />
+      if (page === 'support') return <Support />
       if (page === 'auth') return <AuthPage />
       if (page === 'auth-callback') return <AuthCallbackPage />
+      if (page === 'tools_index') return <ToolIndex />
+      if (page === 'tool_pension_drawdown') return <PensionDrawdownCalculator />
+      if (page === 'tool_fire_number') return <FireNumberCalculator />
+      if (page === 'tool_isa_growth') return <IsaGrowthCalculator />
+      if (page === 'tool_net_worth') return <NetWorthCalculatorTool />
       if (page === 'decisions') return <Decisions />
-      if (page === 'guides_index') return <GuideIndex navigateTo={navigateTo} />
+      if (page === 'guides_index') return <GuideIndex />
+      if (page === 'guide_pension_longevity') return <PensionLongevityGuide />
+      if (page === 'best_net_worth_apps_uk') return <BestNetWorthAppsUK />
+      if (page === 'manual_tracking') return <ManualTracking />
       if (page === 'guide_multi_currency') return <MultiCurrencyGuide />
       if (page === 'guide_long_term_projection') return <LongTermProjectionGuide />
       if (page === 'guide_inflation_adjusted') return <InflationAdjustedGuide />
@@ -781,9 +815,26 @@ export default function App() {
         return <Security navigateTo={navigateTo} />
       case 'terms':
         return <Terms navigateTo={navigateTo} />
-    
+      case 'support':
+        return <Support />
+      case 'tools_index':
+        return <ToolIndex />
+      case 'tool_pension_drawdown':
+        return <PensionDrawdownCalculator />
+      case 'tool_fire_number':
+        return <FireNumberCalculator />
+      case 'tool_isa_growth':
+        return <IsaGrowthCalculator />
+      case 'tool_net_worth':
+        return <NetWorthCalculatorTool />
       case 'guides_index':
-        return <GuideIndex navigateTo={navigateTo} />
+        return <GuideIndex />
+      case 'guide_pension_longevity':
+        return <PensionLongevityGuide />
+      case 'best_net_worth_apps_uk':
+        return <BestNetWorthAppsUK />
+      case 'manual_tracking':
+        return <ManualTracking />
       case 'guide_multi_currency':
         return <MultiCurrencyGuide />
       case 'guide_long_term_projection':

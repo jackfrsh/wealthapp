@@ -19,6 +19,9 @@ export default function SiteFooter({ navigateTo }) {
         </button>
 
         <div className="footer-links">
+          <button type="button" onClick={() => navigateTo('/tools')}>
+            Tools
+          </button>
           <button type="button" onClick={() => navigateTo('/guides')}>
             Guides
           </button>
@@ -30,6 +33,9 @@ export default function SiteFooter({ navigateTo }) {
           </button>
           <button type="button" onClick={() => navigateTo('/security')}>
             Security
+          </button>
+          <button type="button" onClick={() => navigateTo('/support')}>
+            Support
           </button>
           <span>© 2026</span>
         </div>

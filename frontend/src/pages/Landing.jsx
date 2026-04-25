@@ -169,6 +169,13 @@ export default function Landing() {
             </button>
             <button
               type="button"
+              onClick={() => setPage('tools_index')}
+              className="hidden sm:inline px-3 py-2 rounded-xl text-sm font-semibold text-ink-muted/70 hover:text-ink dark:text-white/40 dark:hover:text-white transition-colors"
+            >
+              Tools
+            </button>
+            <button
+              type="button"
               onClick={() => setPage('guides_index')}
               className="hidden sm:inline px-3 py-2 rounded-xl text-sm font-semibold text-ink-muted/70 hover:text-ink dark:text-white/40 dark:hover:text-white transition-colors"
             >

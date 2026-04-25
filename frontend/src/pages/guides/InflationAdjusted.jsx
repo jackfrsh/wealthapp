@@ -1,5 +1,4 @@
 import React from 'react'
-import { useApp } from '../../App'
 import {
   GuideShell,
   H2,
@@ -7,25 +6,15 @@ import {
   Divider,
   GuideLink,
 } from '../../components/GuideLayout'
+import { usePublicNavigation } from '../public/navigation'
 
 export default function InflationAdjustedGuide() {
-  const { setPage } = useApp()
-
-  const navigateTo = (path) => {
-    if (path === '/') return setPage('landing')
-    if (path === '/guides') return setPage('guides_index')
-    if (path === '/guides/multi-currency-net-worth-tracker') return setPage('guide_multi_currency')
-    if (path === '/guides/long-term-wealth-projection') return setPage('guide_long_term_projection')
-    if (path === '/guides/inflation-adjusted-net-worth') return setPage('guide_inflation_adjusted')
-    if (path === '/privacy') return setPage('privacy')
-    if (path === '/security') return setPage('security')
-    if (path === '/terms') return setPage('terms')
-  }
+  const { navigateTo } = usePublicNavigation()
 
   return (
     <GuideShell
       title="Guide"
-      onBack={() => setPage('guides_index')}
+      onBack={() => navigateTo('/guides')}
       navigateTo={navigateTo}
     >
       <div className="guide-kicker">Inflation-adjusted net worth</div>
@@ -69,10 +58,10 @@ export default function InflationAdjustedGuide() {
       <H2>Next steps</H2>
       <div className="guide-links">
         <GuideLink to="/guides/multi-currency-net-worth-tracker" navigateTo={navigateTo}>
-          Multi-currency tracking explained →
+          Multi-currency tracking explained 
         </GuideLink>
         <GuideLink to="/guides/long-term-wealth-projection" navigateTo={navigateTo}>
-          How long-term wealth projections work →
+          How long-term wealth projections work 
         </GuideLink>
       </div>
     </GuideShell>

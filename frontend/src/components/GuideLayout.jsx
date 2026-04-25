@@ -52,7 +52,7 @@ export function GuideCTA({ children, onClick, buttonText }) {
     <div className="guide-cta-box">
       <p className="guide-cta-text">{children}</p>
       <button type="button" className="btn btn-primary guide-cta-btn" onClick={onClick}>
-        {buttonText || "Get started — it's free"}
+        {buttonText || 'Continue in Paddock'}
       </button>
     </div>
   )
@@ -67,16 +67,19 @@ export function GuideLink({ to, navigateTo, children, className = '' }) {
 
   return (
     <a href={to} onClick={handleClick} className={`guide-link-card ${className}`.trim()}>
-      {children}
+      <span>{children}</span>
+      <span aria-hidden="true" className="guide-link-arrow">→</span>
     </a>
   )
 }
 
-export function GuideShell({
+export function PublicShell({
   title,
   onBack,
   navigateTo,
   backLabel,
+  layout = 'content',
+  contentClassName = '',
   children,
 }) {
   const resolvedBackLabel =
@@ -113,10 +116,21 @@ export function GuideShell({
       </section>
 
       <section className="container section guide-page-section">
-        <article className="guide-article">{children}</article>
+        <article
+          className={[
+            layout === 'tool' ? 'public-tool-article' : 'guide-article',
+            contentClassName,
+          ].filter(Boolean).join(' ')}
+        >
+          {children}
+        </article>
       </section>
 
       <SiteFooter navigateTo={navigateTo} />
     </div>
   )
+}
+
+export function GuideShell(props) {
+  return <PublicShell {...props} />
 }
