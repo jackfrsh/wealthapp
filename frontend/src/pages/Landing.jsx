@@ -11,6 +11,7 @@ import insightsShot from '../assets/landing/paddock-decisions.png'
 import homeShotWebp from '../assets/landing/paddock-home.webp'
 import outlookShotWebp from '../assets/landing/paddock-plan.webp'
 import insightsShotWebp from '../assets/landing/paddock-decisions.webp'
+import appStoreBadge from '../assets/app-store-badge.svg'
 
 function hasRecoveryIntent() {
   try {
@@ -109,6 +110,23 @@ function Screenshot({ src, webp, alt, className = '', loading = 'lazy' }) {
         <img src={src} alt={alt} className="w-full h-auto block relative" loading={loading} />
       </picture>
     </div>
+  )
+}
+
+function AppStoreLink({ className = '' }) {
+  return (
+    <a
+      href="https://apps.apple.com/gb/app/paddock-wealth/id6761938898"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Download Paddock Wealth on the App Store"
+      className={[
+        'inline-flex h-12 items-center rounded-[0.9rem] transition-opacity hover:opacity-85 focus:outline-none focus:ring-4 focus:ring-accent/15',
+        className,
+      ].filter(Boolean).join(' ')}
+    >
+      <img src={appStoreBadge} alt="Download on the App Store" className="h-10 w-auto" />
+    </a>
   )
 }
 
@@ -228,6 +246,8 @@ export default function Landing() {
             >
               Sign in
             </button>
+
+            <AppStoreLink />
           </div>
 
           <p className="mt-4 text-xs text-ink-muted/55 dark:text-white/20">
@@ -584,7 +604,7 @@ export default function Landing() {
               It&apos;s built with clarity, consistency and time. Paddock gives you a calmer way to see the numbers and keep moving.
             </p>
 
-            <div className="mt-8 flex items-center justify-center gap-3">
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               <Button variant="primary" className="h-12 px-6 rounded-2xl" onClick={() => openAuth('register')}>
                 Create account
               </Button>
@@ -595,6 +615,7 @@ export default function Landing() {
               >
                 Sign in
               </button>
+              <AppStoreLink />
             </div>
 
             <p className="mt-4 text-xs text-ink-muted/55 dark:text-white/20">
