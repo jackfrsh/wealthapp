@@ -65,6 +65,36 @@ export const ACCOUNT_TYPE_LABELS = {
   other: 'Other',
 }
 
+// v1.1 — UK-native subtype display names.
+// Keys match the account_subtype raw strings from the backend.
+// Unknown future values are simply absent here; displayAccountLabel() falls
+// back to ACCOUNT_TYPE_LABELS so the app never crashes on unrecognised values.
+export const ACCOUNT_SUBTYPE_LABELS = {
+  current_account:   'Current Account',
+  savings:           'Savings Account',
+  cash_isa:          'Cash ISA',
+  premium_bonds:     'Premium Bonds',
+  stocks_shares_isa: 'Stocks & Shares ISA',
+  lifetime_isa:      'Lifetime ISA',
+  gia:               'General Investment Account',
+  workplace_pension: 'Workplace Pension',
+  credit_card:       'Credit Card',
+  other_liability:   'Other Liability',
+}
+
+/**
+ * Returns the most specific display label for an account.
+ * Prefers the subtype label when known; falls back to broad type label.
+ * Never throws — unknown subtype strings produce the type label, not a crash.
+ */
+export function displayAccountLabel(account) {
+  if (account?.account_subtype) {
+    const sub = ACCOUNT_SUBTYPE_LABELS[account.account_subtype]
+    if (sub) return sub
+  }
+  return ACCOUNT_TYPE_LABELS[account?.type] || account?.type || 'Account'
+}
+
 import {
   Landmark,
   Shield,

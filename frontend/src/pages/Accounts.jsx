@@ -17,19 +17,166 @@ import Modal from '../components/Modal'
 import ConfirmDialog from '../components/ConfirmDialog'
 import ChangePill from '../components/ChangePill'
 import { track } from '../track'
-import { fmtCurrency, fmtCurrencyCompact, fmtDate, ACCOUNT_TYPE_LABELS, CURRENCIES, getSnapshotFreshnessState } from '../utils'
+import { fmtCurrency, fmtCurrencyCompact, fmtDate, ACCOUNT_TYPE_LABELS, CURRENCIES, getSnapshotFreshnessState, displayAccountLabel } from '../utils'
 import { Plus, Camera, ChevronDown, ChevronRight, Clock, Crown, Pencil, Trash2, MoreHorizontal, Landmark } from 'lucide-react'
 
-/* ── Wealth group taxonomy ────────────────────────── */
+/* ── Wealth group taxonomy ─────────────────────────────────────────────────
+ *
+ * v1.1 — subtype-aware grouping, matching iOS wealthGroupDefs.
+ *
+ * subtypeOverrides: when an account has one of these account_subtype values,
+ * it belongs to THIS group regardless of its broad type. This lets e.g.
+ * cash_isa (type: isa) land in Cash & Savings, and other_liability (type:
+ * other) land in Liabilities.
+ *
+ * Fallback order (mirrors iOS groupDef(for:)):
+ *   1. subtypeOverrides match
+ *   2. types match
+ *   3. last group in the array ("Other") as catch-all
+ *
+ * ──────────────────────────────────────────────────────────────────────── */
 
 const WEALTH_GROUPS = [
-  { key: 'cash',        label: 'Cash & Liquid',          types: ['bank'],                       isLiability: false },
-  { key: 'investments', label: 'Investments & Wrappers', types: ['isa', 'investment', 'crypto'], isLiability: false },
-  { key: 'pensions',    label: 'Pensions',               types: ['sipp'],                        isLiability: false },
-  { key: 'property',    label: 'Property',               types: ['property'],                    isLiability: false },
-  { key: 'other',       label: 'Other Assets',           types: ['other'],                       isLiability: false },
-  { key: 'liabilities', label: 'Liabilities',            types: ['mortgage', 'loan'],            isLiability: true  },
+  {
+    key: 'cash',
+    label: 'Cash & Savings',
+    types: ['bank'],
+    subtypeOverrides: ['current_account', 'savings', 'cash_isa', 'premium_bonds'],
+    isLiability: false,
+  },
+  {
+    key: 'investments',
+    label: 'ISAs & Investments',
+    types: ['isa', 'investment', 'crypto'],
+    subtypeOverrides: ['stocks_shares_isa', 'lifetime_isa', 'gia'],
+    isLiability: false,
+  },
+  {
+    key: 'pensions',
+    label: 'Pensions',
+    types: ['sipp'],
+    subtypeOverrides: ['workplace_pension'],
+    isLiability: false,
+  },
+  {
+    key: 'property',
+    label: 'Property',
+    types: ['property'],
+    subtypeOverrides: [],
+    isLiability: false,
+  },
+  {
+    key: 'liabilities',
+    label: 'Liabilities',
+    types: ['mortgage', 'loan'],
+    subtypeOverrides: ['credit_card', 'other_liability'],
+    isLiability: true,
+  },
+  {
+    key: 'other',
+    label: 'Other',
+    types: ['other'],
+    subtypeOverrides: [],
+    isLiability: false,
+  },
 ]
+
+// Returns the single WEALTH_GROUPS entry an account belongs to.
+// Subtype overrides are checked first; then broad type; then "Other" catch-all.
+// An account always lands in exactly one group — no double-counting.
+function groupDefFor(account) {
+  const sub = account.account_subtype
+  if (sub) {
+    const bySubtype = WEALTH_GROUPS.find(g => g.subtypeOverrides.includes(sub))
+    if (bySubtype) return bySubtype
+  }
+  const byType = WEALTH_GROUPS.find(g => g.types.includes(account.type))
+  if (byType) return byType
+  return WEALTH_GROUPS[WEALTH_GROUPS.length - 1] // "Other" catch-all
+}
+
+// True when an account should reduce net worth.
+// Covers legacy mortgage/loan types AND v1.1 subtype-based liabilities.
+function isLiabilityAccount(account) {
+  return (
+    account.type === 'mortgage' ||
+    account.type === 'loan' ||
+    account.account_subtype === 'credit_card' ||
+    account.account_subtype === 'other_liability'
+  )
+}
+
+/* ── v1.1 Account kind options ─────────────────────────────────────────────
+ *
+ * Each option carries both the broad backend type and the optional subtype.
+ * The grouped picker uses ACCOUNT_KIND_GROUPS; ACCOUNT_KIND_OPTIONS is the
+ * flat list for reverse-lookup (finding the selected option when editing).
+ *
+ * ──────────────────────────────────────────────────────────────────────── */
+
+const ACCOUNT_KIND_GROUPS = [
+  {
+    label: 'Everyday Money',
+    options: [
+      { label: 'Current Account',            type: 'bank',       subtype: 'current_account'   },
+      { label: 'Savings Account',            type: 'bank',       subtype: 'savings'            },
+      { label: 'Cash ISA',                   type: 'isa',        subtype: 'cash_isa'           },
+      { label: 'Premium Bonds',              type: 'bank',       subtype: 'premium_bonds'      },
+    ],
+  },
+  {
+    label: 'Investing',
+    options: [
+      { label: 'Stocks & Shares ISA',        type: 'isa',        subtype: 'stocks_shares_isa'  },
+      { label: 'Lifetime ISA',               type: 'isa',        subtype: 'lifetime_isa'       },
+      { label: 'General Investment Account', type: 'investment', subtype: 'gia'                },
+      { label: 'Crypto',                     type: 'crypto',     subtype: null                 },
+    ],
+  },
+  {
+    label: 'Retirement',
+    options: [
+      { label: 'SIPP',                       type: 'sipp',       subtype: null                 },
+      { label: 'Workplace Pension',          type: 'sipp',       subtype: 'workplace_pension'  },
+    ],
+  },
+  {
+    label: 'Property',
+    options: [
+      { label: 'Property',                   type: 'property',   subtype: null                 },
+      { label: 'Mortgage',                   type: 'mortgage',   subtype: null                 },
+    ],
+  },
+  {
+    label: 'Debt',
+    options: [
+      { label: 'Credit Card',                type: 'loan',       subtype: 'credit_card'        },
+      { label: 'Loan',                       type: 'loan',       subtype: null                 },
+      { label: 'Other Liability',            type: 'other',      subtype: 'other_liability'    },
+    ],
+  },
+  {
+    label: 'Other',
+    options: [
+      { label: 'Other Asset',                type: 'other',      subtype: null                 },
+    ],
+  },
+]
+
+// Flat list derived from the groups — used for reverse-lookup only.
+const ACCOUNT_KIND_OPTIONS = ACCOUNT_KIND_GROUPS.flatMap(g => g.options)
+
+// Encode an option as the <select> value string.
+// Null subtype is represented as the type alone so <option value="bank"> works.
+function kindValue(type, subtype) {
+  return subtype ? `${type}|${subtype}` : type
+}
+
+// Decode a <select> value string back to { type, subtype }.
+function parseKindValue(value) {
+  const [type, subtype = null] = value.split('|')
+  return { type, subtype }
+}
 
 const TYPE_ACCENT = {
   bank: '#78A9E6', isa: '#2FA676', investment: '#2FA676', crypto: '#C89B3C',
@@ -39,10 +186,7 @@ const TYPE_ACCENT = {
 const RATE_LABEL    = { bank: 'Rate', isa: 'Yield', investment: 'Yield', crypto: 'Yield', sipp: 'Growth', property: 'Yield', mortgage: 'APR', loan: 'APR', other: 'Rate' }
 const MONTHLY_LABEL = { mortgage: 'Payment', loan: 'Payment' }
 
-const TYPES = ['bank', 'isa', 'sipp', 'crypto', 'investment', 'property', 'mortgage', 'loan', 'other']
-const LIABILITY_TYPES = new Set(['mortgage', 'loan'])
-
-const emptyForm = { name: '', type: 'bank', currency: 'GBP', balance: '', include_in_net_worth: true, notes: '', monthly_contribution: '', annual_interest_rate_percent: '' }
+const emptyForm = { name: '', type: 'bank', account_subtype: 'current_account', currency: 'GBP', balance: '', include_in_net_worth: true, notes: '', monthly_contribution: '', annual_interest_rate_percent: '' }
 
 /* ── Helpers ─────────────────────────────────────── */
 
@@ -70,7 +214,7 @@ function accountStaleness(updatedAt) {
 
 function LedgerEntryRow({ account, isLiability, baseCurrency, onEdit, onDelete }) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const typeLabel = ACCOUNT_TYPE_LABELS?.[account.type] || account.type
+  const typeLabel = displayAccountLabel(account)
   const accentColor = TYPE_ACCENT[account.type] || TYPE_ACCENT.other
   const balance = Number(account.balance || 0)
   const displayCurrency = String(account.currency || 'GBP').toUpperCase()
@@ -432,8 +576,8 @@ export default function Accounts() {
   const latestSnapshotFreshness = getSnapshotFreshnessState(latestSnapshot?.created_at)
 
   const {assetsTotal,liabilitiesTotal,netPosition} = useMemo(()=>{
-    const at=accounts.filter(a=>!LIABILITY_TYPES.has(a.type)&&a.include_in_net_worth!==false).reduce((s,a)=>s+(Number(a.balance)||0),0)
-    const lt=accounts.filter(a=>LIABILITY_TYPES.has(a.type)).reduce((s,a)=>s+(Number(a.balance)||0),0)
+    const at=accounts.filter(a=>!isLiabilityAccount(a)&&a.include_in_net_worth!==false).reduce((s,a)=>s+(Number(a.balance)||0),0)
+    const lt=accounts.filter(a=>isLiabilityAccount(a)).reduce((s,a)=>s+(Number(a.balance)||0),0)
     return{assetsTotal:at,liabilitiesTotal:lt,netPosition:at-lt}
   },[accounts])
 
@@ -444,15 +588,29 @@ export default function Accounts() {
 
   const totalMonthlyContributions = useMemo(() => {
     return accounts
-      .filter(a => !LIABILITY_TYPES.has(a.type) && a.include_in_net_worth !== false)
+      .filter(a => !isLiabilityAccount(a) && a.include_in_net_worth !== false)
       .reduce((sum, a) => sum + Math.max(0, Number(a.monthly_contribution || 0)), 0)
   }, [accounts])
 
-  const wealthGroups = useMemo(()=>WEALTH_GROUPS.map(g=>{
-    const ga=accounts.filter(a=>g.types.includes(a.type))
-    const sub=ga.reduce((sum,a)=>{if(!g.isLiability&&a.include_in_net_worth===false)return sum;return sum+(Number(a.balance)||0)},0)
-    return{...g,accounts:ga,subtotal:sub}
-  }).filter(g=>g.accounts.length>0),[accounts])
+  // v1.1 — single-pass group assignment via groupDefFor().
+  // Each account is assigned to exactly one group (no double-counting).
+  // Subtype overrides take priority over broad type, matching iOS behaviour.
+  const wealthGroups = useMemo(() => {
+    const buckets = Object.fromEntries(WEALTH_GROUPS.map(g => [g.key, []]))
+    for (const a of accounts) {
+      buckets[groupDefFor(a).key].push(a)
+    }
+    return WEALTH_GROUPS
+      .map(g => {
+        const ga = buckets[g.key]
+        const subtotal = ga.reduce((sum, a) => {
+          if (!g.isLiability && a.include_in_net_worth === false) return sum
+          return sum + (Number(a.balance) || 0)
+        }, 0)
+        return { ...g, accounts: ga, subtotal }
+      })
+      .filter(g => g.accounts.length > 0)
+  }, [accounts])
 
   const donutData = useMemo(()=>{
     const map=new Map()
@@ -460,15 +618,43 @@ export default function Accounts() {
     return Array.from(map.entries()).map(([type,count])=>({type,count,label:ACCOUNT_TYPE_LABELS?.[type]||type})).sort((a,b)=>b.count-a.count)
   },[accounts])
 
-  const openAdd = (defaultType) => { setEditing(null); setForm({...emptyForm,type:defaultType||'bank',currency:baseCurrency||'GBP'}); setModal(true) }
-  const openEdit = (a) => { setEditing(a.id); setForm({name:a.name||'',type:a.type||'bank',currency:(a.currency||'GBP').toUpperCase(),balance:String(a.balance??''),include_in_net_worth:!!a.include_in_net_worth,notes:a.notes||'',monthly_contribution:String(a.monthly_contribution??''),annual_interest_rate_percent:String(a.annual_interest_rate_percent??''),_nameHint:''}); setModal(true) }
+  const openAdd = (defaultType) => {
+    // Find the first kind option matching the requested type, or fall back to
+    // the first option overall (Current Account), so the picker always shows a
+    // valid selection rather than an empty / mismatched state.
+    const defaultOption = defaultType
+      ? (ACCOUNT_KIND_OPTIONS.find(o => o.type === defaultType) ?? ACCOUNT_KIND_OPTIONS[0])
+      : ACCOUNT_KIND_OPTIONS[0]
+    setEditing(null)
+    setForm({ ...emptyForm, type: defaultOption.type, account_subtype: defaultOption.subtype, currency: baseCurrency || 'GBP' })
+    setModal(true)
+  }
+
+  const openEdit = (a) => {
+    setEditing(a.id)
+    setForm({
+      name: a.name || '',
+      type: a.type || 'bank',
+      // Safety fix: always carry the existing account_subtype into form state.
+      // save() sends it back unchanged unless the user touches the kind picker.
+      account_subtype: a.account_subtype ?? null,
+      currency: (a.currency || 'GBP').toUpperCase(),
+      balance: String(a.balance ?? ''),
+      include_in_net_worth: !!a.include_in_net_worth,
+      notes: a.notes || '',
+      monthly_contribution: String(a.monthly_contribution ?? ''),
+      annual_interest_rate_percent: String(a.annual_interest_rate_percent ?? ''),
+      _nameHint: '',
+    })
+    setModal(true)
+  }
 
   const save = async() => {
     if(!form.name.trim()){showToast?.('Name is required','error');return}
-    const body={name:form.name.trim(),type:form.type,currency:(form.currency||'GBP').toUpperCase(),balance:toNumber(form.balance,0),include_in_net_worth:!!form.include_in_net_worth,notes:form.notes?.trim()||null,monthly_contribution:toNumber(form.monthly_contribution,0),annual_interest_rate_percent:toNumber(form.annual_interest_rate_percent,0)}
+    const body={name:form.name.trim(),type:form.type,account_subtype:form.account_subtype??null,currency:(form.currency||'GBP').toUpperCase(),balance:toNumber(form.balance,0),include_in_net_worth:!!form.include_in_net_worth,notes:form.notes?.trim()||null,monthly_contribution:toNumber(form.monthly_contribution,0),annual_interest_rate_percent:toNumber(form.annual_interest_rate_percent,0)}
     setSaving(true)
     try {
-      if(editing){const eid=editing;await api(`/accounts/${eid}`,{method:'PUT',body});setAccounts(prev=>prev.map(a=>a.id===eid?{...a,...body}:a));invalidatePath('/accounts');invalidatePath('/dashboard');invalidatePath('/dashboard?range=3M');bumpData?.();track('account_updated',{page:'accounts',entityType:'account',entityId:eid,account_type:body.type,currency:body.currency,source:'accounts_edit'});showToast?.('Account updated');setModal(false);setEditing(null);return}
+      if(editing){const eid=editing;await api(`/accounts/${eid}`,{method:'PUT',body});setAccounts(prev=>prev.map(a=>a.id===eid?{...a,...body,account_subtype:body.account_subtype??null}:a));invalidatePath('/accounts');invalidatePath('/dashboard');invalidatePath('/dashboard?range=3M');bumpData?.();track('account_updated',{page:'accounts',entityType:'account',entityId:eid,account_type:body.type,currency:body.currency,source:'accounts_edit'});showToast?.('Account updated');setModal(false);setEditing(null);return}
       if(accountLimitReached){setModal(false);goUpgrade();return}
       const created=await api('/accounts',{method:'POST',body});const ca={...body,...(created||{}),id:created?.id??crypto.randomUUID()};setAccounts(prev=>[ca,...prev]);invalidatePath('/accounts');invalidatePath('/dashboard');invalidatePath('/dashboard?range=3M');bumpData?.();showToast?.('Account added');track('account_added',{page:'accounts',entityType:'account',entityId:ca.id,account_type:body.type,currency:body.currency,source:'accounts_create'});setModal(false);setEditing(null)
     } catch(e) {if(e?.status===403){setModal(false);goUpgrade();return};showToast?.(e?.message||'Save failed','error')}
@@ -868,7 +1054,27 @@ export default function Accounts() {
         <form onSubmit={e=>{e.preventDefault();save()}} className="space-y-4">
           <div><label className={lbl}>Name</label><input className={inp} value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder={accountNamePlaceholder(form?.type)}/><p className="text-[11px] text-ink-muted/50 dark:text-white/25 mt-1">Use a name you'll recognise later.</p></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div><label className={lbl}>Type</label><select className={inp} value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>{TYPES.map(t=><option key={t} value={t}>{ACCOUNT_TYPE_LABELS?.[t]||t}</option>)}</select></div>
+            <div>
+              <label className={lbl}>Account kind</label>
+              <select
+                className={inp}
+                value={kindValue(form.type, form.account_subtype)}
+                onChange={e => {
+                  const { type, subtype } = parseKindValue(e.target.value)
+                  setForm(f => ({ ...f, type, account_subtype: subtype }))
+                }}
+              >
+                {ACCOUNT_KIND_GROUPS.map(g => (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.options.map(o => (
+                      <option key={kindValue(o.type, o.subtype)} value={kindValue(o.type, o.subtype)}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
             <div><label className={lbl}>Currency</label><select className={inp} value={form.currency} onChange={e=>setForm(f=>({...f,currency:e.target.value}))}>{CURRENCIES.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
           </div>
           <div><label className={lbl}>Balance</label><input className={inp} value={form.balance} onChange={e=>setForm(f=>({...f,balance:e.target.value}))} inputMode="decimal" placeholder="e.g. 12,500"/></div>
