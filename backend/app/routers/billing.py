@@ -271,11 +271,15 @@ def sync_billing(
     sub_id = getattr(current_user, "stripe_subscription_id", None)
 
     if not cust and not sub_id:
-        if settings.is_pro:
-            settings.is_pro = False
-            db.add(settings)
-            db.commit()
-        return {"is_pro": False, "status": None}
+        # No Stripe identifiers — cannot verify with Stripe.
+        # Do NOT touch is_pro: the user may be Pro via Apple IAP, or their
+        # customer ID may be missing due to a past webhook failure. Changing
+        # is_pro here would silently downgrade legitimate paid users.
+        logger.info(
+            "billing sync: no Stripe IDs for user=%s — preserving is_pro=%s",
+            current_user.id, settings.is_pro,
+        )
+        return {"is_pro": bool(settings.is_pro), "status": None}
 
     status = None
     trial_end_ts = None
@@ -308,11 +312,21 @@ def sync_billing(
     else:
         settings.trial_end_iso = None
 
-    settings.is_pro = bool(pro_active)
+    # Respect Apple IAP: do not clobber Apple-active Pro with a Stripe-only decision.
+    apple_active = getattr(settings, "apple_subscription_status", None) in (
+        "active", "grace", "trialing"
+    )
+    settings.is_pro = bool(pro_active or apple_active)
+
+    logger.info(
+        "billing sync: user=%s stripe_status=%s pro_active=%s apple_active=%s is_pro=%s",
+        current_user.id, status, pro_active, apple_active, settings.is_pro,
+    )
+
     db.add(settings)
     db.commit()
 
-    return {"is_pro": bool(pro_active), "status": status}
+    return {"is_pro": bool(settings.is_pro), "status": status}
 
 
 # ─────────────────────────────────────────────

@@ -11,7 +11,10 @@ const REQUEST_TIMEOUT_MS = 15_000
 // 1) Explicit env override (VITE_API_URL)
 // 2) Auto: local dev -> http://127.0.0.1:8000/api
 //          deployed  -> /api (same-origin)
-const envBase = (import.meta.env.VITE_API_URL || '').trim().replace(/\/$/, '')
+// VITE_API_URL is canonical. VITE_API_BASE_URL is accepted for backwards compat.
+const envBase = (
+  import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || ''
+).trim().replace(/\/$/, '')
 
 const isLocalHost = (() => {
   try {
