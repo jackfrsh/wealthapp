@@ -5,11 +5,22 @@ Run with:
     DATABASE_URL=sqlite:///./test_billing.db pytest backend/tests/test_billing.py -v
 
 Coverage:
+- create-checkout: returns { url } for a logged-in free user
+- create-checkout: 401 without auth
+- create-checkout: 500 when price env var is missing
+- create-checkout: uses correct price ID for monthly vs annual plan
 - sync: does NOT downgrade when stripe_customer_id / stripe_subscription_id are NULL
 - sync: respects Apple IAP status when computing is_pro from Stripe
 - sync: preserves is_pro for Apple-active users even when Stripe says inactive
 - _set_pro_for_user: preserves Apple Pro when Stripe says False
 - webhook: ignored when event_type is unknown
+
+Note on frontend tests (Upgrade.jsx):
+  The project has no Vitest/Jest setup.  The component-level behaviours
+  (button enabled for free user, redirect on success, red error on failure,
+  loading reset) are covered by the manual verification checklist and would
+  need @testing-library/react + Vitest to automate. Backend tests here
+  verify the API contract those behaviours depend on.
 """
 
 from __future__ import annotations
@@ -69,6 +80,15 @@ def _make_settings(
     session.commit()
     session.refresh(s)
     return s
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Clear in-memory rate-limiter buckets so tests don't 429 each other."""
+    from backend.app.middleware import _window
+    _window._buckets.clear()
+    yield
+    _window._buckets.clear()
 
 
 @pytest.fixture(scope="module")
@@ -343,3 +363,154 @@ class TestBillingSync:
         data = resp.json()
         # Must preserve existing state on Stripe error
         assert data["is_pro"] is True
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 3. Integration — /billing/create-checkout endpoint
+#    Verifies the API contract that Upgrade.jsx depends on.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestCreateCheckout:
+    """
+    The Upgrade CTA calls POST /api/billing/create-checkout with { plan }.
+    These tests confirm the endpoint returns { url } under normal conditions
+    and fails safely when misconfigured, so the frontend error path is exercised
+    by a real 500 rather than a silent hang.
+    """
+
+    def _post_checkout(self, client, user, fastapi_app, plan="monthly"):
+        from backend.app.auth import get_current_user
+        fastapi_app.dependency_overrides[get_current_user] = _override_get_current_user(user)
+        try:
+            return client.post("/api/billing/create-checkout", json={"plan": plan})
+        finally:
+            fastapi_app.dependency_overrides.pop(get_current_user, None)
+
+    def test_checkout_returns_url_for_free_user(self, test_app, db_session):
+        """
+        A logged-in free user (no existing customer ID) gets a checkout URL.
+        Upgrade.jsx checks res?.url — this confirms the field name is correct.
+        """
+        client, _ = test_app
+        from backend.app.main import app as fastapi_app
+
+        user = _make_user(db_session, "uid-co-01", "co01@example.com")
+        _make_settings(db_session, user.id, is_pro=False)
+
+        fake_session = mock.MagicMock()
+        fake_session.url = "https://checkout.stripe.com/pay/cs_test_abc"
+
+        with mock.patch("stripe.checkout.Session.create", return_value=fake_session):
+            resp = self._post_checkout(client, user, fastapi_app, plan="monthly")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "url" in data
+        assert data["url"].startswith("https://checkout.stripe.com/")
+
+    def test_checkout_monthly_uses_monthly_price(self, test_app, db_session):
+        """Monthly plan sends STRIPE_PRICE_ID_MONTHLY to Stripe."""
+        client, _ = test_app
+        from backend.app.main import app as fastapi_app
+
+        user = _make_user(db_session, "uid-co-02", "co02@example.com")
+        _make_settings(db_session, user.id, is_pro=False)
+
+        fake_session = mock.MagicMock()
+        fake_session.url = "https://checkout.stripe.com/pay/cs_test_monthly"
+
+        with mock.patch("stripe.checkout.Session.create", return_value=fake_session) as mock_create:
+            resp = self._post_checkout(client, user, fastapi_app, plan="monthly")
+
+        assert resp.status_code == 200
+        call_kwargs = mock_create.call_args[1]
+        price_used = call_kwargs["line_items"][0]["price"]
+        assert price_used == os.environ["STRIPE_PRICE_ID_MONTHLY"]
+
+    def test_checkout_annual_uses_annual_price(self, test_app, db_session):
+        """Annual plan sends STRIPE_PRICE_ID_ANNUAL to Stripe."""
+        client, _ = test_app
+        from backend.app.main import app as fastapi_app
+
+        user = _make_user(db_session, "uid-co-03", "co03@example.com")
+        _make_settings(db_session, user.id, is_pro=False)
+
+        fake_session = mock.MagicMock()
+        fake_session.url = "https://checkout.stripe.com/pay/cs_test_annual"
+
+        with mock.patch("stripe.checkout.Session.create", return_value=fake_session) as mock_create:
+            resp = self._post_checkout(client, user, fastapi_app, plan="annual")
+
+        assert resp.status_code == 200
+        call_kwargs = mock_create.call_args[1]
+        price_used = call_kwargs["line_items"][0]["price"]
+        assert price_used == os.environ["STRIPE_PRICE_ID_ANNUAL"]
+
+    def test_checkout_requires_auth(self, test_app):
+        """Without a valid bearer token the endpoint must return 401/403.
+        Upgrade.jsx relies on this to surface an error rather than hang."""
+        client, _ = test_app
+        resp = client.post("/api/billing/create-checkout", json={"plan": "monthly"})
+        assert resp.status_code in (401, 403)
+
+    def test_checkout_stripe_failure_returns_500(self, test_app, db_session):
+        """
+        When Stripe.checkout.Session.create raises, the endpoint returns 500.
+        Upgrade.jsx's catch block then shows the error message — confirming
+        it never silently swallows a backend failure.
+        """
+        client, _ = test_app
+        from backend.app.main import app as fastapi_app
+
+        user = _make_user(db_session, "uid-co-04", "co04@example.com")
+        _make_settings(db_session, user.id, is_pro=False)
+
+        with mock.patch(
+            "stripe.checkout.Session.create",
+            side_effect=Exception("Stripe API unavailable"),
+        ):
+            resp = self._post_checkout(client, user, fastapi_app, plan="monthly")
+
+        assert resp.status_code == 500
+        assert "checkout" in resp.json().get("detail", "").lower()
+
+    def test_checkout_missing_price_env_returns_500(self, test_app, db_session):
+        """
+        If STRIPE_PRICE_ID_MONTHLY is absent the endpoint returns 500.
+        The frontend catch block surfaces this as a visible error (not a hang).
+        """
+        client, _ = test_app
+        from backend.app.main import app as fastapi_app
+
+        user = _make_user(db_session, "uid-co-05", "co05@example.com")
+        _make_settings(db_session, user.id, is_pro=False)
+
+        saved = os.environ.pop("STRIPE_PRICE_ID_MONTHLY", None)
+        try:
+            resp = self._post_checkout(client, user, fastapi_app, plan="monthly")
+        finally:
+            if saved is not None:
+                os.environ["STRIPE_PRICE_ID_MONTHLY"] = saved
+
+        assert resp.status_code == 500
+
+    def test_checkout_includes_user_id_in_metadata(self, test_app, db_session):
+        """
+        The session must carry user_id in metadata so the webhook and
+        checkout-status endpoint can find the user without a cookie.
+        """
+        client, _ = test_app
+        from backend.app.main import app as fastapi_app
+
+        user = _make_user(db_session, "uid-co-06", "co06@example.com")
+        _make_settings(db_session, user.id, is_pro=False)
+
+        fake_session = mock.MagicMock()
+        fake_session.url = "https://checkout.stripe.com/pay/cs_test_meta"
+
+        with mock.patch("stripe.checkout.Session.create", return_value=fake_session) as mock_create:
+            resp = self._post_checkout(client, user, fastapi_app, plan="monthly")
+
+        assert resp.status_code == 200
+        call_kwargs = mock_create.call_args[1]
+        assert str(user.id) == call_kwargs["metadata"]["user_id"]

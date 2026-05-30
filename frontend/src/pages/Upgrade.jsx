@@ -16,6 +16,7 @@ export default function Upgrade() {
 
   const [isLoading, setIsLoading] = useState(false)
   const [statusMsg, setStatusMsg] = useState('')
+  const [isError, setIsError] = useState(false)
   const [plan, setPlan] = useState('annual')
 
   const reason = useMemo(() => {
@@ -137,34 +138,48 @@ export default function Upgrade() {
   const handleUpgrade = async () => {
     if (isLoading) return
     setIsLoading(true)
-    setStatusMsg('')
+    setIsError(false)
+    setStatusMsg('Starting checkout…')
+
+    if (import.meta.env.DEV) console.log('[upgrade] upgrade_click', { plan })
 
     try {
+      try { localStorage.setItem('upgrade_reason', 'upgrade_cta') } catch {}
+
+      // Await track so it does not race the checkout POST through the same
+      // token pipeline — a concurrent 401 from /events would fire session-expired
+      // and log the user out before the checkout redirect lands.
       try {
-        localStorage.setItem('upgrade_reason', 'upgrade_cta')
+        await track('upgrade_clicked', {
+          page: 'upgrade',
+          source: 'checkout_cta',
+          plan,
+          reason,
+        })
       } catch {}
 
-      track('upgrade_clicked', {
-        page: 'upgrade',
-        source: 'checkout_cta',
-        plan,
-        reason,
-      })
+      if (import.meta.env.DEV) console.log('[upgrade] checkout_request_start', { plan })
 
       const res = await api('/billing/create-checkout', {
         method: 'POST',
         body: { plan },
       })
 
-      if (res?.url) {
-        window.location.href = res.url
+      // Handle both { url } (current backend) and { checkout_url } (defensive)
+      const checkoutUrl = res?.url || res?.checkout_url
+
+      if (checkoutUrl) {
+        if (import.meta.env.DEV) console.log('[upgrade] checkout_request_success', { checkoutUrl })
+        window.location.assign(checkoutUrl)
         return
       }
 
-      throw new Error('No checkout URL returned.')
+      if (import.meta.env.DEV) console.warn('[upgrade] checkout_request_failed — no URL in response', res)
+      throw new Error("We couldn't start checkout. Please try again.")
     } catch (err) {
-      console.error('Checkout error:', err)
-      setStatusMsg(err?.message || 'Could not start checkout. Please try again.')
+      if (import.meta.env.DEV) console.error('[upgrade] checkout_request_failed', err)
+      setIsError(true)
+      setStatusMsg(err?.message || "We couldn't start checkout. Please try again.")
       setIsLoading(false)
     }
   }
@@ -204,7 +219,14 @@ export default function Upgrade() {
         </p>
 
         {!!statusMsg && (
-          <div className="mt-3 text-sm font-medium text-ink-muted/70 dark:text-white/35">
+          <div
+            role={isError ? 'alert' : undefined}
+            className={`mt-3 text-sm font-medium ${
+              isError
+                ? 'text-red-500 dark:text-red-400'
+                : 'text-ink-muted/70 dark:text-white/35'
+            }`}
+          >
             {statusMsg}
           </div>
         )}
@@ -220,7 +242,7 @@ export default function Upgrade() {
 
             <div className="inline-flex p-1 rounded-2xl border border-black/[.08] dark:border-white/[.10] bg-black/[.02] dark:bg-white/[.06]">
               <button
-                onClick={() => setPlan('monthly')}
+                onClick={() => { setPlan('monthly'); setIsError(false); setStatusMsg('') }}
                 className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
                   plan === 'monthly'
                     ? 'bg-white dark:bg-surface-dark text-ink dark:text-white shadow-sm'
@@ -232,7 +254,7 @@ export default function Upgrade() {
               </button>
 
               <button
-                onClick={() => setPlan('annual')}
+                onClick={() => { setPlan('annual'); setIsError(false); setStatusMsg('') }}
                 className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
                   plan === 'annual'
                     ? 'bg-white dark:bg-surface-dark text-ink dark:text-white shadow-sm'
