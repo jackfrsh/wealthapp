@@ -322,6 +322,33 @@ class TestPutSubtype:
         resp = client.put(f"/api/accounts/{acct_id}", json={"account_subtype": "crypto_wallet"})
         assert resp.status_code == 422, resp.text
 
+    def test_put_without_subtype_field_preserves_existing_subtype(self, test_app, db_session):
+        """Omitting account_subtype from a PUT body must not overwrite the stored value.
+
+        The web client always sends account_subtype explicitly, but this test
+        verifies the backend's exclude_unset behaviour independently — a missing
+        field should never silently wipe an existing subtype.
+        """
+        client, _ = test_app
+        _make_pro_user(db_session, self.UID)
+        _auth(client.app, self.UID)
+        resp = client.post("/api/accounts", json={
+            "name": "PUT Stable",
+            "type": "isa",
+            "account_subtype": "stocks_shares_isa",
+        })
+        assert resp.status_code == 201, resp.text
+        acct_id = resp.json()["id"]
+
+        # PUT without account_subtype field — only rename the account
+        resp = client.put(f"/api/accounts/{acct_id}", json={"name": "Renamed ISA"})
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["name"] == "Renamed ISA"
+        assert data["account_subtype"] == "stocks_shares_isa", (
+            "PUT without account_subtype field must preserve the existing value"
+        )
+
 
 # ─── Legacy accounts (no subtype) ────────────────────────────────────────────
 

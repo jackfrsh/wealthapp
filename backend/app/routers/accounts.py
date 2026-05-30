@@ -55,7 +55,7 @@ def _validate_subtype(value: Optional[str]) -> Optional[str]:
             status_code=422,
             detail=(
                 f"Invalid account_subtype '{normalised}'. "
-                f"Allowed values: {sorted(ALLOWED_ACCOUNT_SUBTYPES)}"
+                f"Allowed values: {', '.join(sorted(ALLOWED_ACCOUNT_SUBTYPES))}"
             ),
         )
     return normalised

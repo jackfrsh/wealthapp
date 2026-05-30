@@ -614,8 +614,12 @@ export default function Accounts() {
 
   const donutData = useMemo(()=>{
     const map=new Map()
-    for(const a of accounts)map.set(a.type||'other',(map.get(a.type||'other')||0)+1)
-    return Array.from(map.entries()).map(([type,count])=>({type,count,label:ACCOUNT_TYPE_LABELS?.[type]||type})).sort((a,b)=>b.count-a.count)
+    for(const a of accounts){
+      const k=a.account_subtype||a.type||'other'
+      if(!map.has(k))map.set(k,{type:a.type||'other',key:k,count:0,label:displayAccountLabel(a)})
+      map.get(k).count++
+    }
+    return Array.from(map.values()).sort((a,b)=>b.count-a.count)
   },[accounts])
 
   const openAdd = (defaultType) => {
@@ -974,7 +978,7 @@ export default function Accounts() {
           <div className="text-[10.5px] font-semibold tracking-[.14em] uppercase text-ink-muted/45 dark:text-white/25 mb-5">Composition</div>
           <div className="flex flex-wrap gap-x-5 gap-y-2">
             {donutData.map(d=>(
-              <div key={d.type} className="flex items-center gap-2">
+              <div key={d.key} className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{background:TYPE_ACCENT[d.type]||TYPE_ACCENT.other}}/>
                 <span className="text-sm text-ink dark:text-white/70">{d.label}</span>
                 <span className="text-[12px] text-ink-muted/55 dark:text-white/38 tabular-nums">{d.count}</span>
