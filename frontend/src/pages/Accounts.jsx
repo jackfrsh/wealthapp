@@ -17,83 +17,11 @@ import Modal from '../components/Modal'
 import ConfirmDialog from '../components/ConfirmDialog'
 import ChangePill from '../components/ChangePill'
 import { track } from '../track'
-import { fmtCurrency, fmtCurrencyCompact, fmtDate, ACCOUNT_TYPE_LABELS, CURRENCIES, getSnapshotFreshnessState, displayAccountLabel } from '../utils'
+import { fmtCurrency, fmtCurrencyCompact, fmtDate, ACCOUNT_TYPE_LABELS, CURRENCIES, getSnapshotFreshnessState, displayAccountLabel, accountFreshnessLabel, WEALTH_GROUPS, groupDefFor } from '../utils'
 import { Plus, Camera, ChevronDown, ChevronRight, Clock, Crown, Pencil, Trash2, MoreHorizontal, Landmark } from 'lucide-react'
 
-/* ── Wealth group taxonomy ─────────────────────────────────────────────────
- *
- * v1.1 — subtype-aware grouping, matching iOS wealthGroupDefs.
- *
- * subtypeOverrides: when an account has one of these account_subtype values,
- * it belongs to THIS group regardless of its broad type. This lets e.g.
- * cash_isa (type: isa) land in Cash & Savings, and other_liability (type:
- * other) land in Liabilities.
- *
- * Fallback order (mirrors iOS groupDef(for:)):
- *   1. subtypeOverrides match
- *   2. types match
- *   3. last group in the array ("Other") as catch-all
- *
- * ──────────────────────────────────────────────────────────────────────── */
-
-const WEALTH_GROUPS = [
-  {
-    key: 'cash',
-    label: 'Cash & Savings',
-    types: ['bank'],
-    subtypeOverrides: ['current_account', 'savings', 'cash_isa', 'premium_bonds'],
-    isLiability: false,
-  },
-  {
-    key: 'investments',
-    label: 'ISAs & Investments',
-    types: ['isa', 'investment', 'crypto'],
-    subtypeOverrides: ['stocks_shares_isa', 'lifetime_isa', 'gia'],
-    isLiability: false,
-  },
-  {
-    key: 'pensions',
-    label: 'Pensions',
-    types: ['sipp'],
-    subtypeOverrides: ['workplace_pension'],
-    isLiability: false,
-  },
-  {
-    key: 'property',
-    label: 'Property',
-    types: ['property'],
-    subtypeOverrides: [],
-    isLiability: false,
-  },
-  {
-    key: 'liabilities',
-    label: 'Liabilities',
-    types: ['mortgage', 'loan'],
-    subtypeOverrides: ['credit_card', 'other_liability'],
-    isLiability: true,
-  },
-  {
-    key: 'other',
-    label: 'Other',
-    types: ['other'],
-    subtypeOverrides: [],
-    isLiability: false,
-  },
-]
-
-// Returns the single WEALTH_GROUPS entry an account belongs to.
-// Subtype overrides are checked first; then broad type; then "Other" catch-all.
-// An account always lands in exactly one group — no double-counting.
-function groupDefFor(account) {
-  const sub = account.account_subtype
-  if (sub) {
-    const bySubtype = WEALTH_GROUPS.find(g => g.subtypeOverrides.includes(sub))
-    if (bySubtype) return bySubtype
-  }
-  const byType = WEALTH_GROUPS.find(g => g.types.includes(account.type))
-  if (byType) return byType
-  return WEALTH_GROUPS[WEALTH_GROUPS.length - 1] // "Other" catch-all
-}
+// WEALTH_GROUPS and groupDefFor are imported from utils.js above.
+// They are the single source of truth for account grouping across pages.
 
 // True when an account should reduce net worth.
 // Covers legacy mortgage/loan types AND v1.1 subtype-based liabilities.
@@ -201,16 +129,6 @@ function asArray(v){return Array.isArray(v)?v:[]}
 
 /* ── LedgerEntryRow ──────────────────────────────── */
 
-const ACCOUNT_STALE_DAYS = 60
-const ACCOUNT_AGING_DAYS = 30
-
-function accountStaleness(updatedAt) {
-  if (!updatedAt) return null
-  const days = Math.floor((Date.now() - new Date(updatedAt).getTime()) / 86400000)
-  if (days >= ACCOUNT_STALE_DAYS) return { state: 'stale', days }
-  if (days >= ACCOUNT_AGING_DAYS) return { state: 'aging', days }
-  return null
-}
 
 function LedgerEntryRow({ account, isLiability, baseCurrency, onEdit, onDelete }) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -225,7 +143,7 @@ function LedgerEntryRow({ account, isLiability, baseCurrency, onEdit, onDelete }
   const monthlyLabel = MONTHLY_LABEL[account.type] || 'Monthly'
   const foreignCurrency = displayCurrency !== (baseCurrency || 'GBP').toUpperCase()
   const hasNotes = account.notes && String(account.notes).trim().length > 0
-  const staleness = accountStaleness(account.updated_at)
+  const freshness = accountFreshnessLabel(account.updated_at)
 
   return (
     <div
@@ -275,12 +193,18 @@ function LedgerEntryRow({ account, isLiability, baseCurrency, onEdit, onDelete }
                 {String(account.notes).length > 32 ? '…' : ''}
               </>
             )}
-            {staleness && !excluded && (
+            {freshness && !excluded && (
               <span
                 className="ml-1"
-                style={{ color: staleness.state === 'stale' ? 'rgba(217,119,6,0.70)' : 'rgba(217,119,6,0.50)' }}
+                style={{
+                  color: freshness.state === 'stale'
+                    ? 'rgba(217,119,6,0.72)'
+                    : freshness.state === 'aging'
+                    ? 'rgba(217,119,6,0.48)'
+                    : undefined
+                }}
               >
-                · Updated {staleness.days}d ago
+                · {freshness.label}
               </span>
             )}
           </div>

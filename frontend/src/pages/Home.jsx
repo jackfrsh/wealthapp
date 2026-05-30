@@ -3,18 +3,24 @@
 //
 // Structure:
 //   MilestoneReceipt   ← celebration ribbon (conditional)
-//   HeroStage          ← net worth, delta, milestone progress
-//   OnboardingPanel    ← conditional, directly below hero for incomplete setup
-//   ISA urgency        ← full-width interrupt (conditional)
-//   CommandDeck        ← Plan · Accounts · Next move (unified slab)
-//   WealthRunway       ← current forecast module
+//   HeroStage          ← eyebrow · total · delta · milestone strip · trust line
+//   OnboardingPanel    ← conditional, full-width, directly below hero
+//   ── Two-column grid (lg+) ──────────────────────────────────
+//   Sidebar (right):
+//     WealthCheckIn    ← compact check-in prompt (stale accounts only)
+//     WealthMix        ← grouped asset breakdown (2+ groups only)
+//   Main (left):
+//     SnapshotStale    ← amber notice (stale snapshot, conditional)
+//     IsaUrgency       ← amber interrupt (tax-year deadline, conditional)
+//     CommandDeck      ← Plan · Accounts · Next move (unified slab)
+//     WealthRunway     ← forecast module
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { api } from '../api'
 import { track } from '../track'
 import { useApp } from '../App'
 import { GoldDelta } from '../components/surfaces'
-import { fmtCurrency, fmtCurrencyCompact, fmtCurrencyCompactStable, fmtDate, isIsaUrgent, getSnapshotFreshnessState } from '../utils'
+import { fmtCurrency, fmtCurrencyCompact, fmtCurrencyCompactStable, fmtDate, isIsaUrgent, getSnapshotFreshnessState, accountFreshnessLabel, WEALTH_GROUPS, groupDefFor } from '../utils'
 import GoalSetup from './GoalSetup'
 import useProjectionData from '../hooks/outlook/useProjectionData'
 import {
@@ -1059,17 +1065,47 @@ export default function Home() {
 
   useEffect(() => { load({ reason: 'effect' }) }, [load, dataVersion])
 
+  // ── Wealth mix (must be above all early returns — Rules of Hooks) ──────────
+  //
+  // Depends only on `accounts` (a stable useState array, always an array).
+  // Safe to call unconditionally: returns [] when accounts is empty or data is null.
+  // Unknown future subtype strings fall through safely via groupDefFor (utils.js).
+  const wealthMixGroups = useMemo(() => {
+    if (!Array.isArray(accounts) || !accounts.length) return []
+    const buckets = Object.fromEntries(WEALTH_GROUPS.map(g => [g.key, []]))
+    for (const a of accounts) {
+      buckets[groupDefFor(a).key].push(a)
+    }
+    return WEALTH_GROUPS
+      .map(g => {
+        const ga = buckets[g.key]
+        const subtotal = ga.reduce((sum, a) => {
+          if (!g.isLiability && a.include_in_net_worth === false) return sum
+          return sum + (Number(a.balance) || 0)
+        }, 0)
+        return { ...g, subtotal }
+      })
+      .filter(g => g.subtotal > 0)
+  }, [accounts])
+
+  const wealthMixAssetGroups = useMemo(
+    () => wealthMixGroups.filter(g => !g.isLiability),
+    [wealthMixGroups]
+  )
+
+  // ──────────────────────────────────────────────────────────────────────────
+
   if (loading && !data) {
     return (
       <div className="space-y-5 animate-fade-in">
         <div
-          className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 pt-9 pb-9 sm:px-10"
+          className="-mx-4 sm:-mx-6 lg:-mx-8 px-6 pt-10 pb-10 sm:px-10"
           style={{ background: '#141A26' }}
         >
           <div className="h-2.5 w-24 rounded skeleton opacity-20 mb-3" />
           <div className="h-14 w-60 rounded-lg skeleton opacity-25 mb-5" />
-          <div className="h-2 w-40 rounded skeleton opacity-15 mb-8" />
-          <div className="h-1 w-full rounded-full skeleton opacity-15" />
+          <div className="h-3 w-32 rounded skeleton opacity-15 mb-6" />
+          <div className="h-2.5 w-44 rounded skeleton opacity-10" />
         </div>
         <div className="rounded-2xl h-14 skeleton" />
         <div className="h-20 rounded-3xl skeleton" />
@@ -1233,14 +1269,23 @@ export default function Home() {
   const totalMonthlyContribs = assetAccounts.reduce((s, a) => s + Math.max(0, Number(a.monthly_contribution || 0)), 0)
   const contributingCount = assetAccounts.filter((a) => Number(a.monthly_contribution || 0) > 0).length
 
-  // Stale account detection — accounts included in net worth not updated in 60+ days.
-  const ACCOUNT_STALE_DAYS = 60
-  const staleAccountCount = dataAccounts.filter((a) => {
-    if (a.include_in_net_worth === false) return false
-    if (!a.updated_at) return false
-    const days = Math.floor((Date.now() - new Date(a.updated_at).getTime()) / 86400000)
-    return days >= ACCOUNT_STALE_DAYS
-  }).length
+  // Stale account detection — accounts included in net worth with state === 'stale' (30+ days).
+  // Uses accountFreshnessLabel so the threshold and state logic live in one place.
+  const staleAccountCount = dataAccounts.filter(
+    (a) => a.include_in_net_worth !== false && accountFreshnessLabel(a.updated_at)?.state === 'stale'
+  ).length
+
+  // Derived from the hook-safe memos above — plain expressions, not hooks.
+  const wealthMixAssetTotal = wealthMixAssetGroups.reduce((s, g) => s + g.subtotal, 0)
+  const wealthMixLargest = [...wealthMixAssetGroups].sort((a, b) => b.subtotal - a.subtotal)[0]
+  // Headline: percentage copy only when 2+ distinct asset groups exist and total > 0.
+  const wealthMixHeadline = (() => {
+    if (wealthMixAssetGroups.length < 2 || !wealthMixLargest || wealthMixAssetTotal <= 0) return null
+    const pct = Math.round((wealthMixLargest.subtotal / wealthMixAssetTotal) * 100)
+    return `${wealthMixLargest.label} make up ${pct}% of your tracked wealth.`
+  })()
+  // Show card only when ≥2 groups have non-zero balances — a single group adds no comparison value.
+  const showWealthMix = wealthMixGroups.length >= 2
 
   const forecastMonthsRemaining = (data.forecast?.years_remaining || 0) * 12
   let planShortfall = 0
@@ -1323,83 +1368,158 @@ export default function Home() {
           style={{ background: 'radial-gradient(circle, rgba(120,169,230,0.06) 0%, transparent 65%)' }}
         />
 
-        <div className="relative px-6 pt-9 pb-8 sm:px-10 sm:pt-10 max-w-2xl">
-          <div className="text-[11px] font-semibold tracking-[.18em] uppercase mb-3" style={{ color: 'rgba(255,255,255,0.38)' }}>
-            Total wealth · {baseCurrency}
-          </div>
+        <div className="relative px-6 pt-10 pb-10 sm:px-10 sm:pt-12 sm:pb-12 max-w-2xl">
 
-          <div className={`hero-number text-white ${animatingDelta ? 'animate-delta' : ''}`}>
-            {fmtCurrency(total, baseCurrency)}
-          </div>
+          {editingMilestone ? (
 
-          {!suppressDelta && sparkValues.length >= 2 && (
-            <div className="mt-3 mb-1">
-              <div
-                className="text-[10px] font-semibold tracking-[.14em] uppercase mb-1.5"
-                style={{ color: 'rgba(255,255,255,0.26)' }}
-              >
-                Net change
+            /* ── Edit mode: always single-column, full-width input ──────────── */
+            <>
+              <div className="text-[11px] font-semibold tracking-[.18em] uppercase mb-3" style={{ color: 'rgba(255,255,255,0.38)' }}>
+                Total wealth · {baseCurrency}
+              </div>
+              <div className={`hero-number text-white ${animatingDelta ? 'animate-delta' : ''}`}>
+                {fmtCurrency(total, baseCurrency)}
+              </div>
+              {!suppressDelta && sparkValues.length >= 2 && (
+                <div className="mt-4">
+                  <GoldDelta value={delta} label={deltaContextLabel} size="md" currency={ccy} />
+                </div>
+              )}
+              <div className="mt-5 flex items-center gap-2">
+                <input
+                  value={milestoneInput}
+                  onChange={(e) => setMilestoneInput(e.target.value)}
+                  inputMode="decimal"
+                  className="flex-1 px-3.5 py-2 rounded-2xl text-sm text-white focus:outline-none transition-all"
+                  style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)' }}
+                  placeholder="e.g. 250000"
+                />
+                <button
+                  onClick={saveMilestone}
+                  disabled={savingMilestone}
+                  className="px-4 py-2 rounded-2xl text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50"
+                  style={{ background: 'rgba(212,175,55,0.85)', color: '#0A0F1A' }}
+                  type="button"
+                >
+                  {savingMilestone ? 'Saving…' : 'Save'}
+                </button>
+                <button
+                  onClick={() => setEditingMilestone(false)}
+                  className="p-2 rounded-xl transition-opacity hover:opacity-80"
+                  style={{ color: 'rgba(255,255,255,0.45)' }}
+                  aria-label="Cancel"
+                  type="button"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="flex items-center gap-2 mt-5 text-[11px]" style={{ color: snapshotTone.color }}>
+                <SnapshotFreshnessIcon size={10} />
+                <span>{snapshotTone.label}</span>
+              </div>
+            </>
+
+          ) : (
+
+            /* ── View mode: two-zone on desktop, stacked on mobile ──────────── */
+            /*    Left: wealth number + delta + trust (primary)                  */
+            /*    Right: next-target strip (secondary, bottom-aligned)           */
+            <div className="md:flex md:items-end md:gap-x-12">
+
+              {/* Primary zone */}
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-semibold tracking-[.18em] uppercase mb-3" style={{ color: 'rgba(255,255,255,0.38)' }}>
+                  Total wealth · {baseCurrency}
+                </div>
+                <div className={`hero-number text-white ${animatingDelta ? 'animate-delta' : ''}`}>
+                  {fmtCurrency(total, baseCurrency)}
+                </div>
+                {!suppressDelta && sparkValues.length >= 2 && (
+                  <div className="mt-4">
+                    <GoldDelta value={delta} label={deltaContextLabel} size="md" currency={ccy} />
+                  </div>
+                )}
+                {/* Trust line anchors the bottom of the primary zone */}
+                <div className="flex items-center gap-2 mt-5 text-[11px]" style={{ color: snapshotTone.color }}>
+                  <SnapshotFreshnessIcon size={10} />
+                  <span>{snapshotTone.label}</span>
+                </div>
               </div>
 
-              <GoldDelta
-                value={delta}
-                label={deltaContextLabel}
-                size="md"
-                currency={ccy}
-              />
+              {/* Secondary zone: milestone strip
+                  - Mobile: mt-5, appears below trust line (still within hero)
+                  - Desktop: md:shrink-0 md:w-48, bottom-aligned with primary zone */}
+              {hasMilestone && (
+                <div className="mt-5 md:mt-0 md:shrink-0 md:w-48">
 
-              <ChangeBreakdown items={data?.breakdown_delta} ccy={ccy} />
+                  {/* Eyebrow */}
+                  <div className="text-[10px] font-semibold tracking-[.14em] uppercase mb-1" style={{ color: 'rgba(255,255,255,0.28)' }}>
+                    Next target
+                  </div>
+
+                  {/* Target amount */}
+                  <div className="text-[18px] font-bold tabular-nums text-white leading-tight">
+                    {fmtCurrencyCompact(activeMilestoneTarget, ccy)}
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="mt-2 rounded-full overflow-hidden" style={{ height: 3, background: 'rgba(255,255,255,0.08)' }}>
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{
+                        width: `${Math.max(0, Math.min(100, milestoneProgressPct)).toFixed(1)}%`,
+                        background: milestoneAchieved
+                          ? 'rgba(47,166,118,0.85)'
+                          : 'rgba(120,169,230,0.78)',
+                      }}
+                    />
+                  </div>
+
+                  {/* Supporting: % complete · age · remaining — calm copy when NW ≤ 0 */}
+                  {total > 0 ? (
+                    <div className="mt-1.5 text-[11px] tabular-nums" style={{ color: 'rgba(255,255,255,0.30)' }}>
+                      <span className="font-semibold" style={{ color: 'rgba(255,255,255,0.45)' }}>
+                        {milestoneProgressPct.toFixed(0)}% complete
+                      </span>
+                      {(reachAge || milestoneRemaining > 0) && (
+                        <>
+                          <span className="mx-1.5" style={{ color: 'rgba(255,255,255,0.18)' }}>·</span>
+                          {[
+                            reachAge ? `Around age ${reachAge}` : null,
+                            milestoneRemaining > 0
+                              ? `${fmtCurrencyCompact(milestoneRemaining, ccy)} remaining`
+                              : null,
+                          ].filter(Boolean).join(' · ')}
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="mt-1.5 text-[11px]" style={{ color: 'rgba(255,255,255,0.28)' }}>
+                      Progress starts once net worth moves above {fmtCurrencyCompact(0, ccy)}.
+                    </div>
+                  )}
+
+                  {/* Edit / suggested — quietest level */}
+                  <div className="mt-2 flex items-center gap-2">
+                    {usingSuggested && (
+                      <span className="text-[10px] font-medium uppercase tracking-[.10em]" style={{ color: 'rgba(255,255,255,0.20)' }}>
+                        suggested
+                      </span>
+                    )}
+                    <button
+                      onClick={startEditMilestone}
+                      className="text-[10px] font-semibold transition-opacity hover:opacity-80"
+                      style={{ color: 'rgba(212,175,55,0.55)' }}
+                      type="button"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
 
-          {changeGroundingLabel && (
-            <div className="text-[11px] mt-1" style={{ color: 'rgba(255,255,255,0.38)' }}>
-              {changeGroundingLabel}
-            </div>
           )}
-
-          {changeExplainer && (
-            <div className="text-[11px] mt-1.5 mb-3" style={{ color: 'rgba(255,255,255,0.28)' }}>
-              {changeExplainer}
-            </div>
-          )}
-
-          {milestoneAchieved && (
-            <div className="mt-3">
-              <div className="inline-flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                <CheckCircle size={10} /> Target reached
-              </div>
-            </div>
-          )}
-
-          {hasMilestone && (
-            <div className="mt-5 max-w-xl">
-              <MilestoneProgress
-                activeMilestoneTarget={activeMilestoneTarget}
-                milestoneProgressPct={milestoneProgressPct}
-                milestoneRemaining={milestoneRemaining}
-                milestoneAchieved={milestoneAchieved}
-                reachAge={reachAge}
-                usingSuggested={usingSuggested}
-                editingMilestone={editingMilestone}
-                milestoneInput={milestoneInput}
-                setMilestoneInput={setMilestoneInput}
-                saveMilestone={saveMilestone}
-                savingMilestone={savingMilestone}
-                setEditingMilestone={setEditingMilestone}
-                startEditMilestone={startEditMilestone}
-                ccy={ccy}
-              />
-            </div>
-          )}
-
-          <div
-            className="flex items-center gap-2 mt-5 text-[11px]"
-            style={{ color: snapshotTone.color }}
-          >
-            <SnapshotFreshnessIcon size={10} />
-            <span>{snapshotTone.label}</span>
-          </div>
         </div>
       </div>
 
@@ -1418,115 +1538,189 @@ export default function Home() {
 
       {hasMilestone && false}
 
-      {snapshotFreshness.state === 'stale' && data?.last_snapshot_date && (
-        <div className="mt-5">
-          <div
-            className="rounded-2xl px-5 py-4"
-            style={{ background: 'rgba(200,155,60,0.07)', border: '1px solid rgba(200,155,60,0.16)' }}
-          >
-            <div className="flex items-start gap-3">
-              <AlertTriangle size={14} style={{ color: 'rgba(200,155,60,0.75)', flexShrink: 0, marginTop: 2 }} />
-              <div>
-                <div className="text-sm font-semibold" style={{ color: 'rgba(200,155,60,0.92)' }}>
-                  Last snapshot was {snapshotFreshness.days} days ago.
+      {/*
+        ── Two-column layout ──────────────────────────────────────────────────
+        Sidebar (check-in prompt + Wealth Mix) is DOM-first so it stacks
+        naturally above CommandDeck on mobile.  On desktop (lg+) CSS grid
+        repositions it into the right column, keeping the main content left.
+
+        The grid wrapper is only applied when there is sidebar content —
+        otherwise the outer div is a plain block and main fills full width.
+      */}
+      <div className={`mt-8${staleAccountCount > 0 || showWealthMix ? ' lg:grid lg:grid-cols-[1fr_272px] xl:grid-cols-[1fr_296px] lg:gap-x-8 lg:items-start' : ''}`}>
+
+        {/* ── Sidebar ───────────────────────────────────────────────────────
+            DOM position 1 → appears above main on mobile (natural stacking).
+            lg:col-start-2 + lg:row-start-1 → pinned right column on desktop. */}
+        {(staleAccountCount > 0 || showWealthMix) && (
+          <div className="lg:col-start-2 lg:row-start-1 flex flex-col gap-3 mb-5 lg:mb-0">
+
+            {/* Compact wealth check-in prompt */}
+            {staleAccountCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setPage('accounts')}
+                className="w-full text-left group"
+              >
+                <div
+                  className="rounded-2xl px-4 py-3 transition-opacity group-hover:opacity-80"
+                  style={{ background: 'rgba(200,155,60,0.07)', border: '1px solid rgba(200,155,60,0.18)' }}
+                >
+                  <div className="flex items-start gap-3">
+                    <Clock size={13} style={{ color: 'rgba(200,155,60,0.72)', flexShrink: 0, marginTop: 1 }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-semibold leading-snug" style={{ color: 'rgba(220,185,100,0.92)' }}>
+                        Time for a quick wealth check-in
+                      </p>
+                      <p className="text-[11px] mt-0.5 leading-snug" style={{ color: 'rgba(200,155,60,0.58)' }}>
+                        {staleAccountCount === 1
+                          ? "1 account hasn't been updated in over 30 days."
+                          : `${staleAccountCount} accounts haven't been updated in over 30 days.`}
+                      </p>
+                      <div className="flex items-center gap-1 mt-1.5">
+                        <span className="text-[10px] font-semibold" style={{ color: 'rgba(200,155,60,0.75)' }}>
+                          Review accounts
+                        </span>
+                        <ChevronRight size={9} style={{ color: 'rgba(200,155,60,0.75)' }} />
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(200,155,60,0.65)' }}>
-                  Figures may not reflect current balances until you record a new snapshot.
+              </button>
+            )}
+
+            {/* Compact wealth mix */}
+            {showWealthMix && (
+              <div className="rounded-2xl p-4 bg-black/[.02] dark:bg-white/[.025] border border-black/[.06] dark:border-white/[.065]">
+                <p
+                  className="text-[10px] font-semibold tracking-[.16em] uppercase"
+                  style={{ color: 'rgba(160,170,190,0.48)' }}
+                >
+                  Wealth mix
+                </p>
+
+                {wealthMixHeadline && (
+                  <p
+                    className="mt-2 text-[12px] font-semibold leading-snug"
+                    style={{ color: 'rgba(230,235,245,0.76)' }}
+                  >
+                    {wealthMixHeadline}
+                  </p>
+                )}
+
+                <div className="mt-2.5 space-y-1.5">
+                  {wealthMixGroups.map(g => (
+                    <div key={g.key} className="flex items-baseline justify-between gap-3">
+                      <span className="text-[11px]" style={{ color: 'rgba(180,190,210,0.50)' }}>
+                        {g.label}
+                      </span>
+                      <span
+                        className="text-[11px] font-semibold tabular-nums"
+                        style={{
+                          color: g.isLiability
+                            ? 'rgba(192,90,70,0.75)'
+                            : 'rgba(220,228,242,0.76)',
+                        }}
+                      >
+                        {g.isLiability ? '−' : ''}{fmtCurrencyCompactStable(g.subtotal, baseCurrency)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Main column ───────────────────────────────────────────────────
+            DOM position 2 → renders below sidebar on mobile.
+            lg:col-start-1 + lg:row-start-1 → left column on desktop. */}
+        <div className="lg:col-start-1 lg:row-start-1 min-w-0">
+
+          {snapshotFreshness.state === 'stale' && data?.last_snapshot_date && (
+            <div className="mb-5">
+              <div
+                className="rounded-2xl px-5 py-4"
+                style={{ background: 'rgba(200,155,60,0.07)', border: '1px solid rgba(200,155,60,0.16)' }}
+              >
+                <div className="flex items-start gap-3">
+                  <AlertTriangle size={14} style={{ color: 'rgba(200,155,60,0.75)', flexShrink: 0, marginTop: 2 }} />
+                  <div>
+                    <div className="text-sm font-semibold" style={{ color: 'rgba(200,155,60,0.92)' }}>
+                      Last snapshot was {snapshotFreshness.days} days ago.
+                    </div>
+                    <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(200,155,60,0.65)' }}>
+                      Figures may not reflect current balances until you record a new snapshot.
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
+          )}
+
+          {showIsaUrgency && (
+            <div className="mb-5">
+              <button
+                type="button"
+                onClick={() => {
+                  track('isa_urgency_clicked', { page: 'home', days_left: taxYearDaysLeft })
+                  setPage('decisions')
+                }}
+                className="w-full text-left group"
+              >
+                <div
+                  className="rounded-2xl px-5 py-4 transition-opacity group-hover:opacity-90"
+                  style={{ background: 'rgba(200,155,60,0.07)', border: '1px solid rgba(200,155,60,0.16)' }}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <Clock size={12} style={{ color: 'rgba(200,155,60,0.75)', flexShrink: 0 }} />
+                        <span className="text-[10px] font-semibold tracking-[.14em] uppercase" style={{ color: 'rgba(200,155,60,0.65)' }}>
+                          ISA deadline · {taxYearDaysLeft} days
+                        </span>
+                      </div>
+                      <div className="text-sm font-semibold leading-snug" style={{ color: 'rgba(200,155,60,0.92)' }}>
+                        {fmtCurrencyCompact(isaRemaining, baseCurrency)} of tax-free allowance unused before {taxYearEnd}
+                      </div>
+                      <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(200,155,60,0.65)' }}>
+                        Directing new money into wrappers first is the clearest next move.
+                      </div>
+                    </div>
+                    <div className="shrink-0 flex items-center gap-1 text-xs font-semibold mt-0.5" style={{ color: 'rgba(200,155,60,0.65)' }}>
+                      Decide <ChevronRight size={13} />
+                    </div>
+                  </div>
+                </div>
+              </button>
+            </div>
+          )}
+
+          <CommandDeck
+            goal={retirementGoal}
+            total={total}
+            ccy={ccy}
+            forecast={data.forecast}
+            planShortfall={planShortfall}
+            showIsaUrgency={showIsaUrgency}
+            totalMonthlyContribs={totalMonthlyContribs}
+            contributingCount={contributingCount}
+            retirementGoal={retirementGoal}
+            onPlan={() => setPage('plan')}
+            onSetGoal={() => setGoalSetupOpen(true)}
+            onAccounts={() => setPage('accounts')}
+            onStrategy={() => setPage('decisions')}
+          />
+
+          <div className="mt-10 pt-8 border-t border-black/[.04] dark:border-white/[.04]">
+            <WealthRunway
+              settingsReady={settingsReady}
+              isPro={isPro}
+              ccy={ccy}
+              defaultProjYears={goalHorizonYears}
+            />
           </div>
         </div>
-      )}
-
-      {showIsaUrgency && (
-        <div className="mt-5">
-          <button
-            type="button"
-            onClick={() => {
-              track('isa_urgency_clicked', { page: 'home', days_left: taxYearDaysLeft })
-              setPage('decisions')
-            }}
-            className="w-full text-left group"
-          >
-            <div
-              className="rounded-2xl px-5 py-4 transition-opacity group-hover:opacity-90"
-              style={{ background: 'rgba(200,155,60,0.07)', border: '1px solid rgba(200,155,60,0.16)' }}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <Clock size={12} style={{ color: 'rgba(200,155,60,0.75)', flexShrink: 0 }} />
-                    <span className="text-[10px] font-semibold tracking-[.14em] uppercase" style={{ color: 'rgba(200,155,60,0.65)' }}>
-                      ISA deadline · {taxYearDaysLeft} days
-                    </span>
-                  </div>
-                  <div className="text-sm font-semibold leading-snug" style={{ color: 'rgba(200,155,60,0.92)' }}>
-                    {fmtCurrencyCompact(isaRemaining, baseCurrency)} of tax-free allowance unused before {taxYearEnd}
-                  </div>
-                  <div className="mt-1 text-xs leading-relaxed" style={{ color: 'rgba(200,155,60,0.65)' }}>
-                    Directing new money into wrappers first is the clearest next move.
-                  </div>
-                </div>
-                <div className="shrink-0 flex items-center gap-1 text-xs font-semibold mt-0.5" style={{ color: 'rgba(200,155,60,0.65)' }}>
-                  Decide <ChevronRight size={13} />
-                </div>
-              </div>
-            </div>
-          </button>
-        </div>
-      )}
-
-      {staleAccountCount > 0 && (
-        <div className="mt-5">
-          <button
-            type="button"
-            onClick={() => setPage('accounts')}
-            className="w-full text-left group"
-          >
-            <div
-              className="rounded-2xl px-5 py-3.5 flex items-center justify-between gap-4 transition-opacity group-hover:opacity-80"
-              style={{ background: 'rgba(120,169,230,0.055)', border: '1px solid rgba(120,169,230,0.11)' }}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <Clock size={13} style={{ color: 'rgba(120,169,230,0.60)', flexShrink: 0 }} />
-                <span className="text-[13px] font-medium truncate" style={{ color: 'rgba(120,169,230,0.80)' }}>
-                  {staleAccountCount === 1
-                    ? '1 account may need a balance review'
-                    : `${staleAccountCount} accounts may need a balance review`}
-                </span>
-              </div>
-              <ChevronRight size={13} style={{ color: 'rgba(120,169,230,0.38)', flexShrink: 0 }} />
-            </div>
-          </button>
-        </div>
-      )}
-
-      <div className="mt-6">
-        <CommandDeck
-          goal={retirementGoal}
-          total={total}
-          ccy={ccy}
-          forecast={data.forecast}
-          planShortfall={planShortfall}
-          showIsaUrgency={showIsaUrgency}
-          totalMonthlyContribs={totalMonthlyContribs}
-          contributingCount={contributingCount}
-          retirementGoal={retirementGoal}
-          onPlan={() => setPage('plan')}
-          onSetGoal={() => setGoalSetupOpen(true)}
-          onAccounts={() => setPage('accounts')}
-          onStrategy={() => setPage('decisions')}
-        />
-      </div>
-
-      <div className="mt-10 pt-8 border-t border-black/[.04] dark:border-white/[.04]">
-        <WealthRunway
-          settingsReady={settingsReady}
-          isPro={isPro}
-          ccy={ccy}
-          defaultProjYears={goalHorizonYears}
-        />
       </div>
 
       {goalSetupOpen && (

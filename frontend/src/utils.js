@@ -150,6 +150,100 @@ export function fmtCurrencyCompactStable(amount, ccy = 'GBP') {
   return fmtCurrency(n, c)
 }
 
+// ── Wealth Group Taxonomy ─────────────────────────────────────────────────
+//
+// Canonical group definitions for the v1.1 UK wealth structure.
+// Display order is intentional — "other" is last so it acts as a catch-all.
+// subtypeOverrides are checked before broad types so e.g. cash_isa lands in
+// Cash & Savings rather than ISAs & Investments.
+// Unknown future subtype strings fall through to broad-type lookup safely.
+
+export const WEALTH_GROUPS = [
+  {
+    key: 'cash',
+    label: 'Cash & Savings',
+    types: ['bank'],
+    subtypeOverrides: ['current_account', 'savings', 'cash_isa', 'premium_bonds'],
+    isLiability: false,
+  },
+  {
+    key: 'investments',
+    label: 'ISAs & Investments',
+    types: ['isa', 'investment', 'crypto'],
+    subtypeOverrides: ['stocks_shares_isa', 'lifetime_isa', 'gia'],
+    isLiability: false,
+  },
+  {
+    key: 'pensions',
+    label: 'Pensions',
+    types: ['sipp'],
+    subtypeOverrides: ['workplace_pension'],
+    isLiability: false,
+  },
+  {
+    key: 'property',
+    label: 'Property',
+    types: ['property'],
+    subtypeOverrides: [],
+    isLiability: false,
+  },
+  {
+    key: 'liabilities',
+    label: 'Liabilities',
+    types: ['mortgage', 'loan'],
+    subtypeOverrides: ['credit_card', 'other_liability'],
+    isLiability: true,
+  },
+  {
+    key: 'other',
+    label: 'Other',
+    types: ['other'],
+    subtypeOverrides: [],
+    isLiability: false,
+  },
+]
+
+/**
+ * Returns the single WEALTH_GROUPS entry an account belongs to.
+ * Subtype overrides are checked first; then broad type; then "Other" catch-all.
+ * An account always lands in exactly one group — no double-counting.
+ * Unknown future subtype strings never crash; they fall through to the type lookup.
+ */
+export function groupDefFor(account) {
+  const sub = account.account_subtype
+  if (sub) {
+    const bySubtype = WEALTH_GROUPS.find(g => g.subtypeOverrides.includes(sub))
+    if (bySubtype) return bySubtype
+  }
+  const byType = WEALTH_GROUPS.find(g => g.types.includes(account.type))
+  if (byType) return byType
+  return WEALTH_GROUPS[WEALTH_GROUPS.length - 1] // "other" catch-all
+}
+
+// ── Account freshness ─────────────────────────────────────────────────────
+
+/**
+ * Returns a structured freshness label for an account's last update time.
+ * Freshness is a trust signal — tells users how current the account data is.
+ * Returns null when updatedAt is missing, unparseable, or in the future.
+ *
+ * States and thresholds:
+ *   fresh  — 0–13 days  (Updated today / yesterday / X days ago)
+ *   aging  — 14–29 days (Review soon)
+ *   stale  — 30+ days   (Needs review)
+ */
+export function accountFreshnessLabel(updatedAt) {
+  if (!updatedAt) return null
+  const ms = Date.now() - new Date(updatedAt).getTime()
+  if (!Number.isFinite(ms) || ms < 0) return null
+  const days = Math.floor(ms / 86400000)
+  if (days === 0) return { state: 'fresh', label: 'Updated today',            days }
+  if (days === 1) return { state: 'fresh', label: 'Updated yesterday',        days }
+  if (days < 14)  return { state: 'fresh', label: `Updated ${days} days ago`, days }
+  if (days < 30)  return { state: 'aging', label: 'Review soon',              days }
+  return               { state: 'stale', label: 'Needs review',             days }
+}
+
 // ── Plan signal helpers ────────────────────────────────────────────────────
 
 /** Days remaining until the UK tax year ends (5 April). */
