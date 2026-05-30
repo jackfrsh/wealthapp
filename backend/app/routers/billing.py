@@ -114,9 +114,28 @@ def create_checkout(
     else:
         price_id = _require_env("STRIPE_PRICE_ID_MONTHLY")
 
+    frontend_base = _frontend_base()
+
+    # Stripe live mode rejects HTTP and localhost success_url — fail fast with a
+    # clear server-side log before wasting a Stripe API round-trip.
+    stripe_key = os.getenv("STRIPE_SECRET_KEY", "")
+    if stripe_key.startswith("sk_live_") and (
+        "localhost" in frontend_base or not frontend_base.startswith("https://")
+    ):
+        logger.error(
+            "create_checkout: FRONTEND_URL=%r is not a valid HTTPS URL but "
+            "STRIPE_SECRET_KEY is live-mode. Stripe will reject the success_url. "
+            "Set FRONTEND_URL=https://app.getpaddock.com on Railway.",
+            frontend_base,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Checkout is temporarily unavailable — server configuration error.",
+        )
+
     # Include CHECKOUT_SESSION_ID so frontend can verify instantly
-    success_url = _frontend_base() + "/upgrade?success=true&session_id={CHECKOUT_SESSION_ID}"
-    cancel_url = _frontend_base() + "/upgrade?cancel=true"
+    success_url = frontend_base + "/upgrade?success=true&session_id={CHECKOUT_SESSION_ID}"
+    cancel_url = frontend_base + "/upgrade?cancel=true"
 
     customer_id = getattr(current_user, "stripe_customer_id", None)
 
@@ -142,16 +161,31 @@ def create_checkout(
     if customer_id:
         params["customer"] = customer_id
     else:
-        # Optional: prefill email if you have it on the user object
         if getattr(current_user, "email", None):
             params["customer_email"] = current_user.email
 
-    logger.info("Creating checkout session | user=%s | plan=%s | price=%s", current_user.id, plan, price_id)
+    logger.info(
+        "Creating checkout session | user=%s | plan=%s | price=%s | success_url=%s",
+        current_user.id, plan, price_id, success_url,
+    )
 
     try:
         session = stripe.checkout.Session.create(**params)
-    except Exception as e:
-        logger.exception("Stripe checkout creation failed")
+    except stripe.error.StripeError as e:
+        logger.error(
+            "Stripe checkout creation failed | user=%s | plan=%s | "
+            "error_type=%s | code=%s | message=%s",
+            current_user.id, plan,
+            type(e).__name__,
+            getattr(e, "code", None),
+            str(e),
+        )
+        raise HTTPException(status_code=503, detail="Checkout is temporarily unavailable. Please try again.")
+    except Exception:
+        logger.exception(
+            "Stripe checkout unexpected error | user=%s | plan=%s",
+            current_user.id, plan,
+        )
         raise HTTPException(status_code=500, detail="Could not start checkout. Please try again.")
 
     return {"url": session.url}
@@ -242,13 +276,34 @@ def checkout_status(
 
 @router.get("/health")
 def billing_health(current_user: User = Depends(get_current_user)):
-    # Don’t leak secrets. Just confirm presence.
+    key = os.getenv("STRIPE_SECRET_KEY") or ""
+    frontend_url = (os.getenv("FRONTEND_URL") or "").strip().rstrip("/")
+
+    # Expose key mode (live/test) without revealing the secret itself.
+    if key.startswith("sk_live_"):
+        key_mode = "live"
+    elif key.startswith("sk_test_"):
+        key_mode = "test"
+    else:
+        key_mode = None
+
+    # Expose URL scheme so FRONTEND_URL misconfiguration is diagnosable.
+    if "://" in frontend_url:
+        url_scheme = frontend_url.split("://")[0]
+        url_host = frontend_url.split("://", 1)[1].split("/")[0]
+    else:
+        url_scheme = None
+        url_host = None
+
     return {
-        "stripe_key_set": bool(os.getenv("STRIPE_SECRET_KEY")),
+        "stripe_key_set": bool(key),
+        "stripe_key_mode": key_mode,
         "webhook_secret_set": bool(os.getenv("STRIPE_WEBHOOK_SECRET")),
         "price_monthly_set": bool(os.getenv("STRIPE_PRICE_ID_MONTHLY")),
         "price_annual_set": bool(os.getenv("STRIPE_PRICE_ID_ANNUAL")),
-        "frontend_url_set": bool(os.getenv("FRONTEND_URL")),
+        "frontend_url_set": bool(frontend_url),
+        "frontend_url_scheme": url_scheme,
+        "frontend_url_host": url_host,
         "has_customer": bool(getattr(current_user, "stripe_customer_id", None)),
         "has_subscription": bool(getattr(current_user, "stripe_subscription_id", None)),
     }

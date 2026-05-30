@@ -93,10 +93,14 @@ def reset_rate_limiter():
 
 @pytest.fixture(scope="module")
 def test_app():
+    import tempfile
     from sqlmodel import SQLModel, Session, create_engine
     from fastapi.testclient import TestClient
 
-    test_db_url = "sqlite:///./test_billing_integration.db"
+    # Use a temp file so parallel runs and re-runs don't collide on a stale DB.
+    _tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    _tmp.close()
+    test_db_url = f"sqlite:///{_tmp.name}"
     test_engine = create_engine(test_db_url, connect_args={"check_same_thread": False})
 
     import backend.app.database as db_module
@@ -514,3 +518,60 @@ class TestCreateCheckout:
         assert resp.status_code == 200
         call_kwargs = mock_create.call_args[1]
         assert str(user.id) == call_kwargs["metadata"]["user_id"]
+
+    def test_checkout_stripe_error_returns_503(self, test_app, db_session):
+        """
+        A stripe.error.StripeError (e.g. invalid price ID, mode mismatch) must
+        return 503 — not 200 — so Upgrade.jsx shows the error banner.
+        """
+        client, _ = test_app
+        from backend.app.main import app as fastapi_app
+
+        user = _make_user(db_session, "uid-co-07", "co07@example.com")
+        _make_settings(db_session, user.id, is_pro=False)
+
+        import stripe as stripe_mod
+        with mock.patch(
+            "stripe.checkout.Session.create",
+            side_effect=stripe_mod.error.InvalidRequestError(
+                "No such price: 'price_bad'", param="price"
+            ),
+        ):
+            resp = self._post_checkout(client, user, fastapi_app, plan="monthly")
+
+        assert resp.status_code == 503
+
+    def test_checkout_live_key_with_non_https_frontend_url_returns_503(
+        self, test_app, db_session
+    ):
+        """
+        When STRIPE_SECRET_KEY is sk_live_* but FRONTEND_URL is HTTP/localhost,
+        Stripe would reject the success_url — we must fail fast with 503 before
+        wasting the Stripe API round-trip.
+
+        This is the most likely cause of the production 500: FRONTEND_URL not
+        set on Railway → fallback is http://localhost:5173.
+        """
+        client, _ = test_app
+        from backend.app.main import app as fastapi_app
+
+        user = _make_user(db_session, "uid-co-08", "co08@example.com")
+        _make_settings(db_session, user.id, is_pro=False)
+
+        saved_key = os.environ.get("STRIPE_SECRET_KEY")
+        saved_url = os.environ.get("FRONTEND_URL")
+        os.environ["STRIPE_SECRET_KEY"] = "sk_live_test_placeholder_key"
+        os.environ["FRONTEND_URL"] = "http://localhost:5173"
+        try:
+            resp = self._post_checkout(client, user, fastapi_app, plan="monthly")
+        finally:
+            if saved_key is not None:
+                os.environ["STRIPE_SECRET_KEY"] = saved_key
+            else:
+                os.environ.pop("STRIPE_SECRET_KEY", None)
+            if saved_url is not None:
+                os.environ["FRONTEND_URL"] = saved_url
+            else:
+                os.environ.pop("FRONTEND_URL", None)
+
+        assert resp.status_code == 503
