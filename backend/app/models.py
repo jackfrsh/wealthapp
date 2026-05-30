@@ -107,6 +107,9 @@ class Account(SQLModel, table=True):
     include_in_net_worth: bool = Field(default=True)
     notes: Optional[str] = Field(default=None)
 
+    # UK account subtype (e.g. "cash_isa", "current_account"). Nullable; validated in API layer.
+    account_subtype: Optional[str] = Field(default=None)
+
     # Projection inputs (MVP)
     monthly_contribution: float = Field(default=0.0)
     annual_interest_rate_percent: float = Field(default=0.0)

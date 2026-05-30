@@ -27,6 +27,40 @@ from ..services.networth import write_snapshot_background
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
 
+# ─── Subtype allowlist ───────────────────────────────────────────────────────
+
+ALLOWED_ACCOUNT_SUBTYPES: frozenset[str] = frozenset({
+    "current_account",
+    "savings",
+    "cash_isa",
+    "premium_bonds",
+    "stocks_shares_isa",
+    "lifetime_isa",
+    "gia",
+    "workplace_pension",
+    "credit_card",
+    "other_liability",
+})
+
+
+def _validate_subtype(value: Optional[str]) -> Optional[str]:
+    """Normalise and validate account_subtype. Returns None for absent/empty values."""
+    if value is None:
+        return None
+    normalised = value.strip().lower()
+    if not normalised:
+        return None
+    if normalised not in ALLOWED_ACCOUNT_SUBTYPES:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Invalid account_subtype '{normalised}'. "
+                f"Allowed values: {sorted(ALLOWED_ACCOUNT_SUBTYPES)}"
+            ),
+        )
+    return normalised
+
+
 # ─── Schemas ────────────────────────────────────────────────────────────────
 
 class AccountCreate(BaseModel):
@@ -36,6 +70,7 @@ class AccountCreate(BaseModel):
     balance: float = 0.0
     include_in_net_worth: bool = True
     notes: Optional[str] = None
+    account_subtype: Optional[str] = None
 
     # Projection inputs
     monthly_contribution: float = 0.0
@@ -49,6 +84,7 @@ class AccountPatch(BaseModel):
     balance: Optional[float] = None
     include_in_net_worth: Optional[bool] = None
     notes: Optional[str] = None
+    account_subtype: Optional[str] = None
 
     monthly_contribution: Optional[float] = None
     annual_interest_rate_percent: Optional[float] = None
@@ -64,6 +100,7 @@ class AccountResponse(BaseModel):
     balance: float
     include_in_net_worth: bool
     notes: Optional[str]
+    account_subtype: Optional[str]
     monthly_contribution: float
     annual_interest_rate_percent: float
     updated_at: datetime
@@ -92,6 +129,9 @@ def _apply_patch(account: Account, patch: dict) -> None:
 
         if field == "type" and value:
             value = str(value).lower()
+
+        if field == "account_subtype":
+            value = _validate_subtype(value)
 
         if field == "balance" and value is not None:
             value = float(value)
@@ -152,6 +192,7 @@ async def create_account(
         balance=float(body.balance or 0.0),
         include_in_net_worth=bool(body.include_in_net_worth),
         notes=body.notes,
+        account_subtype=_validate_subtype(body.account_subtype),
         monthly_contribution=float(body.monthly_contribution or 0.0),
         annual_interest_rate_percent=float(body.annual_interest_rate_percent or 0.0),
         updated_at=datetime.now(timezone.utc),
