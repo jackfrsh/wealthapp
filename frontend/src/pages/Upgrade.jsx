@@ -276,7 +276,7 @@ export default function Upgrade() {
               </div>
 
               <div className="text-xs text-ink-muted/60 dark:text-white/30">
-                {plan === 'annual' ? 'Annual includes a 7-day trial.' : 'Monthly has no trial. Switch to annual anytime.'}
+                {plan === 'annual' ? 'Annual includes a 30-day trial.' : 'Monthly has no trial. Switch to annual anytime.'}
               </div>
             </div>
 
