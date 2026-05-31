@@ -16,6 +16,7 @@ import { useApp } from '../App'
 import Modal from '../components/Modal'
 import ConfirmDialog from '../components/ConfirmDialog'
 import ChangePill from '../components/ChangePill'
+import QuickUpdateModal from '../components/QuickUpdateModal'
 import { track } from '../track'
 import { fmtCurrency, fmtCurrencyCompact, fmtDate, ACCOUNT_TYPE_LABELS, CURRENCIES, getSnapshotFreshnessState, displayAccountLabel, accountFreshnessLabel, WEALTH_GROUPS, groupDefFor } from '../utils'
 import { Plus, Camera, ChevronDown, ChevronRight, Clock, Crown, Pencil, Trash2, MoreHorizontal, Landmark } from 'lucide-react'
@@ -451,6 +452,7 @@ export default function Accounts() {
   const [confirmState, setConfirmState] = useState(null)
   const [confirmLoading, setConfirmLoading] = useState(false)
   const [justRecorded, setJustRecorded] = useState(false)
+  const [quickUpdateOpen, setQuickUpdateOpen] = useState(false)
   const cancelledRef = useRef(false)
   useEffect(()=>{cancelledRef.current=false;return()=>{cancelledRef.current=true}},[])
 
@@ -459,9 +461,18 @@ export default function Accounts() {
   const accountLimitReached = !isPro && accountCount >= FREE_ACCOUNT_LIMIT
   const usage = useMemo(()=>{if(isPro)return null;return{used:accountCount,limit:FREE_ACCOUNT_LIMIT,pct:clamp((accountCount/FREE_ACCOUNT_LIMIT)*100,0,100)}},[isPro,accountCount])
 
+  const staleAccountCount = useMemo(
+    () => accounts.filter((a) => accountFreshnessLabel(a.updated_at)?.state === 'stale').length,
+    [accounts]
+  )
+
   const goUpgrade = useCallback(()=>{try{localStorage.setItem('upgrade_reason','account_limit')}catch{};track('upgrade_clicked',{page:'accounts',source:'account_limit'});setPage('upgrade')},[setPage])
 
   useEffect(()=>{track('page_view',{page:'accounts'})},[])
+
+  const loadAccounts = useCallback(async () => {
+    try { const r = asArray(await api('/accounts')); if (!cancelledRef.current) setAccounts(r) } catch {}
+  }, [])
 
   useEffect(()=>{
     let c=false; setLoading(true)
@@ -715,6 +726,18 @@ export default function Accounts() {
     >
       {accountLimitReached ? <><Crown size={13} /> Upgrade</> : <><Plus size={14} /> Add account</>}
     </button>
+
+    {staleAccountCount > 0 && (
+      <button
+        type="button"
+        onClick={() => setQuickUpdateOpen(true)}
+        className="shrink-0 inline-flex items-center justify-center gap-1.5 text-[11.5px] sm:text-xs font-semibold px-2.5 sm:px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
+        style={{ color: 'rgba(200,155,60,0.80)', background: 'rgba(200,155,60,0.08)', border: '1px solid rgba(200,155,60,0.18)' }}
+      >
+        <Clock size={11} />
+        Quick update
+      </button>
+    )}
   </div>
 </div>
 </div>
@@ -1020,6 +1043,14 @@ export default function Accounts() {
       </Modal>
 
       <ConfirmDialog open={!!confirmState} title={confirmState?.title} message={confirmState?.message} confirmLabel={confirmState?.confirmLabel||'Delete'} destructive loading={confirmLoading} onConfirm={confirmState?.onConfirm} onCancel={()=>{setConfirmState(null);setConfirmLoading(false)}}/>
+
+      <QuickUpdateModal
+        open={quickUpdateOpen}
+        onClose={() => setQuickUpdateOpen(false)}
+        accounts={accounts}
+        baseCurrency={baseCurrency}
+        onSaved={() => { invalidatePath('/accounts'); invalidatePath('/dashboard'); invalidatePath('/dashboard?range=3M'); loadAccounts(); bumpData?.() }}
+      />
     </div>
   )
 }

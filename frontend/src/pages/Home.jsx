@@ -16,12 +16,13 @@
 //     WealthRunway     ← forecast module
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { api } from '../api'
+import { api, invalidatePath } from '../api'
 import { track } from '../track'
 import { useApp } from '../App'
 import { GoldDelta } from '../components/surfaces'
 import { fmtCurrency, fmtCurrencyCompact, fmtCurrencyCompactStable, fmtDate, isIsaUrgent, getSnapshotFreshnessState, accountFreshnessLabel, WEALTH_GROUPS, groupDefFor } from '../utils'
 import GoalSetup from './GoalSetup'
+import QuickUpdateModal from '../components/QuickUpdateModal'
 import useProjectionData from '../hooks/outlook/useProjectionData'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
@@ -923,6 +924,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [goalSetupOpen, setGoalSetupOpen] = useState(false)
+  const [quickUpdateOpen, setQuickUpdateOpen] = useState(false)
 
   const prevTotal = useRef(null)
   const [animatingDelta, setAnimatingDelta] = useState(false)
@@ -1559,7 +1561,7 @@ export default function Home() {
             {staleAccountCount > 0 && (
               <button
                 type="button"
-                onClick={() => setPage('accounts')}
+                onClick={() => setQuickUpdateOpen(true)}
                 className="w-full text-left group"
               >
                 <div
@@ -1748,6 +1750,14 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      <QuickUpdateModal
+        open={quickUpdateOpen}
+        onClose={() => setQuickUpdateOpen(false)}
+        accounts={accounts}
+        baseCurrency={baseCurrency}
+        onSaved={() => { invalidatePath('/accounts'); invalidatePath('/dashboard'); invalidatePath('/dashboard?range=3M'); bumpData?.() }}
+      />
     </div>
   )
 }

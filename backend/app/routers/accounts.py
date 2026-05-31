@@ -249,6 +249,31 @@ async def put_account(
     return account
 
 
+@router.post("/{account_id}/review", response_model=AccountResponse)
+async def review_account(
+    account_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Mark an account as reviewed.
+
+    Refreshes updated_at to now without changing any account data.
+    Use this when a user has checked an account and confirmed the balance
+    is correct — the account should no longer appear stale, even though
+    no value changed.
+
+    Does not write a snapshot: the net worth figure is unchanged.
+    """
+    account = _get_account_or_404(session, current_user.id, account_id)
+
+    account.updated_at = datetime.now(timezone.utc)
+    session.add(account)
+    session.commit()
+    session.refresh(account)
+
+    return account
+
+
 @router.delete("/{account_id}", status_code=204)
 async def delete_account(
     account_id: int,
