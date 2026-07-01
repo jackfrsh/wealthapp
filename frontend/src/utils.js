@@ -32,6 +32,31 @@ export function fmtCurrencyCompact(amount, ccy = 'GBP') {
   }
 }
 
+export function fmtCurrencyCompactShort(amount, ccy = 'GBP') {
+  const n = Number(amount)
+  if (!Number.isFinite(n)) return '—'
+
+  const c = ccy || 'GBP'
+  const abs = Math.abs(n)
+  const sign = n < 0 ? '-' : ''
+  const symbol = CURRENCY_SYMBOLS[c] || `${c} `
+  const trim = (v) => String(v).replace(/\.0$/, '').replace(/(\.\d*[1-9])0$/, '$1')
+
+  if (abs >= 1_000_000) {
+    const value = abs / 1_000_000
+    const decimals = value < 10 && !Number.isInteger(value) ? 1 : 0
+    return `${sign}${symbol}${trim(value.toFixed(decimals))}m`
+  }
+
+  if (abs >= 1_000) {
+    const value = abs / 1_000
+    const decimals = value < 10 && !Number.isInteger(value) ? 1 : 0
+    return `${sign}${symbol}${trim(value.toFixed(decimals))}k`
+  }
+
+  return fmtCurrency(n, c)
+}
+
 export function fmtDate(iso) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('en-GB', {

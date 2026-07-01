@@ -20,18 +20,18 @@ import { api, invalidatePath } from '../api'
 import { track } from '../track'
 import { useApp } from '../App'
 import { GoldDelta } from '../components/surfaces'
-import { fmtCurrency, fmtCurrencyCompact, fmtCurrencyCompactStable, fmtDate, isIsaUrgent, getSnapshotFreshnessState, accountFreshnessLabel, WEALTH_GROUPS, groupDefFor } from '../utils'
+import { fmtCurrency, fmtCurrencyCompact, fmtCurrencyCompactStable, fmtCurrencyCompactShort, fmtDate, isIsaUrgent, getSnapshotFreshnessState, accountFreshnessLabel, WEALTH_GROUPS, groupDefFor } from '../utils'
 import GoalSetup from './GoalSetup'
 import QuickUpdateModal from '../components/QuickUpdateModal'
 import useProjectionData from '../hooks/outlook/useProjectionData'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid,
+  ResponsiveContainer, CartesianGrid, ReferenceLine, ReferenceDot,
 } from 'recharts'
 import WealthTooltip from '../components/charts/WealthTooltip'
 import {
   xAxisProps, yAxisProps, gridProps, tooltipProps,
-  chartMargin, ACCENT_STROKE, activeDotStyle,
+  ACCENT_STROKE, activeDotStyle,
 } from '../components/charts/chartTheme'
 import {
   Shield,
@@ -556,8 +556,152 @@ function CommandDeck({
 /* WealthRunway                                         */
 /* ──────────────────────────────────────────────────── */
 
-function WealthRunway({ settingsReady, isPro, ccy, defaultProjYears }) {
-  const [runwayOpen, setRunwayOpen] = useState(false)
+const RUNWAY_TARGET_STROKE = '#C89B3C'
+
+function formatRunwayDate(d) {
+  if (!d) return ''
+  return new Date(d).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+function formatRunwayMonthYear(d) {
+  if (!d) return ''
+  return new Date(d).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
+}
+
+function formatRunwayTick(d, years) {
+  if (!d) return ''
+  const date = new Date(d)
+  if (years > 5) return String(date.getFullYear())
+  if (years > 1) return date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
+  return date.toLocaleDateString('en-GB', { month: 'short' })
+}
+
+function buildRunwayTicks(data, years) {
+  if (!data?.length) return undefined
+  const maxTicks = years > 10 ? 6 : years > 1 ? 7 : 5
+  const picked = []
+  const seenLabels = new Set()
+
+  for (let i = 0; i < maxTicks; i++) {
+    const idx = Math.round((i * (data.length - 1)) / Math.max(1, maxTicks - 1))
+    const date = data[idx]?.date
+    const label = formatRunwayTick(date, years)
+    if (date && label && !seenLabels.has(label)) {
+      picked.push(date)
+      seenLabels.add(label)
+    }
+  }
+
+  const last = data[data.length - 1]?.date
+  const lastLabel = formatRunwayTick(last, years)
+  if (last && lastLabel && !seenLabels.has(lastLabel)) picked.push(last)
+
+  return picked.length > 1 ? picked : undefined
+}
+
+function runwaySeriesName(name, item) {
+  const key = item?.dataKey || name
+  if (key === 'actual') return 'Actual'
+  if (key === 'projected') return 'Forecast'
+  if (key === 'target') return 'Target'
+  return name
+}
+
+function TargetReferenceLabel({ viewBox, targetAmount, currency }) {
+  if (!viewBox || !targetAmount) return null
+  const x = viewBox.x + viewBox.width - 4
+  const y = Math.max(13, viewBox.y - 6)
+
+  return (
+    <text
+      x={x}
+      y={y}
+      textAnchor="end"
+      fill="rgba(220,185,100,0.72)"
+      fontSize={11}
+      fontWeight={600}
+      style={{ fontVariantNumeric: 'tabular-nums', pointerEvents: 'none' }}
+    >
+      Target {fmtCurrencyCompactShort(targetAmount, currency)}
+    </text>
+  )
+}
+
+function RunwayPointLabel({ viewBox, text, fill = 'rgba(210,225,245,0.72)' }) {
+  if (!viewBox || !text) return null
+  return (
+    <text
+      x={viewBox.cx}
+      y={Math.max(12, viewBox.cy - 12)}
+      textAnchor="middle"
+      fill={fill}
+      fontSize={11}
+      fontWeight={650}
+      style={{ fontVariantNumeric: 'tabular-nums', pointerEvents: 'none' }}
+    >
+      {text}
+    </text>
+  )
+}
+
+function RunwayLegendItem({ label, tone = 'actual' }) {
+  const strokeColor = tone === 'target' ? RUNWAY_TARGET_STROKE : ACCENT_STROKE
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        className="inline-block w-5 rounded-full"
+        style={{
+          height: tone === 'forecast' ? 0 : 2,
+          background: tone === 'forecast' ? 'transparent' : strokeColor,
+          borderTop: tone === 'forecast' ? `2px dashed ${strokeColor}` : undefined,
+          opacity: tone === 'target' ? 0.72 : tone === 'forecast' ? 0.62 : 0.9,
+        }}
+      />
+      {label}
+    </span>
+  )
+}
+
+function RunwayMetric({ label, value, sub, tone = 'neutral' }) {
+  const toneColor =
+    tone === 'target'
+      ? 'rgba(220,185,100,0.78)'
+      : tone === 'good'
+      ? 'rgba(170,210,190,0.82)'
+      : tone === 'warn'
+      ? 'rgba(220,185,100,0.82)'
+      : 'rgba(235,240,250,0.80)'
+
+  return (
+    <div
+      className="min-w-[112px] flex-1 rounded-2xl px-3.5 py-3"
+      style={{
+        background: 'rgba(255,255,255,0.032)',
+        border: '1px solid rgba(255,255,255,0.06)',
+      }}
+    >
+      <div className="text-[10px] font-semibold tracking-[.14em] uppercase" style={{ color: 'rgba(255,255,255,0.26)' }}>
+        {label}
+      </div>
+      <div className="mt-1.5 text-[16px] font-bold tabular-nums leading-none" style={{ color: toneColor }}>
+        {value}
+      </div>
+      {sub && (
+        <div className="mt-1.5 text-[11px] leading-snug" style={{ color: 'rgba(255,255,255,0.30)' }}>
+          {sub}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function WealthRunway({ settingsReady, isPro, ccy, defaultProjYears, goal }) {
+  const [runwayOpen, setRunwayOpen] = useState(true)
 
   const deflate = useCallback((v) => Number(v || 0), [])
 
@@ -578,6 +722,50 @@ function WealthRunway({ settingsReady, isPro, ccy, defaultProjYears }) {
     return last?.value || null
   }, [projData])
 
+  const lastActualPoint = useMemo(() => {
+    for (let i = projChartData.length - 1; i >= 0; i--) {
+      if (projChartData[i]?.actual != null) return projChartData[i]
+    }
+    return null
+  }, [projChartData])
+
+  const firstProjectedPoint = useMemo(() => {
+    return projChartData.find((p) => p?.projected != null) || null
+  }, [projChartData])
+
+  const lastProjectedPoint = useMemo(() => {
+    for (let i = projChartData.length - 1; i >= 0; i--) {
+      if (projChartData[i]?.projected != null) return projChartData[i]
+    }
+    return null
+  }, [projChartData])
+
+  const targetAmount = Number(goal?.target_amount || 0)
+  const hasTarget = targetAmount > 0
+  const projectedGap = hasTarget && headlineValue ? targetAmount - Number(headlineValue) : null
+  const gapSummary = (() => {
+    if (projectedGap == null) return null
+    const absGap = Math.abs(projectedGap)
+    if (absGap < 1) return 'Projected to meet target'
+    if (projectedGap > 0) return `Projected to finish ${fmtCurrencyCompactShort(absGap, ccy)} short`
+    return `Projected ${fmtCurrencyCompactShort(absGap, ccy)} ahead`
+  })()
+  const targetCrossPoint = hasTarget
+    ? projChartData.find((p) => Number(p?.projected) >= targetAmount)
+    : null
+  const targetTiming = (() => {
+    if (!hasTarget) return null
+    if (Number(lastActualPoint?.actual) >= targetAmount) return 'Already past target'
+    if (targetCrossPoint?.date) return `Target crossed around ${formatRunwayMonthYear(targetCrossPoint.date)}`
+    return `Target not reached within ${effectiveProjYears}y`
+  })()
+  const currentValue = Number(lastActualPoint?.actual ?? firstProjectedPoint?.projected ?? 0)
+  const runwayTicks = useMemo(
+    () => buildRunwayTicks(projChartData, effectiveProjYears),
+    [projChartData, effectiveProjYears]
+  )
+  const horizonLabel = `${effectiveProjYears} year${effectiveProjYears !== 1 ? 's' : ''}`
+
   if (!settingsReady) return null
 
   return (
@@ -592,7 +780,9 @@ function WealthRunway({ settingsReady, isPro, ccy, defaultProjYears }) {
       <button
         type="button"
         onClick={() => setRunwayOpen((v) => !v)}
-        className="w-full text-left px-6 py-5 sm:px-7 sm:py-5 flex items-start justify-between gap-4 transition-opacity duration-150 hover:opacity-80"
+        aria-expanded={runwayOpen}
+        aria-label={runwayOpen ? 'Collapse current forecast' : 'Expand current forecast'}
+        className="w-full text-left px-6 py-4 sm:px-7 sm:py-5 flex items-start justify-between gap-4 transition-opacity duration-150 hover:opacity-80"
       >
         <div className="min-w-0">
           <div
@@ -606,13 +796,13 @@ function WealthRunway({ settingsReady, isPro, ccy, defaultProjYears }) {
             className="mt-1.5 text-[13px] leading-relaxed"
             style={{ color: 'rgba(255,255,255,0.36)' }}
           >
-            Projected from your current accounts and contributions.
+            Know where you stand. See where you're going.
           </div>
 
           {!runwayOpen && headlineValue && (
             <div className="mt-3 flex items-baseline gap-2 flex-wrap">
               <div className="text-[32px] sm:text-[36px] font-bold tabular-nums text-white tracking-tight leading-none">
-                {fmtCurrencyCompactStable(headlineValue, ccy)}
+                {fmtCurrencyCompactShort(headlineValue, ccy)}
               </div>
               <div
                 className="text-[13px] font-medium"
@@ -620,6 +810,14 @@ function WealthRunway({ settingsReady, isPro, ccy, defaultProjYears }) {
               >
                 in {effectiveProjYears}y
               </div>
+            </div>
+          )}
+
+          {!runwayOpen && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px]" style={{ color: 'rgba(255,255,255,0.28)' }}>
+              <RunwayLegendItem label="Actual" />
+              <RunwayLegendItem label="Forecast" tone="forecast" />
+              {hasTarget && <RunwayLegendItem label="Target" tone="target" />}
             </div>
           )}
         </div>
@@ -632,35 +830,71 @@ function WealthRunway({ settingsReady, isPro, ccy, defaultProjYears }) {
 
       {runwayOpen && (
         <div className="px-6 pb-6 sm:px-7 sm:pb-7">
-          <div className="pt-4">
+          <div>
             <div
-              className="mb-4 h-px"
+              className="mb-5 h-px"
               style={{
                 background:
                   'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.025) 72%, transparent 100%)',
               }}
             />
             <div className="space-y-4">
-              <div className="pt-5 space-y-5">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,440px)] lg:items-end">
                 {headlineValue && (
                   <div>
                     <div className="flex items-end gap-2.5 flex-wrap">
                       <div className="text-[30px] sm:text-[34px] font-bold tabular-nums text-white tracking-tight leading-none">
-                        {fmtCurrencyCompactStable(headlineValue, ccy)}
+                        {fmtCurrencyCompactShort(headlineValue, ccy)}
                       </div>
                       <div
                         className="text-[12px] font-medium pb-[3px]"
                         style={{ color: 'rgba(255,255,255,0.32)' }}
                       >
-                        in {effectiveProjYears} year{effectiveProjYears !== 1 ? 's' : ''}
+                        in {horizonLabel}
                       </div>
                     </div>
                     <div
                       className="mt-1.5 text-[12.5px] leading-relaxed"
                       style={{ color: 'rgba(255,255,255,0.32)' }}
                     >
-                      If you keep going at your current pace.
+                      Forecast from your balances, contributions and expected return.
                     </div>
+                    {gapSummary && (
+                      <div
+                        className="mt-2 inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold tabular-nums"
+                        style={{
+                          color: projectedGap > 0 ? 'rgba(220,185,100,0.82)' : 'rgba(170,210,190,0.82)',
+                          background: projectedGap > 0 ? 'rgba(200,155,60,0.08)' : 'rgba(47,166,118,0.08)',
+                          border: projectedGap > 0 ? '1px solid rgba(200,155,60,0.14)' : '1px solid rgba(47,166,118,0.13)',
+                        }}
+                      >
+                        {gapSummary}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {headlineValue && (
+                  <div className="flex flex-wrap gap-2">
+                    <RunwayMetric
+                      label="Now"
+                      value={currentValue > 0 ? fmtCurrencyCompactShort(currentValue, ccy) : '—'}
+                      sub={lastActualPoint?.date ? formatRunwayMonthYear(lastActualPoint.date) : undefined}
+                    />
+                    {hasTarget && (
+                      <RunwayMetric
+                        label="Target"
+                        value={fmtCurrencyCompactShort(targetAmount, ccy)}
+                        sub={targetTiming}
+                        tone="target"
+                      />
+                    )}
+                    <RunwayMetric
+                      label="Outlook"
+                      value={projectedGap == null ? fmtCurrencyCompactShort(headlineValue, ccy) : projectedGap > 0 ? 'Short' : 'Ahead'}
+                      sub={gapSummary || `Forecast ${fmtCurrencyCompactShort(headlineValue, ccy)}`}
+                      tone={projectedGap > 0 ? 'warn' : projectedGap < 0 ? 'good' : 'neutral'}
+                    />
                   </div>
                 )}
               </div>
@@ -689,23 +923,23 @@ function WealthRunway({ settingsReady, isPro, ccy, defaultProjYears }) {
                   {filteredMilestones.map((m) => (
                     <div
                       key={m.year}
-                      className="px-3 py-2 rounded-2xl"
+                      className="inline-flex items-baseline gap-2 rounded-full px-3 py-1.5"
                       style={{
-                        background: 'rgba(255,255,255,0.04)',
-                        border: '1px solid rgba(255,255,255,0.06)',
+                        background: 'rgba(255,255,255,0.032)',
+                        border: '1px solid rgba(255,255,255,0.055)',
                       }}
                     >
                       <div
-                        className="text-[10px] font-semibold tracking-[.14em] uppercase"
+                        className="text-[10px] font-semibold tracking-[.12em] uppercase"
                         style={{ color: 'rgba(255,255,255,0.24)' }}
                       >
                         {m.year}y
                       </div>
                       <div
-                        className="mt-1 text-[13px] font-semibold tabular-nums"
+                        className="text-[12px] font-semibold tabular-nums"
                         style={{ color: 'rgba(255,255,255,0.72)' }}
                       >
-                        {fmtCurrencyCompactStable(m.projected_net_worth, ccy)}
+                        {fmtCurrencyCompactShort(m.projected_net_worth, ccy)}
                       </div>
                     </div>
                   ))}
@@ -716,59 +950,179 @@ function WealthRunway({ settingsReady, isPro, ccy, defaultProjYears }) {
                 <div className="h-[230px] rounded-2xl skeleton opacity-15" />
               ) : projChartData.length > 1 ? (
                 <div
-                  className="rounded-2xl px-2 pt-3"
+                  className="rounded-2xl px-3 pt-3 pb-3 sm:px-4"
                   style={{
-                    background: 'rgba(255,255,255,0.022)',
-                    border: '1px solid rgba(255,255,255,0.05)',
+                    background: 'linear-gradient(180deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.018) 100%)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.025)',
                   }}
                 >
-                  <div className="h-[240px]">
+                  <div className="px-0 pb-2 flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px]" style={{ color: 'rgba(255,255,255,0.34)' }}>
+                      <RunwayLegendItem label="Actual" />
+                      <RunwayLegendItem label="Forecast" tone="forecast" />
+                      {hasTarget && <RunwayLegendItem label="Target" tone="target" />}
+                    </div>
+                    <div className="text-right">
+                      {gapSummary && (
+                        <div className="text-[11px] font-semibold tabular-nums" style={{ color: projectedGap > 0 ? 'rgba(220,185,100,0.70)' : 'rgba(170,210,190,0.70)' }}>
+                          {gapSummary}
+                        </div>
+                      )}
+                      {targetTiming && (
+                        <div className="mt-1 text-[10.5px]" style={{ color: 'rgba(255,255,255,0.28)' }}>
+                          {targetTiming}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="h-[292px] sm:h-[340px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={projChartData} margin={chartMargin}>
+                      <AreaChart
+                        data={projChartData}
+                        margin={effectiveProjYears > 5
+                          ? { top: 26, right: 22, left: 0, bottom: 2 }
+                          : { top: 24, right: 18, left: 0, bottom: 2 }}
+                      >
                         <defs>
                           <linearGradient id="homeRunwayFill" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={ACCENT_STROKE} stopOpacity={0.08} />
+                            <stop offset="0%" stopColor={ACCENT_STROKE} stopOpacity={0.11} />
+                            <stop offset="52%" stopColor={ACCENT_STROKE} stopOpacity={0.045} />
                             <stop offset="100%" stopColor={ACCENT_STROKE} stopOpacity={0} />
                           </linearGradient>
                         </defs>
 
-                        <CartesianGrid {...gridProps} />
+                        <CartesianGrid {...gridProps} strokeOpacity={0.055} />
 
                         <XAxis
                           dataKey="date"
                           {...xAxisProps}
-                          tickFormatter={(d) =>
-                            new Date(d).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
-                          }
+                          ticks={runwayTicks}
+                          minTickGap={effectiveProjYears > 5 ? 28 : 20}
+                          tickFormatter={(d) => formatRunwayTick(d, effectiveProjYears)}
                         />
 
-                        <YAxis {...yAxisProps} tickFormatter={(v) => Math.round(v / 1000) + 'k'} />
+                        <YAxis {...yAxisProps} tickFormatter={(v) => fmtCurrencyCompactShort(v, ccy)} />
 
-                        <Tooltip content={<WealthTooltip currency={ccy} />} {...tooltipProps} />
+                        <Tooltip
+                          content={
+                            <WealthTooltip
+                              currency={ccy}
+                              labelFormatter={formatRunwayDate}
+                              nameFormatter={runwaySeriesName}
+                              valueFormatter={(v) => fmtCurrencyCompactShort(v, ccy)}
+                              extraItems={hasTarget ? [{ dataKey: 'target', name: 'Target', value: targetAmount, color: RUNWAY_TARGET_STROKE }] : []}
+                            />
+                          }
+                          {...tooltipProps}
+                        />
+
+                        {hasTarget && (
+                          <ReferenceLine
+                            y={targetAmount}
+                            ifOverflow="extendDomain"
+                            stroke={RUNWAY_TARGET_STROKE}
+                            strokeWidth={1.25}
+                            strokeDasharray="4 5"
+                            strokeOpacity={0.58}
+                            label={<TargetReferenceLabel targetAmount={targetAmount} currency={ccy} />}
+                          />
+                        )}
+
+                        {lastActualPoint?.date && (
+                          <ReferenceLine
+                            x={lastActualPoint.date}
+                            stroke="currentColor"
+                            strokeOpacity={0.12}
+                            strokeDasharray="2 7"
+                            label={{
+                              value: 'Now',
+                              position: 'top',
+                              fill: 'rgba(255,255,255,0.35)',
+                              fontSize: 10,
+                              fontWeight: 650,
+                            }}
+                          />
+                        )}
 
                         <Area
                           type="monotone"
                           dataKey="actual"
+                          name="Actual"
                           stroke={ACCENT_STROKE}
-                          strokeWidth={1.5}
+                          strokeWidth={2}
                           fill="url(#homeRunwayFill)"
                           dot={false}
                           connectNulls={false}
                           activeDot={activeDotStyle}
+                          isAnimationActive={false}
                         />
 
                         <Area
                           type="monotone"
                           dataKey="projected"
+                          name="Forecast"
                           stroke={ACCENT_STROKE}
-                          strokeWidth={1.5}
-                          strokeDasharray="6 4"
+                          strokeWidth={2}
+                          strokeOpacity={0.7}
+                          strokeDasharray="7 5"
                           fill="none"
                           dot={false}
                           connectNulls
+                          isAnimationActive={false}
                         />
+
+                        {lastActualPoint?.date && lastActualPoint?.actual != null && (
+                          <ReferenceDot
+                            x={lastActualPoint.date}
+                            y={Number(lastActualPoint.actual)}
+                            r={3.5}
+                            fill="#0F141F"
+                            stroke={ACCENT_STROKE}
+                            strokeWidth={2}
+                            isFront
+                          />
+                        )}
+
+                        {targetCrossPoint?.date && Number(targetCrossPoint.projected) > 0 && (
+                          <ReferenceDot
+                            x={targetCrossPoint.date}
+                            y={Number(targetCrossPoint.projected)}
+                            r={3}
+                            fill={RUNWAY_TARGET_STROKE}
+                            fillOpacity={0.82}
+                            stroke="#0F141F"
+                            strokeWidth={1.5}
+                            isFront
+                          />
+                        )}
+
+                        {lastProjectedPoint?.date && Number(lastProjectedPoint.projected) > 0 && (
+                          <ReferenceDot
+                            x={lastProjectedPoint.date}
+                            y={Number(lastProjectedPoint.projected)}
+                            r={3.75}
+                            fill="#0F141F"
+                            stroke={ACCENT_STROKE}
+                            strokeOpacity={0.78}
+                            strokeWidth={2}
+                            isFront
+                            label={
+                              <RunwayPointLabel
+                                text={fmtCurrencyCompactShort(lastProjectedPoint.projected, ccy)}
+                                fill="rgba(150,190,235,0.82)"
+                              />
+                            }
+                          />
+                        )}
                       </AreaChart>
                     </ResponsiveContainer>
+                  </div>
+                  <div
+                    className="mt-2 px-0 pt-3 text-[11px] leading-relaxed"
+                    style={{ color: 'rgba(255,255,255,0.30)', borderTop: '1px solid rgba(255,255,255,0.045)' }}
+                  >
+                    Based on current balances, monthly contributions and expected return. Not financial advice.
                   </div>
                 </div>
               ) : (
@@ -1720,6 +2074,7 @@ export default function Home() {
               isPro={isPro}
               ccy={ccy}
               defaultProjYears={goalHorizonYears}
+              goal={retirementGoal}
             />
           </div>
         </div>
