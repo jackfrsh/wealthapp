@@ -21,10 +21,12 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from ..auth import get_current_user
 from ..database import get_session
-from ..models import Account, User
+from ..models import Account, Settings, User
 from ..services.networth import write_snapshot_background
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
+
+FREE_ACCOUNT_LIMIT = 5
 
 
 # ─── Subtype allowlist ───────────────────────────────────────────────────────
@@ -170,13 +172,10 @@ async def create_account(
     session: Session = Depends(get_session),
 ):
     # Enforce free-tier account limit
-    from ..models import Settings
-
     settings = session.exec(select(Settings).where(Settings.user_id == current_user.id)).first()
     is_pro = bool(getattr(settings, "is_pro", False)) if settings else False
 
     if not is_pro:
-        FREE_ACCOUNT_LIMIT = 3
         count = len(session.exec(select(Account).where(Account.user_id == current_user.id)).all())
         if count >= FREE_ACCOUNT_LIMIT:
             raise HTTPException(
