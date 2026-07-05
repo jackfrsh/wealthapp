@@ -536,7 +536,7 @@ export default function Landing() {
       <p>Daily FX checking</p>
       <p>Monthly what-if contribution modelling</p>
       <p>1-year projection</p>
-      <p>Up to 3 accounts</p>
+      <p>Up to 5 accounts</p>
     </div>
 
     <div className="mt-auto pt-8">

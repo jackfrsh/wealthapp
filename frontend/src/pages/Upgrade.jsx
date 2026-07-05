@@ -189,7 +189,7 @@ export default function Upgrade() {
 
   const headline = isAccountLimit ? 'More accounts, deeper intelligence.' : 'See when your plan gets you there.'
   const subhead = isAccountLimit
-    ? 'Free supports up to 3 accounts. Pro unlocks unlimited accounts, long-horizon projections, and your full freedom timeline.'
+    ? 'Free supports up to 5 accounts. Pro unlocks unlimited accounts, long-horizon projections, and your full freedom timeline.'
     : 'Your freedom timeline, 40-year projections, scenario modelling, and the planning depth to close the gap.'
 
     const proBullets = [
@@ -328,7 +328,7 @@ export default function Upgrade() {
             <div className="rounded-2xl border border-black/[.06] dark:border-white/[.08] bg-white/70 dark:bg-white/[.04] p-5">
               <div className="text-sm font-semibold text-ink dark:text-white">Free</div>
               <ul className="mt-3 space-y-2 text-sm text-ink-muted dark:text-white/45">
-                <li>Up to 3 accounts</li>
+                <li>Up to 5 accounts</li>
                 <li>1-year projection</li>
                 <li>One goal</li>
                 <li>All 4 decision tools</li>

@@ -456,7 +456,7 @@ export default function Accounts() {
   const cancelledRef = useRef(false)
   useEffect(()=>{cancelledRef.current=false;return()=>{cancelledRef.current=true}},[])
 
-  const FREE_ACCOUNT_LIMIT = 3
+  const FREE_ACCOUNT_LIMIT = 5
   const accountCount = accounts.length
   const accountLimitReached = !isPro && accountCount >= FREE_ACCOUNT_LIMIT
   const usage = useMemo(()=>{if(isPro)return null;return{used:accountCount,limit:FREE_ACCOUNT_LIMIT,pct:clamp((accountCount/FREE_ACCOUNT_LIMIT)*100,0,100)}},[isPro,accountCount])
